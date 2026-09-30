@@ -1,0 +1,61 @@
+import { useState } from "react";
+import { Info, Settings, X } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
+import { useTheme } from "@/hooks/use-theme";
+import { GeneralPage } from "./pages/general";
+import { AboutPage } from "./pages/about";
+import { version } from "../../../package.json";
+
+export function SettingsDialog() {
+  const [section, setSection] = useState<"general" | "about">("general");
+  const [theme, setTheme] = useTheme();
+  const reducedMotion = useReducedMotion();
+
+  return (
+    <Dialog onOpenChange={(open) => { if (open) setSection("general"); }}>
+      <DialogTrigger render={<Button variant="ghost" size="icon-sm" className="titlebar-settings rounded-lg" aria-label="设置" title="设置" />}>
+        <motion.span className="flex items-center justify-center" whileHover={reducedMotion ? undefined : { rotate: 45 }} transition={{ duration: 0.2 }}>
+          <Settings aria-hidden="true" />
+        </motion.span>
+      </DialogTrigger>
+      <DialogPopup showCloseButton={false} className="overflow-hidden rounded-lg"
+        style={{ width: 1024, maxWidth: "calc(100vw - 40px)", height: "85dvh", padding: 0, gap: 0 }}
+        initial={{ opacity: 0, scale: reducedMotion ? 1 : 0.97 }} animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: reducedMotion ? 1 : 0.98 }} transition={{ duration: reducedMotion ? 0 : 0.18 }}>
+        <DialogClose render={<Button variant="ghost" size="icon-sm" className="absolute right-4 top-4 rounded-lg" aria-label="关闭设置" title="关闭设置" />}>
+          <X aria-hidden="true" />
+        </DialogClose>
+        <div className="flex h-full min-h-0 w-full overflow-hidden">
+          <aside className="flex w-44 shrink-0 flex-col bg-muted/50 sm:w-60">
+            <div className="px-5 pb-4 pt-5">
+              <DialogTitle className="text-[26px] font-bold leading-none tracking-tight">设置</DialogTitle>
+              <DialogDescription className="mt-1.5 text-sm text-muted-foreground">个性化与全局设置</DialogDescription>
+            </div>
+            <div className="mx-3 border-t border-border" role="separator" />
+            <nav aria-label="设置导航" className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto px-3 py-3">
+              <Button variant={section === "general" ? "secondary" : "ghost"} className="justify-start gap-2.5 rounded-lg px-3"
+                aria-current={section === "general" ? "page" : undefined} onClick={() => setSection("general")}>
+                <Settings aria-hidden="true" /><span>常规设置</span>
+              </Button>
+              <Button variant={section === "about" ? "secondary" : "ghost"} className="mt-auto justify-start gap-2.5 rounded-lg px-3"
+                aria-current={section === "about" ? "page" : undefined} onClick={() => setSection("about")}>
+                <Info aria-hidden="true" /><span>关于</span>
+              </Button>
+            </nav>
+            <div className="flex flex-col gap-1 px-5 pb-5 pt-2">
+              <span className="text-sm font-semibold">Nons</span>
+              <span className="text-xs text-muted-foreground">Version {version}</span>
+            </div>
+          </aside>
+          <section aria-label={section === "general" ? "常规设置" : "关于 Nons"} className="min-w-0 flex-1 overflow-auto bg-background p-5 pt-14 sm:p-10">
+            <motion.div key={section} initial={{ opacity: reducedMotion ? 1 : 0, y: reducedMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+              {section === "general" ? <GeneralPage theme={theme} onThemeChange={setTheme} /> : <AboutPage version={version} />}
+            </motion.div>
+          </section>
+        </div>
+      </DialogPopup>
+    </Dialog>
+  );
+}

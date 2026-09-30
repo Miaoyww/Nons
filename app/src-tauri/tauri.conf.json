@@ -14,10 +14,10 @@
       {
         "title": "Nons",
         "decorations": false,
-        "minWidth": 360,
-        "minHeight": 240,
-        "width": 800,
-        "height": 600
+        "minWidth": 1200,
+        "minHeight": 720,
+        "width": 1200,
+        "height": 720
       }
     ],
     "security": {
