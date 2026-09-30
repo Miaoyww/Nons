@@ -121,5 +121,36 @@
   }
   body {
     @apply bg-background text-foreground;
+    margin: 0;
+    font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.titlebar-control {
+  width: 2.5rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  color: var(--muted-foreground);
+  transition: background-color 150ms, color 150ms;
+}
+
+.titlebar-control:active {
+  transform: none;
+}
+
+.titlebar-close:hover:not(:disabled) {
+  background: var(--destructive);
+  color: white;
+}
+
+.titlebar[data-focused="false"] > div:first-child {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

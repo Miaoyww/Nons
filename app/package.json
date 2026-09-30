@@ -10,12 +10,14 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@base-ui/react": "^1.8.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^1.48.0",
+    "motion": "^13.4.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "shadcn": "^4.21.0",

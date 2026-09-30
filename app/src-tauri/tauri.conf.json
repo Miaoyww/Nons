@@ -12,7 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "nons",
+        "title": "Nons",
+        "decorations": false,
+        "minWidth": 360,
+        "minHeight": 240,
         "width": 800,
         "height": 600
       }
