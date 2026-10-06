@@ -81,7 +81,7 @@ export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean;
   return (
     <>
       <header
-        className={`titlebar relative z-10 h-12 shrink-0 select-none items-center ${playerMode ? "flex bg-transparent" : "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] border-b border-border/70 bg-background"}`}
+        className={`titlebar glass-surface relative z-10 h-12 shrink-0 select-none items-center ${playerMode ? "flex" : "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"}`}
         data-focused={focused}
       >
         <div className={`flex h-full min-w-0 ${playerMode ? "flex-1" : "items-center"}`}>

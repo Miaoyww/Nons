@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, ListMusic, Pause, Play, Repeat, Repeat1 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
 import { ActionButton } from "./action-button";
@@ -17,6 +17,7 @@ export function Timeline({ onError }: { onError: (error: unknown) => void }) {
       onPointerUp={(event) => { if (drag !== null) { void nativeCall("player_seek", { positionMs: Number(event.currentTarget.value) }).catch(onError); setDrag(null); } }}
       onPointerCancel={() => setDrag(null)} onBlur={() => setDrag(null)}
       onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key) && drag !== null) { void nativeCall("player_seek", { positionMs: Number(event.currentTarget.value) }).catch(onError); setDrag(null); } }}
+      style={{ "--seek-progress": `${100 * Math.min(drag ?? progress.positionMs, Math.max(1, progress.durationMs)) / Math.max(1, progress.durationMs)}%` } as CSSProperties}
       className="music-range min-w-0 flex-1" />
     <span className="w-10">{formatTime(progress.durationMs)}</span>
   </div>;
