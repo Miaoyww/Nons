@@ -102,7 +102,7 @@ export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean;
         </>}
         </div>
         {!playerMode && <nav aria-label="音乐导航" className="flex shrink-0 items-center gap-1">
-            {([['library', '音乐库'], ['discover', '发现'], ['local', '本地']] as const).map(([view, label]) => <Button key={view} variant={page.view === view || (view === 'discover' && page.view === 'search') ? 'secondary' : 'ghost'} aria-current={page.view === view || (view === 'discover' && page.view === 'search') ? 'page' : undefined} onClick={() => navigate(view)}>{label}</Button>)}
+            {([['library', '音乐库'], ['discover', '发现'], ['local', '本地']] as const).map(([view, label]) => <Button key={view} variant={page.view === view || (view === 'library' && page.view === 'collection') || (view === 'discover' && page.view === 'search') ? 'secondary' : 'ghost'} aria-current={page.view === view || (view === 'library' && page.view === 'collection') || (view === 'discover' && page.view === 'search') ? 'page' : undefined} onClick={() => navigate(view)}>{label}</Button>)}
           </nav>}
         <div className="flex h-full min-w-0 items-center justify-end pl-3">
           {!playerMode && <div className="titlebar-search-slot mr-2"><form className="titlebar-search" onSubmit={(event) => { event.preventDefault(); if (keyword.trim()) navigate(page.view === 'local' ? 'local' : 'search', keyword.trim()); }}>

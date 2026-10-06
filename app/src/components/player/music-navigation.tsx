@@ -1,20 +1,21 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 
-export type MusicView = "library" | "discover" | "local" | "search" | "queue";
-interface Page { view: MusicView; query: string }
+export type MusicView = "library" | "discover" | "local" | "search" | "queue" | "collection";
+export interface MusicCollection { id: number; kind: "playlist" | "album" | "artist"; name: string; cover: string; subtitle: string; trackCount: number }
+interface Page { view: MusicView; query: string; collection?: MusicCollection }
 const NavigationContext = createContext<{
   page: Page; canBack: boolean; canForward: boolean;
-  navigate: (view: MusicView, query?: string) => void; back: () => void; forward: () => void;
+  navigate: (view: MusicView, query?: string, collection?: MusicCollection) => void; back: () => void; forward: () => void;
 } | null>(null);
 
 export function MusicNavigationProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<{ entries: Page[]; index: number }>({ entries: [{ view: "local", query: "" }], index: 0 });
-  function navigate(view: MusicView, query = "") {
+  function navigate(view: MusicView, query = "", collection?: MusicCollection) {
     setHistory((previous) => {
       const current = previous.entries[previous.index];
-      if (current.view === view && current.query === query) return previous;
+      if (current.view === view && current.query === query && current.collection?.id === collection?.id && current.collection?.kind === collection?.kind) return previous;
       // Bound history; navigating after going back discards the forward branch.
-      const entries = [...previous.entries.slice(0, previous.index + 1), { view, query }].slice(-100);
+      const entries = [...previous.entries.slice(0, previous.index + 1), { view, query, collection }].slice(-100);
       return { entries, index: entries.length - 1 };
     });
   }
