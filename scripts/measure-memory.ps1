@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $nonsWorkspace = Split-Path $PSScriptRoot -Parent
 $nonsProcesses = Get-CimInstance Win32_Process
 if (-not $PlayerProcessId) {
-    $nonsCandidates = @($nonsProcesses | Where-Object { $_.Name -eq 'nons.exe' -and $_.ExecutablePath -and $_.ExecutablePath.StartsWith($nonsWorkspace, [StringComparison]::OrdinalIgnoreCase) })
+    $nonsCandidates = @($nonsProcesses | Where-Object { $_.Name -eq 'Nons.exe' -and $_.ExecutablePath -and $_.ExecutablePath.StartsWith($nonsWorkspace, [StringComparison]::OrdinalIgnoreCase) })
     if ($nonsCandidates.Count -ne 1) { throw 'Run one NonsPlayer instance or specify -PlayerProcessId.' }
     $PlayerProcessId = $nonsCandidates[0].ProcessId
 }
