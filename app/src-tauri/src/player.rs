@@ -1,8 +1,8 @@
 use crate::{
     media::MediaControls,
     model::{
-        next_index, AppResult, OutputDevice, PlaybackStatus, PlayerSnapshot, Progress,
-        ResolvedTrack, Track,
+        following_index, AppResult, OutputDevice, PlaybackStatus, PlayerSnapshot, Progress,
+        RepeatMode, ResolvedTrack, Track,
     },
     netease::Netease,
     storage::Store,
@@ -28,6 +28,7 @@ pub enum Command {
     Stop,
     Next,
     Previous,
+    Repeat,
     Seek(u64),
     Volume(f64),
     Device(Option<String>),
@@ -350,8 +351,31 @@ impl Actor {
                 self.publish();
             }
             Command::Jump(index) => self.load(index, true)?,
+            Command::Repeat => {
+                self.state.repeat_mode = match self.state.repeat_mode {
+                    RepeatMode::Off => RepeatMode::All,
+                    RepeatMode::All => RepeatMode::One,
+                    RepeatMode::One => RepeatMode::Off,
+                };
+                if let Some(job) = self.next_job.take() {
+                    job.abort();
+                }
+                *self.prepared.lock().map_err(|_| "预加载状态不可用")? = None;
+                *self.armed.lock().map_err(|_| "预加载状态不可用")? = None;
+                self.next_attempt = None;
+                self.next_attempts = 0;
+                self.publish();
+            }
             Command::Next => {
-                if let Some(index) = next_index(self.state.index, self.state.queue.len()) {
+                if let Some(index) = following_index(
+                    self.state.index,
+                    self.state.queue.len(),
+                    if self.state.repeat_mode == RepeatMode::One {
+                        RepeatMode::All
+                    } else {
+                        self.state.repeat_mode
+                    },
+                ) {
                     self.load(index, true)?;
                 }
             }
@@ -360,6 +384,8 @@ impl Actor {
                     self.seek(0)?;
                 } else if let Some(index) = self.state.index.and_then(|i| i.checked_sub(1)) {
                     self.load(index, true)?;
+                } else if self.state.index == Some(0) && self.state.repeat_mode != RepeatMode::Off {
+                    self.load(self.state.queue.len() - 1, true)?;
                 }
             }
             Command::Pause => {
@@ -416,6 +442,14 @@ impl Actor {
                     return Ok(());
                 }
                 if next {
+                    if following_index(
+                        self.state.index,
+                        self.state.queue.len(),
+                        self.state.repeat_mode,
+                    ) != Some(index)
+                    {
+                        return Ok(());
+                    }
                     self.next_job = None;
                     if let Ok(resolved) = *result {
                         *self.prepared.lock().map_err(|_| "预加载状态不可用")? = Some(Prepared {
@@ -628,7 +662,11 @@ impl Actor {
                     .map_or(self.state.duration_ms, |t| t.mseconds());
             }
             MessageView::Eos(_) => {
-                if let Some(index) = next_index(self.state.index, self.state.queue.len()) {
+                if let Some(index) = following_index(
+                    self.state.index,
+                    self.state.queue.len(),
+                    self.state.repeat_mode,
+                ) {
                     if let Err(error) = self.load(index, true) {
                         self.state.error = Some(error);
                         self.state.status = PlaybackStatus::Error;
@@ -699,7 +737,11 @@ impl Actor {
                 let ready = self.prepared.lock().map(|p| p.is_some()).unwrap_or(false)
                     || self.armed.lock().map(|p| p.is_some()).unwrap_or(false);
                 if !ready {
-                    if let Some(index) = next_index(self.state.index, self.state.queue.len()) {
+                    if let Some(index) = following_index(
+                        self.state.index,
+                        self.state.queue.len(),
+                        self.state.repeat_mode,
+                    ) {
                         self.next_attempt = Some(Instant::now());
                         self.next_attempts += 1;
                         self.resolve(index, self.state.queue[index].clone(), true);

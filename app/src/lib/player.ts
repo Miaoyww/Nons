@@ -9,6 +9,7 @@ export interface Track {
 }
 export type PlaybackStatus = "stopped" | "loading" | "playing" | "paused" | "buffering" | "error";
 export interface PlayerSnapshot {
+  repeatMode: "off" | "all" | "one";
   revision: number; queue: Track[]; index: number | null; status: PlaybackStatus;
   positionMs: number; durationMs: number; volume: number; deviceId: string | null;
   actualQuality: string | null; error: string | null; mediaError: string | null;
@@ -22,7 +23,7 @@ export interface Lyrics {
 }
 export interface OutputDevice { id: string; name: string }
 
-let snapshot: PlayerSnapshot = { revision: 0, queue: [], index: null, status: "stopped", positionMs: 0,
+let snapshot: PlayerSnapshot = { repeatMode: "off", revision: 0, queue: [], index: null, status: "stopped", positionMs: 0,
   durationMs: 0, volume: 0.8, deviceId: null, actualQuality: null, error: null, mediaError: null };
 let progress: Progress = { revision: 0, positionMs: 0, durationMs: 0, status: "stopped", receivedAt: 0 };
 let updateSerial = 0;

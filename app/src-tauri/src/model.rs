@@ -54,6 +54,8 @@ pub enum PlaybackStatus {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerSnapshot {
+    #[serde(default)]
+    pub repeat_mode: RepeatMode,
     pub revision: u64,
     pub queue: Vec<Track>,
     pub index: Option<usize>,
@@ -70,6 +72,7 @@ pub struct PlayerSnapshot {
 impl Default for PlayerSnapshot {
     fn default() -> Self {
         Self {
+            repeat_mode: RepeatMode::Off,
             revision: 0,
             queue: vec![],
             index: None,
@@ -130,9 +133,35 @@ pub fn next_index(index: Option<usize>, count: usize) -> Option<usize> {
     index.and_then(|i| i.checked_add(1)).filter(|i| *i < count)
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RepeatMode {
+    #[default]
+    Off,
+    All,
+    One,
+}
+
+pub fn following_index(index: Option<usize>, count: usize, mode: RepeatMode) -> Option<usize> {
+    let current = index.filter(|i| *i < count)?;
+    match mode {
+        RepeatMode::One => Some(current),
+        RepeatMode::All => Some((current + 1) % count),
+        RepeatMode::Off => next_index(index, count),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn repeat_respects_queue_boundaries() {
+        assert_eq!(following_index(Some(1), 2, RepeatMode::All), Some(0));
+        assert_eq!(following_index(Some(1), 2, RepeatMode::One), Some(1));
+        assert_eq!(following_index(Some(0), 1, RepeatMode::All), Some(0));
+        assert_eq!(following_index(None, 0, RepeatMode::All), None);
+        assert_eq!(following_index(Some(usize::MAX), 2, RepeatMode::One), None);
+    }
     #[test]
     fn a_finished_queue_does_not_repeat_or_wrap() {
         assert_eq!(next_index(Some(0), 2), Some(1));

@@ -204,6 +204,7 @@ fn player_action(action: &str, backend: State<'_, Backend>) -> AppResult<()> {
         "stop" => Command::Stop,
         "next" => Command::Next,
         "previous" => Command::Previous,
+        "repeat" => Command::Repeat,
         _ => return Err("播放操作无效".into()),
     };
     backend.player.send(command)
