@@ -30,16 +30,17 @@
 .now-playing-layout {
   display: flex;
   justify-content: center;
-  padding: clamp(20px, 4vh, 48px) clamp(32px, 6vw, 96px);
+  padding: clamp(16px, 3vh, 40px) clamp(32px, 6vw, 96px);
 }
 .now-playing-layout.has-lyrics {
   display: grid;
   grid-template-columns: minmax(280px, 0.85fr) minmax(320px, 1.2fr);
   gap: clamp(40px, 7vw, 120px);
 }
-.now-playing-details { width: min(360px, 42vh); max-width: 100%; margin-inline: auto; }
+.now-playing-details { width: 100%; max-width: 380px; margin-inline: auto; gap: 12px; }
+.now-playing-controls { gap: 8px; }
 .now-playing-cover { min-height: 0; flex-shrink: 0; }
-.now-playing-toggle { width: 64px; height: 64px; }
+.now-playing-toggle { width: 56px; height: 56px; }
 .now-playing-toggle svg { width: 36px; height: 36px; fill: currentColor; }
 .now-playing-lyrics { mask-image: linear-gradient(transparent, black 12%, black 85%, transparent); }
 .now-playing .nons-lyrics .amll-lyric-player { --amll-lp-hover-bg-color: rgb(255 255 255 / 10%); }

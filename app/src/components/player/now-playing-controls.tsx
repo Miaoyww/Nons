@@ -13,7 +13,7 @@ export function NowPlayingControls({ onQueue, onError }: { onQueue: () => void; 
   const playing = ["playing", "buffering", "loading"].includes(state.status);
   const disabled = !isTauri() || state.index === null;
   const action = (action: string) => void nativeCall("player_action", { action }).catch(onError);
-  return <div className="flex flex-col gap-4" aria-label="正在播放控制">
+  return <div className="now-playing-controls flex flex-col" aria-label="正在播放控制">
     <Timeline onError={onError} />
     <div className="flex items-center justify-center gap-7">
       <ActionButton variant="ghost" size="icon-lg" disabled={disabled} aria-label="上一首" onClick={() => action("previous")}><SkipBack aria-hidden="true" /></ActionButton>
