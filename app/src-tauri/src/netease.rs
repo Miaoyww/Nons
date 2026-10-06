@@ -27,6 +27,13 @@ pub struct LoginStatus {
     pub message: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountProfile {
+    pub nickname: String,
+    pub avatar_url: String,
+}
+
 impl Netease {
     pub fn new() -> AppResult<Self> {
         let credential = keyring::Entry::new("NonsPlayer", "netease-session")
@@ -235,21 +242,21 @@ impl Netease {
     }
 
     pub async fn session(&self) -> AppResult<bool> {
+        Ok(self.profile().await?.is_some())
+    }
+
+    pub async fn profile(&self) -> AppResult<Option<AccountProfile>> {
         if self
             .cookie
             .lock()
             .map_err(|_| "登录状态锁不可用")?
             .is_none()
         {
-            return Ok(false);
+            return Ok(None);
         }
         let query = self.query()?;
         let body = checked(self.client.login_status(&query)).await?;
-        Ok(body
-            .pointer("/data/profile/userId")
-            .or_else(|| body.pointer("/profile/userId"))
-            .and_then(Value::as_u64)
-            .is_some_and(|id| id > 0))
+        Ok(account_profile(&body))
     }
 
     pub fn logout(&self) -> AppResult<()> {
@@ -260,6 +267,26 @@ impl Netease {
         *self.cookie.lock().map_err(|_| "登录状态锁不可用")? = None;
         Ok(())
     }
+}
+
+fn account_profile(body: &Value) -> Option<AccountProfile> {
+    let profile = body
+        .pointer("/data/profile")
+        .or_else(|| body.get("profile"))?;
+    profile.get("userId")?.as_u64().filter(|id| *id > 0)?;
+    Some(AccountProfile {
+        nickname: profile
+            .get("nickname")
+            .and_then(Value::as_str)
+            .filter(|name| !name.is_empty())
+            .unwrap_or("网易云用户")
+            .into(),
+        avatar_url: profile
+            .get("avatarUrl")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .into(),
+    })
 }
 
 async fn timed<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>>>(
@@ -338,8 +365,27 @@ fn track_from_json(song: &Value) -> Option<Track> {
 
 #[cfg(test)]
 mod tests {
-    use super::qr_key;
+    use super::{account_profile, qr_key};
     use serde_json::json;
+
+    #[test]
+    fn account_profile_accepts_both_response_shapes_and_rejects_logged_out() {
+        let profile = json!({"userId": 123, "nickname": "Listener", "avatarUrl": "https://example.com/avatar.png"});
+        for body in [
+            json!({"profile": profile}),
+            json!({"data": {"profile": profile}}),
+        ] {
+            let account = account_profile(&body).unwrap();
+            assert_eq!(account.nickname, "Listener");
+            assert_eq!(account.avatar_url, "https://example.com/avatar.png");
+        }
+        for body in [
+            json!({"data": {"profile": null}}),
+            json!({"profile": {"userId": 0}}),
+        ] {
+            assert!(account_profile(&body).is_none());
+        }
+    }
 
     #[test]
     fn qr_key_accepts_sdk_root_response() {

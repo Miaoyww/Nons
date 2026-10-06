@@ -5,6 +5,8 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { Copy, Minus, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
+import { LoginDialog } from "@/components/player/login-dialog";
+import appIcon from "@/assets/icon.png";
 
 export function Titlebar() {
   const native = isTauri();
@@ -78,11 +80,15 @@ export function Titlebar() {
         data-focused={focused}
       >
         <div
-          className="h-full min-w-0 flex-1"
+          className="flex h-full min-w-0 flex-1 items-center gap-2.5 pl-7"
           onMouseDown={drag}
-        />
+        >
+          <img src={appIcon} alt="" className="size-7" draggable={false} />
+          <span className="text-sm font-semibold">NonsPlayer</span>
+        </div>
 
         <div className="flex h-full shrink-0 items-center gap-1 pr-1.5">
+          <LoginDialog />
           <SettingsDialog />
 
           <span className="mx-1.5 h-4 w-px bg-border" aria-hidden="true" />

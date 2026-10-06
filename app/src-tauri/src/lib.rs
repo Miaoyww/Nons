@@ -8,7 +8,7 @@ mod player;
 mod storage;
 
 use model::{AppResult, Lyrics, OutputDevice, PlayerSnapshot, Track, TrackSource};
-use netease::{LoginStatus, Netease, QrLogin};
+use netease::{AccountProfile, LoginStatus, Netease, QrLogin};
 use player::{Command, Player};
 use std::{path::PathBuf, sync::Arc};
 use tauri::{Manager, State};
@@ -217,6 +217,10 @@ async fn login_session(backend: State<'_, Backend>) -> AppResult<bool> {
     backend.netease.session().await
 }
 #[tauri::command]
+async fn account_profile(backend: State<'_, Backend>) -> AppResult<Option<AccountProfile>> {
+    backend.netease.profile().await
+}
+#[tauri::command]
 fn logout(backend: State<'_, Backend>) -> AppResult<()> {
     backend.netease.logout()
 }
@@ -283,6 +287,7 @@ pub fn run() {
             qr_login,
             poll_login,
             login_session,
+            account_profile,
             logout
         ])
         .build(tauri::generate_context!())

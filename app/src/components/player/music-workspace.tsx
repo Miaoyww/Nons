@@ -4,7 +4,6 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPlus, Library, ListMusic, Mic2, Music2, Plus, Search, X } from "lucide-react";
 import { connectPlayer, errorText, nativeCall, usePlayer, type OutputDevice, type Track } from "@/lib/player";
 import { ActionButton } from "./action-button";
-import { LoginDialog } from "./login-dialog";
 import { PlaybackBar } from "./playback-bar";
 import { TrackList } from "./track-list";
 
@@ -104,10 +103,8 @@ export function MusicWorkspace() {
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="flex min-h-0 flex-1">
       <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-muted/20 px-4 py-6">
-        <div className="mb-8 flex items-center gap-3 px-3"><span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Music2 className="size-5" aria-hidden="true" /></span><span className="text-lg font-semibold tracking-tight">NonsPlayer</span></div>
         <p className="mb-3 px-3 text-xs text-muted-foreground">你的音乐</p>
         <nav aria-label="音乐导航" className="space-y-1">{navigation.map(({ id, name, icon: Icon }) => <ActionButton key={id} variant={view === id ? "secondary" : "ghost"} className="w-full justify-start" aria-current={view === id ? "page" : undefined} onClick={() => { setKeyword(""); setView(id); }}><Icon aria-hidden="true" />{name}</ActionButton>)}</nav>
-        <div className="mt-auto border-t border-border pt-4"><LoginDialog /></div>
       </aside>
       <main id="music-content" className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="音乐工作区">
         {!isTauri() && <p role="status" className="border-b border-border bg-muted/50 px-8 py-3 text-sm text-muted-foreground">这是界面预览。播放、搜索和导入功能需要在桌面应用中使用。</p>}
