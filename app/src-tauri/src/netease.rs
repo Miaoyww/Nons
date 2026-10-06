@@ -1,3 +1,8 @@
+#[path = "netease_library.rs"]
+mod library;
+#[allow(unused_imports)] // Read-only examples include this module without Tauri command types.
+pub use library::{CollectionPage, LibrarySummary, TrackPage};
+
 use crate::model::{AppResult, Lyrics, ResolvedTrack, Track, TrackSource};
 use base64::Engine;
 use ncm_api_rs::{
@@ -30,6 +35,7 @@ pub struct LoginStatus {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountProfile {
+    pub user_id: u64,
     pub nickname: String,
     pub avatar_url: String,
 }
@@ -273,8 +279,9 @@ fn account_profile(body: &Value) -> Option<AccountProfile> {
     let profile = body
         .pointer("/data/profile")
         .or_else(|| body.get("profile"))?;
-    profile.get("userId")?.as_u64().filter(|id| *id > 0)?;
+    let user_id = profile.get("userId")?.as_u64().filter(|id| *id > 0)?;
     Some(AccountProfile {
+        user_id,
         nickname: profile
             .get("nickname")
             .and_then(Value::as_str)

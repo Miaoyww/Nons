@@ -9,7 +9,9 @@ mod player;
 mod storage;
 
 use model::{AppResult, Lyrics, OutputDevice, PlayerSnapshot, Track, TrackSource};
-use netease::{AccountProfile, LoginStatus, Netease, QrLogin};
+use netease::{
+    AccountProfile, CollectionPage, LibrarySummary, LoginStatus, Netease, QrLogin, TrackPage,
+};
 use player::{Command, Player};
 use std::{path::PathBuf, sync::Arc};
 use tauri::{Manager, State};
@@ -42,6 +44,97 @@ async fn search_music(
     }
     backend.store.save_tracks(&tracks)?;
     Ok(tracks)
+}
+
+#[tauri::command]
+async fn music_library(backend: State<'_, Backend>) -> AppResult<LibrarySummary> {
+    let mut summary = backend.netease.library_summary().await?;
+    save_library_tracks(&mut summary.liked_tracks, &backend)?;
+    Ok(summary)
+}
+
+#[tauri::command]
+async fn library_collections(
+    kind: String,
+    offset: u32,
+    filter: String,
+    backend: State<'_, Backend>,
+) -> AppResult<CollectionPage> {
+    backend
+        .netease
+        .library_collections(&kind, offset, &filter)
+        .await
+}
+
+#[tauri::command]
+async fn library_tracks(
+    kind: String,
+    id: u64,
+    offset: u32,
+    backend: State<'_, Backend>,
+) -> AppResult<TrackPage> {
+    let mut page = backend
+        .netease
+        .library_tracks(&kind, id, offset, 100)
+        .await?;
+    save_library_tracks(&mut page.tracks, &backend)?;
+    Ok(page)
+}
+
+#[tauri::command]
+async fn library_history(
+    week: bool,
+    offset: u32,
+    backend: State<'_, Backend>,
+) -> AppResult<TrackPage> {
+    let mut page = backend.netease.library_history(week, offset).await?;
+    save_library_tracks(&mut page.tracks, &backend)?;
+    Ok(page)
+}
+
+fn save_library_tracks(tracks: &mut [Track], backend: &Backend) -> AppResult<()> {
+    for track in tracks.iter_mut() {
+        if track.cover.is_empty() {
+            track.cover = backend.fallback_cover.clone();
+        }
+    }
+    backend.store.save_tracks(tracks)
+}
+
+#[tauri::command]
+async fn play_library_collection(
+    kind: String,
+    id: u64,
+    key: Option<String>,
+    backend: State<'_, Backend>,
+) -> AppResult<bool> {
+    let mut page = backend.netease.library_queue(&kind, id).await?;
+    save_library_tracks(&mut page.tracks, &backend)?;
+    if page.tracks.is_empty() {
+        return Err("这个收藏还没有可播放的歌曲".into());
+    }
+    let index = match key {
+        Some(key) => page
+            .tracks
+            .iter()
+            .position(|t| t.key == key)
+            .ok_or("歌曲已不在收藏中，请刷新")?,
+        None => 0,
+    };
+    backend.player.send(Command::Queue(page.tracks, index))?;
+    Ok(page.more)
+}
+
+#[tauri::command]
+async fn create_library_playlist(
+    name: String,
+    private: bool,
+    backend: State<'_, Backend>,
+) -> AppResult<()> {
+    backend
+        .netease
+        .library_create_playlist(&name, private)
+        .await
 }
 
 #[tauri::command]
@@ -270,6 +363,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             player_snapshot,
             search_music,
+            music_library,
+            library_collections,
+            library_tracks,
+            library_history,
+            play_library_collection,
+            create_library_playlist,
             local_music,
             import_music,
             play_queue,
