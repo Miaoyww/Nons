@@ -257,10 +257,11 @@
   }
 }
 
-/* Keep the search hit area near the icon; reveal it on hover or keyboard focus. */
-.titlebar-search { position: relative; display: flex; align-items: center; padding: 6px; margin-block: -6px; }
-.titlebar-search input { width: 0; opacity: 0; padding: 0; border: 0; background: transparent; font-size: 14px; outline: none; transition: opacity 160ms; }
-.titlebar-search:hover, .titlebar-search:focus-within { background: var(--muted); border-radius: 10px; }
-.titlebar-search:hover input, .titlebar-search:focus-within input { width: clamp(120px, 14vw, 200px); opacity: 1; padding-inline: 4px 8px; }
+/* Reserve the expanded width so search cannot displace or cover navigation. */
+.titlebar-search-slot { width: 220px; flex-shrink: 0; display: flex; justify-content: flex-end; }
+.titlebar-search { display: flex; align-items: center; width: 36px; height: 36px; padding: 2px; overflow: hidden; border-radius: 10px; transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1), background-color 160ms; }
+.titlebar-search input { width: 180px; flex-shrink: 0; opacity: 0; padding-inline: 6px; border: 0; background: transparent; font-size: 14px; outline: none; transition: opacity 160ms; }
+.titlebar-search:hover, .titlebar-search:focus-within { width: 220px; background: var(--muted); }
+.titlebar-search:hover input, .titlebar-search:focus-within input { opacity: 1; }
 .titlebar-search:focus-within { outline: 2px solid var(--ring); outline-offset: 1px; }
 @media (max-width: 950px) { .titlebar > div:first-child span { display: none; } }
