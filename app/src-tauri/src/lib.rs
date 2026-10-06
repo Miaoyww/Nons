@@ -47,6 +47,16 @@ async fn search_music(
 }
 
 #[tauri::command]
+async fn liked_song_ids(backend: State<'_, Backend>) -> AppResult<Vec<u64>> {
+    backend.netease.liked_song_ids().await
+}
+
+#[tauri::command]
+async fn set_song_liked(id: u64, liked: bool, backend: State<'_, Backend>) -> AppResult<()> {
+    backend.netease.set_song_liked(id, liked).await
+}
+
+#[tauri::command]
 async fn music_library(backend: State<'_, Backend>) -> AppResult<LibrarySummary> {
     let mut summary = backend.netease.library_summary().await?;
     save_library_tracks(&mut summary.liked_tracks, &backend)?;
@@ -388,6 +398,8 @@ pub fn run() {
             poll_login,
             login_session,
             account_profile,
+            liked_song_ids,
+            set_song_liked,
             logout
         ])
         .build(tauri::generate_context!())

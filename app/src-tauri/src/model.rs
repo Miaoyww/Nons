@@ -21,6 +21,8 @@ pub enum TrackSource {
 pub struct Track {
     pub key: String,
     pub title: String,
+    #[serde(default)]
+    pub aliases: Vec<String>,
     pub artist: String,
     pub album: String,
     pub duration_ms: u64,

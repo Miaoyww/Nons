@@ -1,3 +1,4 @@
+import { TrackTitle } from "./track-title";
 // Layout and interaction adapted from YesPlayMusic src/views/library.vue.
 // Copyright (c) 2020-2023 qier222, MIT. See notices/YesPlayMusic-LICENSE.txt.
 import { useEffect, useState, type FormEvent } from "react";
@@ -90,7 +91,7 @@ function CollectionCards({ items, busy, onOpen, onPlay }: { items: MusicCollecti
 }
 
 export default function MusicLibrary({ onError }: { onError: (cause: unknown) => void }) {
-  const { profile, loading: accountLoading, error: accountError } = useAccount();
+  const { profile, loading: accountLoading, error: accountError, likesRevision } = useAccount();
   const { page, navigate } = useMusicNavigation();
   const player = usePlayer();
   const currentKey = player.index !== null ? player.queue[player.index]?.key : undefined;
@@ -126,7 +127,7 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
       .catch((cause) => { if (!disposed) setSummaryError(errorText(cause)); })
       .finally(() => { if (!disposed) setSummaryBusy(false); });
     return () => { disposed = true; };
-  }, [profile, refresh]);
+  }, [profile, refresh, likesRevision]);
 
   useEffect(() => {
     let disposed = false;
@@ -149,7 +150,7 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
       .catch((cause) => { if (!disposed) setDetailError(errorText(cause)); })
       .finally(() => { if (!disposed) setDetailBusy(false); });
     return () => { disposed = true; };
-  }, [collection, profile, detailOffset, refresh, showingDetail]);
+  }, [collection, profile, detailOffset, refresh, showingDetail, likesRevision]);
 
   function openCollection(item: MusicCollection) { navigate("collection", "", item); }
   async function playCollection(item: MusicCollection, key?: string) {
@@ -201,7 +202,7 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
           {!profile && !accountLoading ? <div className="library-empty"><p>登录网易云音乐，找回你喜欢的旋律。</p><LoginDialog /></div>
             : summaryError || summary?.likedError ? <div role="alert" className="library-empty text-destructive"><p>{summaryError ?? summary?.likedError}</p>{retry}</div>
             : summaryBusy ? <div role="status" className="library-song-grid">{Array.from({ length: 12 }, (_, index) => <div key={index} className="library-song-skeleton"><span /><div><span /><span /></div></div>)}</div>
-            : summary?.likedTracks.length ? <div className="library-song-grid">{summary.likedTracks.map((track) => <button key={track.key} className="library-song" data-current={track.key === currentKey} disabled={playing} onClick={() => { if (liked) void playCollection(liked, track.key); }} aria-label={`播放 ${track.title}`} title={`${track.title} · ${track.artist}`}><Cover cover={track.cover} className="size-10" /><div className="min-w-0"><p className="truncate font-semibold">{track.title}</p><p className="truncate text-xs opacity-75">{track.artist}</p></div></button>)}</div>
+            : summary?.likedTracks.length ? <div className="library-song-grid">{summary.likedTracks.map((track) => <button key={track.key} className="library-song" data-current={track.key === currentKey} disabled={playing} onClick={() => { if (liked) void playCollection(liked, track.key); }} aria-label={`播放 ${track.title}`} title={`${track.title} · ${track.artist}`}><Cover cover={track.cover} className="size-10" /><div className="min-w-0"><p className="truncate font-semibold"><TrackTitle track={track} /></p><p className="truncate text-xs opacity-75">{track.artist}</p></div></button>)}</div>
             : <p className="library-empty text-muted-foreground">喜欢的歌曲会出现在这里。</p>}
         </div>
       </div>

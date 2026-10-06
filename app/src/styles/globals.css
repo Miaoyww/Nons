@@ -339,18 +339,23 @@
 
 /* Isolate sticky headers in the scroll surface; keep hover geometry stable. */
 .track-list { border-collapse: separate; border-spacing: 0 4px; }
-.track-row { transition: box-shadow 160ms; }
+.track-row { border-radius: 12px; transition: box-shadow 160ms; }
 .track-row td { transition: background-color 160ms; }
 .track-row td:first-child { border-radius: 12px 0 0 12px; }
 .track-row td:last-child { border-radius: 0 12px 12px 0; }
 .track-row[data-current="true"] td { background: var(--secondary); }
 .track-row:hover, .track-row:focus-within { box-shadow: 0 4px 16px rgb(0 0 0 / 16%); }
 .track-row:hover td, .track-row:focus-within td { background: var(--background); }
-.track-row:hover .track-title, .track-row:focus-within .track-title { color: oklch(0.55 0.16 150); }
-.dark .track-row:hover .track-title, .dark .track-row:focus-within .track-title { color: oklch(0.78 0.16 150); }
+.dark .track-row:hover td, .dark .track-row:focus-within td { background: var(--muted); }
+.track-row:hover .track-title, .track-row:focus-within .track-title { color: oklch(0.54 0.23 264); }
+.dark .track-row:hover .track-title, .dark .track-row:focus-within .track-title { color: oklch(0.76 0.13 264); }
 .track-cover { position: relative; flex-shrink: 0; overflow: hidden; border-radius: 10px; cursor: pointer; }
 .track-cover:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .track-cover-play { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 25%); color: white; opacity: 0; transition: opacity 160ms; }
 .track-cover-play svg { width: 24px; height: 24px; fill: currentColor; }
 .track-row:hover .track-cover-play, .track-row:focus-within .track-cover-play { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .track-row, .track-row td, .track-cover-play { transition: none; } }
+
+.track-like[data-liked="true"] { color: oklch(0.54 0.23 264); }
+.dark .track-like[data-liked="true"] { color: oklch(0.76 0.13 264); }
+.track-like[data-liked="true"] svg { fill: currentColor; }

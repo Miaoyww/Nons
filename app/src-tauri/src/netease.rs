@@ -85,6 +85,30 @@ impl Netease {
             .collect())
     }
 
+    pub async fn liked_song_ids(&self) -> AppResult<Vec<u64>> {
+        let profile = self.profile().await?.ok_or("请先登录网易云音乐")?;
+        let query = self.query()?.param("uid", &profile.user_id.to_string());
+        let body = checked(self.client.likelist(&query)).await?;
+        let ids = body
+            .get("ids")
+            .and_then(Value::as_array)
+            .ok_or("收藏列表响应缺少歌曲 ID")?;
+        Ok(ids.iter().filter_map(Value::as_u64).collect())
+    }
+
+    pub async fn set_song_liked(&self, id: u64, liked: bool) -> AppResult<()> {
+        if id == 0 {
+            return Err("歌曲 ID 无效".into());
+        }
+        self.profile().await?.ok_or("请先登录网易云音乐")?;
+        let query = self
+            .query()?
+            .param("id", &id.to_string())
+            .param("like", if liked { "true" } else { "false" });
+        checked(self.client.like(&query)).await?;
+        Ok(())
+    }
+
     pub async fn resolve(
         &self,
         track: Track,
@@ -333,6 +357,23 @@ fn qr_key(body: &Value) -> AppResult<&str> {
         .ok_or_else(|| "网易云二维码响应缺少有效登录 key，请重新生成".into())
 }
 
+fn song_aliases(song: &Value) -> Vec<String> {
+    let title = song.get("name").and_then(Value::as_str).unwrap_or_default();
+    let mut names = Vec::new();
+    for field in ["tns", "transNames", "alia", "alias"] {
+        if let Some(values) = song.get(field).and_then(Value::as_array) {
+            for value in values {
+                if let Some(name) = value.as_str().map(str::trim).filter(|s| !s.is_empty()) {
+                    if name != title && !names.iter().any(|existing| existing == name) {
+                        names.push(name.to_owned());
+                    }
+                }
+            }
+        }
+    }
+    names
+}
+
 fn track_from_json(song: &Value) -> Option<Track> {
     let id = song.get("id")?.as_u64()?;
     let artists = song.get("ar").or_else(|| song.get("artists"))?.as_array()?;
@@ -345,6 +386,7 @@ fn track_from_json(song: &Value) -> Option<Track> {
     Some(Track {
         key: format!("netease:{id}"),
         title: song.get("name")?.as_str()?.into(),
+        aliases: song_aliases(song),
         artist: if artist.is_empty() {
             "未知艺术家".into()
         } else {
@@ -372,8 +414,21 @@ fn track_from_json(song: &Value) -> Option<Track> {
 
 #[cfg(test)]
 mod tests {
-    use super::{account_profile, qr_key};
+    use super::{account_profile, qr_key, song_aliases, Track};
     use serde_json::json;
+
+    #[test]
+    fn aliases_merge_translation_and_alias_shapes_without_duplicates() {
+        let song = json!({"name":"Причал", "tns":["码头", " "], "transNames":["码头"], "alia":["别名", "Причал"], "alias":["别名", "其他"]});
+        assert_eq!(song_aliases(&song), vec!["码头", "别名", "其他"]);
+        assert!(song_aliases(&json!({"name":"Song"})).is_empty());
+    }
+
+    #[test]
+    fn stored_tracks_without_aliases_remain_readable() {
+        let track: Track = serde_json::from_value(json!({"key":"netease:1", "title":"Song", "artist":"Artist", "album":"Album", "durationMs":1000, "cover":"", "source":{"kind":"netease", "id":1}})).unwrap();
+        assert!(track.aliases.is_empty());
+    }
 
     #[test]
     fn account_profile_accepts_both_response_shapes_and_rejects_logged_out() {

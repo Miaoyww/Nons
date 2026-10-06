@@ -114,6 +114,7 @@ fn read_track(path: &Path, cover_dir: &Path, fallback: &str, store: &Store) -> A
     // Re-importing a file must preserve a user's explicit lyric binding.
     let netease_id = store.track(&key).ok().and_then(|t| t.netease_id());
     Ok(Track {
+        aliases: Vec::new(),
         key,
         title: tag
             .and_then(|t| t.title())

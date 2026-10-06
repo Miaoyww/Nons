@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 
 export type TrackSource = { kind: "netease"; id: number } | { kind: "local"; path: string; neteaseId: number | null };
 export interface Track {
-  key: string; title: string; artist: string; album: string;
+  key: string; title: string; aliases?: string[]; artist: string; album: string;
   durationMs: number; cover: string; source: TrackSource;
 }
 export type PlaybackStatus = "stopped" | "loading" | "playing" | "paused" | "buffering" | "error";
