@@ -337,7 +337,7 @@
 }
 @media (hover: none) { .library-cover-play { opacity: 1; } }
 
-/* Isolate sticky headers in the scroll surface; keep hover geometry stable. */
+/* Keep row geometry stable across hover and keyboard focus. */
 .track-list { border-collapse: separate; border-spacing: 0 4px; }
 .track-row { border-radius: 12px; transition: box-shadow 160ms; }
 .track-row td { transition: background-color 160ms; }

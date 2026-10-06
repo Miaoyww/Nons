@@ -15,7 +15,7 @@ export const TrackList = memo(function TrackList({ tracks, currentKey, busy, onP
     {(likeError || likesError) && <div role="alert" className="mb-3 flex items-center gap-2 text-sm text-destructive"><p>{likeError ?? likesError}</p>{likesError && <ActionButton variant="ghost" size="sm" onClick={reloadLikes}>重试收藏状态</ActionButton>}</div>}
     <table className="track-list w-full table-fixed text-left text-sm">
     <caption className="sr-only">歌曲列表</caption>
-    <thead className="sticky top-0 z-10 bg-background text-xs text-muted-foreground">
+    <thead className="bg-background text-xs text-muted-foreground">
       <tr className="border-b border-border"><th className="w-12 py-3 text-center" scope="col">序号</th><th className="py-3" scope="col">歌曲</th><th className="w-[22%] py-3" scope="col">专辑</th><th className="w-12" scope="col"><span className="sr-only">喜欢</span></th><th className="w-20 py-3" scope="col">时长</th>{onAppend && <th className="w-12" scope="col"><span className="sr-only">加入队列</span></th>}</tr>
     </thead>
     <tbody>
