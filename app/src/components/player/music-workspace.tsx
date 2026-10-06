@@ -88,7 +88,7 @@ export function MusicWorkspace({ nowPlaying, onNowPlayingChange }: { nowPlaying:
     void nativeCall("append_queue", { keys: [track.key] }).then(() => setNotice(`已将「${track.title}」加入播放队列。`)).catch(onError);
   }, [onError]);
 
-  return <div className="flex min-h-0 flex-1 flex-col">
+  return <div className="music-workspace flex min-h-0 flex-1 flex-col">
     <Suspense fallback={<div role="status" className="m-auto">正在加载播放器…</div>}>
       <AnimatePresence>
         {nowPlaying && <LyricsView key="now-playing" onQueue={() => { navigate("queue"); onNowPlayingChange(false); }} />}

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { errorText, nativeCall } from "@/lib/player";
+import { errorText, nativeCall, usePlayer } from "@/lib/player";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Options { quality: string; allowDowngrade: boolean }
@@ -43,11 +43,13 @@ export function useMusicOptions() {
 
 export function QualitySelect() {
   const { options, busy, error, update } = useMusicOptions();
-  return <div className="flex flex-col gap-1">
+  const { actualQuality } = usePlayer();
+  const [open, setOpen] = useState(false);
+  return <div className="quality-control flex flex-col gap-1" data-open={open}>
     <Select items={qualities} value={options.quality} disabled={busy || !isTauri()}
-      onValueChange={(quality) => { if (quality) update({ quality }); }}>
-      <SelectTrigger size="sm" aria-label="音质" title="播放音质"><SelectValue /></SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}><SelectGroup>{qualities.map(({ value, label }) =>
+      onOpenChange={setOpen} onValueChange={(quality) => { if (quality) update({ quality }); }}>
+      <SelectTrigger size="sm" aria-label="音质" title={`偏好音质：${qualities.find((q) => q.value === options.quality)?.label ?? options.quality} · 实际音质：${actualQuality ?? "尚未播放"}`}><SelectValue /></SelectTrigger>
+      <SelectContent side="top" alignItemWithTrigger={false}><SelectGroup>{qualities.map(({ value, label }) =>
         <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent>
     </Select>
     {error && <p role="alert" className="max-w-48 text-xs text-destructive">{error}</p>}

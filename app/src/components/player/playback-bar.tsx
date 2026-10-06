@@ -1,9 +1,9 @@
-import { ListMusic, Pause, Play, SkipBack, SkipForward, Volume2 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, ListMusic, Pause, Play, Repeat, Repeat1 } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
 import { ActionButton } from "./action-button";
-import { Cover } from "./cover";
+import { trackDisplayTitle } from "./track-title";
 
 export function Timeline({ onError }: { onError: (error: unknown) => void }) {
   const progress = useProgress();
@@ -24,26 +24,32 @@ export function Timeline({ onError }: { onError: (error: unknown) => void }) {
 export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qualityControl?: ReactNode; onLyrics: () => void; onQueue: () => void; onError: (error: unknown) => void }) {
   const state = usePlayer();
   const track = state.index !== null ? state.queue[state.index] : undefined;
-  const playing = state.status === "playing" || state.status === "buffering" || state.status === "loading";
-  const [volume, setVolume] = useState(state.volume);
-  useEffect(() => setVolume(state.volume), [state.volume]);
+  const playing = ["playing", "buffering", "loading"].includes(state.status);
+  const [preview, setPreview] = useState<"previous" | "next" | null>(null);
+  const looping = state.repeatMode !== "off";
+  const previous = state.index === null ? undefined : state.queue[state.index - 1] ?? (looping ? state.queue[state.queue.length - 1] : undefined);
+  const next = state.index === null ? undefined : state.queue[state.index + 1] ?? (looping ? state.queue[0] : undefined);
+  const previewTrack = preview === "previous" ? previous : preview === "next" ? next : undefined;
+  const title = previewTrack ? trackDisplayTitle(previewTrack) : track ? trackDisplayTitle(track) : "选择一首音乐";
   const action = (action: string) => void nativeCall("player_action", { action }).catch(onError);
-  return <footer className="grid h-20 shrink-0 grid-cols-[minmax(180px,1fr)_minmax(280px,1.4fr)_minmax(180px,1fr)] items-center gap-6 border-t border-border bg-background px-6" aria-label="播放控制">
-    <button type="button" className="flex min-w-0 items-center gap-3 rounded-lg text-left outline-none hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring" aria-label="打开正在播放" onClick={onLyrics}><Cover cover={track?.cover} className="size-12" /><div className="min-w-0"><p className="truncate text-sm font-semibold">{track?.title ?? "选择一首音乐"}</p><p className="mt-1 truncate text-xs text-muted-foreground">{track?.artist ?? "网易云音乐与本地曲库"}</p><p className="mt-1 text-xs text-muted-foreground">{statusLabels[state.status]}{state.actualQuality && ` · ${state.actualQuality}`}</p></div></button>
-    <div className="flex flex-col items-center gap-1"><div className="flex items-center gap-4">
-      <ActionButton variant="ghost" size="icon" aria-label="上一首" disabled={!track || !isTauri()} onClick={() => action("previous")}><SkipBack aria-hidden="true" /></ActionButton>
-      <ActionButton size="icon-lg" className="rounded-full" aria-label={playing ? "暂停" : "播放"} disabled={!track || !isTauri()} onClick={() => action(playing ? "pause" : "resume")}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</ActionButton>
-      <ActionButton variant="ghost" size="icon" aria-label="下一首" disabled={state.index === null || state.index + 1 >= state.queue.length || !isTauri()} onClick={() => action("next")}><SkipForward aria-hidden="true" /></ActionButton>
-    </div><Timeline onError={onError} /></div>
-    <div className="flex items-center justify-end gap-3">
-      {qualityControl}
-      <ActionButton variant="ghost" size="icon" aria-label="显示播放队列" onClick={onQueue}><ListMusic aria-hidden="true" /></ActionButton>
-      <Volume2 className="size-4 text-muted-foreground" aria-hidden="true" />
-      <input type="range" aria-label="音量" min={0} max={1} step={0.01} value={volume} disabled={!isTauri()} onChange={(event) => {
-        const value = Number(event.target.value);
-        setVolume(value);
-        void nativeCall("player_volume", { volume: value }).catch(onError);
-      }} className="music-range w-20" />
+  const repeatLabel = state.repeatMode === "one" ? "单曲循环" : state.repeatMode === "all" ? "列表循环" : "顺序播放";
+  return <footer className="floating-playback" aria-label="播放控制">
+    <div className="playback-capsule glass-surface">
+      <ActionButton size="icon-lg" className="capsule-play" aria-label={playing ? "暂停" : "播放"} disabled={!track || !isTauri()} onClick={() => action(playing ? "pause" : "resume")}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</ActionButton>
+      <div className="capsule-center">
+        <div className="capsule-navigation">
+          <ActionButton variant="ghost" size="icon-sm" aria-label={previous ? `上一首：${trackDisplayTitle(previous)}` : "上一首"} disabled={!track || !isTauri()} onMouseEnter={() => setPreview("previous")} onMouseLeave={() => setPreview(null)} onFocus={() => setPreview("previous")} onBlur={() => setPreview(null)} onClick={() => action("previous")}><ChevronLeft aria-hidden="true" /></ActionButton>
+          <button type="button" className="capsule-title" aria-label="打开正在播放" title={title} onClick={onLyrics}><span key={title}>{title}</span></button>
+          <ActionButton variant="ghost" size="icon-sm" aria-label={next ? `下一首：${trackDisplayTitle(next)}` : "下一首"} disabled={!next || !isTauri()} onMouseEnter={() => setPreview("next")} onMouseLeave={() => setPreview(null)} onFocus={() => setPreview("next")} onBlur={() => setPreview(null)} onClick={() => action("next")}><ChevronRight aria-hidden="true" /></ActionButton>
+        </div>
+        <Timeline onError={onError} />
+      </div>
+      <div className="capsule-options">
+        {qualityControl}
+        <ActionButton variant="ghost" size="icon-sm" aria-label={`播放模式：${repeatLabel}，点击切换`} title={repeatLabel} disabled={!isTauri()} data-active={looping} onClick={() => action("repeat")}>{state.repeatMode === "one" ? <Repeat1 aria-hidden="true" /> : <Repeat aria-hidden="true" />}</ActionButton>
+        <ActionButton variant="ghost" size="icon-sm" aria-label="显示播放队列" onClick={onQueue}><ListMusic aria-hidden="true" /></ActionButton>
+      </div>
+      <span className="sr-only">{statusLabels[state.status]}{state.actualQuality && ` · 实际音质 ${state.actualQuality}`}</span>
     </div>
   </footer>;
 }
