@@ -83,7 +83,7 @@ export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean;
           className="flex h-full min-w-0 flex-1 items-center gap-2.5 pl-7"
           onMouseDown={drag}
         >
-          {playerMode ? <Button autoFocus variant="ghost" size="sm" aria-label="返回音乐" onMouseDown={(event) => event.stopPropagation()} onClick={onBack}><ChevronDown aria-hidden="true" />返回</Button> : <><img src={appIcon} alt="" className="size-7" draggable={false} />
+          {playerMode ? <Button autoFocus variant="ghost" size="icon-lg" className="now-playing-back" aria-label="返回音乐" title="返回音乐" onMouseDown={(event) => event.stopPropagation()} onClick={onBack}><ChevronDown aria-hidden="true" /></Button> : <><img src={appIcon} alt="" className="size-7" draggable={false} />
           <span className="text-sm font-semibold">NonsPlayer</span></>}
         </div>
 

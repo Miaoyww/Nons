@@ -25,7 +25,7 @@ function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
   });
 }
 
-function LyricRenderer({ lines }: { lines: LyricLine[] }) {
+function LyricRenderer({ lines, onError }: { lines: LyricLine[]; onError: (cause: unknown) => void }) {
   const [visible, setVisible] = useState(document.visibilityState !== "hidden");
   const progress = useProgress(visible);
   const [renderer, setRenderer] = useState<LyricPlayerRef | null>(null);
@@ -64,6 +64,10 @@ function LyricRenderer({ lines }: { lines: LyricLine[] }) {
   // AMLL's automatic frame loop is disabled; only the visible lyric subtree
   // receives an interpolated clock. React does not render on every frame.
   return visible ? <LyricPlayer ref={retainRenderer} className="h-full w-full" lyricLines={lines} disabled playing={playing} currentTime={progress.positionMs}
+    onLyricLineClick={(event) => {
+      if (!isTauri()) return;
+      void nativeCall("player_seek", { positionMs: event.line.getLine().startTime }).catch(onError);
+    }}
     enableBlur={!reduced} enableScale={!reduced} enableSpring={!reduced} alignPosition={0.4} /> : null;
 }
 
@@ -120,8 +124,8 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
     <AlbumBackground cover={track?.cover} playing={state.status === "playing"} hasLyrics={lines.length > 0} />
     <div className={`now-playing-layout relative min-h-0 flex-1 ${showLyrics ? "has-lyrics" : ""}`}>
     <div className="now-playing-details flex min-h-0 min-w-0 flex-col justify-center gap-5 overflow-y-auto">
-      <Cover cover={track?.cover} className="now-playing-cover aspect-square w-full rounded-xl shadow-2xl" />
-      <div className="flex items-start justify-between gap-4"><div className="min-w-0"><h1 className="truncate text-xl font-semibold tracking-tight">{track?.title ?? "让音乐开始"}</h1><p className="mt-1 truncate text-muted-foreground">{track?.artist ?? "选择一首喜欢的音乐"}</p></div><ActionButton variant="ghost" size="icon-sm" disabled={!track || loading} aria-label="刷新歌词" title={`刷新歌词 · ${source ?? "暂无歌词"}`} onClick={refreshTrack}><RefreshCw aria-hidden="true" /></ActionButton></div>
+      <div className="now-playing-cover-slot"><Cover cover={track?.cover} className="now-playing-cover aspect-square rounded-xl shadow-2xl" /></div>
+      <div className="flex shrink-0 items-start justify-between gap-4"><div className="min-w-0"><h1 className="truncate text-xl font-semibold tracking-tight">{track?.title ?? "让音乐开始"}</h1><p className="mt-1 truncate text-muted-foreground">{track?.artist ?? "选择一首喜欢的音乐"}</p></div><ActionButton variant="ghost" size="icon-sm" disabled={!track || loading} aria-label="刷新歌词" title={`刷新歌词 · ${source ?? "暂无歌词"}`} onClick={refreshTrack}><RefreshCw aria-hidden="true" /></ActionButton></div>
       <NowPlayingControls onQueue={onQueue} onError={(cause) => setError(errorText(cause))} />
       {track?.source.kind === "local" && <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">匹配在线歌词</summary><form className="mt-3 space-y-2" onSubmit={(event) => {
         event.preventDefault(); const id = Number(binding);
@@ -130,7 +134,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
       }}><label htmlFor="lyric-binding">对应版本的网易云歌曲 ID</label><div className="flex gap-2"><input id="lyric-binding" inputMode="numeric" value={binding} onChange={(e) => setBinding(e.target.value)} className="music-input min-w-0 flex-1" /><ActionButton type="submit" variant="secondary" disabled={loading}>绑定</ActionButton></div><p className="text-xs text-muted-foreground">请确认是同一录音版本，本地歌词文件始终优先。</p></form></details>}
       {(error || state.error || state.mediaError) && <p role="alert" className="text-sm">{error ?? state.error ?? state.mediaError}</p>}
     </div>
-    {showLyrics && <div className="now-playing-lyrics min-h-0 min-w-0 overflow-hidden">{lines.length ? <LyricRenderer key={track?.key} lines={lines} /> : <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">正在查找歌词…</div>}</div>}
+    {showLyrics && <div className="now-playing-lyrics min-h-0 min-w-0 overflow-hidden">{lines.length ? <LyricRenderer key={track?.key} lines={lines} onError={(cause) => setError(errorText(cause))} /> : <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">正在查找歌词…</div>}</div>}
     </div>
   </section>;
 }
