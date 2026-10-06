@@ -36,7 +36,8 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qu
   const action = (action: string) => void nativeCall("player_action", { action }).catch(onError);
   const repeatLabel = state.repeatMode === "one" ? "单曲循环" : state.repeatMode === "all" ? "列表循环" : "顺序播放";
   return <footer className="floating-playback" aria-label="播放控制">
-    <div className="playback-capsule glass-surface">
+    <div className="playback-capsule">
+      <div className="capsule-glass glass-surface" aria-hidden="true" />
       <ActionButton size="icon-lg" className="capsule-play" aria-label={playing ? "暂停" : "播放"} disabled={!track || !isTauri()} onClick={() => action(playing ? "pause" : "resume")}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</ActionButton>
       <div className="capsule-center">
         <div className="capsule-navigation">
@@ -51,8 +52,8 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qu
         <ActionButton variant="ghost" size="icon-sm" aria-label={`播放模式：${repeatLabel}，点击切换`} title={repeatLabel} disabled={!isTauri()} data-active={looping} onClick={() => action("repeat")}>{state.repeatMode === "one" ? <Repeat1 aria-hidden="true" /> : <Repeat aria-hidden="true" />}</ActionButton>
         <ActionButton variant="ghost" size="icon-sm" aria-label="显示播放队列" onClick={onQueue}><ListMusic aria-hidden="true" /></ActionButton>
       </div>
+      <VolumeControl onError={onError} />
       <span className="sr-only">{statusLabels[state.status]}{state.actualQuality && ` · 实际音质 ${state.actualQuality}`}</span>
     </div>
-    <VolumeControl onError={onError} />
   </footer>;
 }

@@ -26,7 +26,7 @@ export function VolumeControl({ onError }: { onError: (error: unknown) => void }
   return <div className="volume-control" data-dismissed={dismissed} onMouseEnter={() => setDismissed(false)} onFocus={() => setDismissed(false)} onKeyDown={(event) => {
     if (event.key === "Escape") { event.preventDefault(); setDismissed(true); event.currentTarget.querySelector<HTMLButtonElement>("button")?.focus(); setDismissed(true); }
   }}>
-    <ActionButton variant="ghost" size="icon-lg" className="volume-button glass-surface" aria-label={volume === 0 ? "取消静音" : "静音"} aria-pressed={volume === 0} aria-describedby="playback-volume-value" disabled={!isTauri()} onClick={() => changeVolume(volume === 0 ? previousVolume.current : 0)}>
+    <ActionButton variant="ghost" size="icon-sm" className="volume-button" aria-label={volume === 0 ? "取消静音" : "静音"} aria-pressed={volume === 0} aria-describedby="playback-volume-value" disabled={!isTauri()} onClick={() => changeVolume(volume === 0 ? previousVolume.current : 0)}>
       {volume === 0 ? <VolumeX aria-hidden="true" /> : volume < 0.5 ? <Volume1 aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
     </ActionButton>
     <div className="volume-card-slot">
