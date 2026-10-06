@@ -120,7 +120,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   }, [track?.key, apply]);
 
   const showLyrics = lines.length > 0 || loading;
-  return <section className="nons-lyrics absolute inset-0 flex flex-col pt-12" aria-label="正在播放">
+  return <section className="nons-lyrics now-playing-enter absolute inset-0 flex flex-col pt-12" aria-label="正在播放">
     <AlbumBackground cover={track?.cover} playing={state.status === "playing"} hasLyrics={lines.length > 0} />
     <div className={`now-playing-layout relative min-h-0 flex-1 ${showLyrics ? "has-lyrics" : ""}`}>
     <div className="now-playing-details flex min-h-0 min-w-0 flex-col justify-center gap-5 overflow-y-auto">
