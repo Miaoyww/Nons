@@ -277,6 +277,48 @@
   padding: 40px clamp(32px, 8vw, 160px) 32px;
 }
 .dark .music-library { --library-primary: var(--music-accent); --library-primary-bg: oklch(0.26 0.055 264); }
+
+/* Keep the native scroll interaction with a quiet, rounded page scrollbar. */
+#music-content > :is(.music-library, .relative.overflow-auto) {
+  --page-scrollbar-thumb: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+  --page-scrollbar-thumb-hover: var(--muted-foreground);
+  scrollbar-width: thin;
+  scrollbar-color: var(--page-scrollbar-thumb) transparent;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  #music-content > :is(.music-library, .relative.overflow-auto) {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  #music-content > :is(.music-library, .relative.overflow-auto)::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  #music-content > :is(.music-library, .relative.overflow-auto)::-webkit-scrollbar-track,
+  #music-content > :is(.music-library, .relative.overflow-auto)::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  #music-content > :is(.music-library, .relative.overflow-auto)::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: var(--page-scrollbar-thumb);
+    background-clip: padding-box;
+  }
+  #music-content > :is(.music-library, .relative.overflow-auto)::-webkit-scrollbar-thumb:hover {
+    background-color: var(--page-scrollbar-thumb-hover);
+  }
+  #music-content > :is(.music-library, .relative.overflow-auto)::-webkit-scrollbar-button {
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  #music-content > :is(.music-library, .relative.overflow-auto) {
+    --page-scrollbar-thumb: CanvasText;
+    --page-scrollbar-thumb-hover: Highlight;
+  }
+}
 .library-profile { display: flex; align-items: center; gap: 12px; }
 .library-avatar { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; object-fit: cover; }
 .library-heading { font-size: clamp(30px, 3.5vw, 42px); font-weight: 700; letter-spacing: -0.035em; line-height: 1.25; overflow-wrap: anywhere; }
