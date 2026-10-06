@@ -81,12 +81,12 @@ export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean;
   return (
     <>
       <header
-        className={`titlebar glass-surface relative z-10 h-12 shrink-0 select-none items-center ${playerMode ? "flex" : "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"}`}
+        className={`titlebar relative z-10 h-12 shrink-0 select-none items-center ${playerMode ? "flex bg-transparent" : "glass-surface grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"}`}
         data-focused={focused}
       >
         <div className={`flex h-full min-w-0 ${playerMode ? "flex-1" : "items-center"}`}>
         <div
-          className={`flex h-full min-w-0 gap-2.5 ${playerMode ? "items-start flex-1" : "items-center pl-4 pr-4"}`}
+          className={`flex h-full min-w-0 items-center gap-2.5 ${playerMode ? "flex-1" : "pl-4 pr-4"}`}
           onMouseDown={drag}
         >
           {playerMode ? <Button autoFocus variant="ghost" size="icon-lg" className="now-playing-back" aria-label="返回音乐" title="返回音乐" onMouseDown={(event) => event.stopPropagation()} onClick={onBack}><ChevronDown aria-hidden="true" /></Button> : <><img src={appIcon} alt="" className="size-7" draggable={false} />

@@ -56,7 +56,7 @@
 .now-playing-cover { width: min(100cqw, 100cqh); min-height: 0; }
 .now-playing-toggle { width: 56px; height: 56px; }
 .now-playing-toggle svg { width: 36px; max-width: 100%; flex-shrink: 0; height: 36px; fill: currentColor; }
-.now-playing-back { width: 44px; height: 44px; margin: 8px 0 0 12px; }
+.now-playing-back { width: 44px; height: 44px; margin-left: 12px; }
 .now-playing-back svg { width: 26px; height: 26px; }
 .now-playing-lyrics { mask-image: linear-gradient(transparent, black 12%, black 85%, transparent); }
 .now-playing .nons-lyrics .amll-lyric-player { --amll-lp-hover-bg-color: rgb(255 255 255 / 10%); }
@@ -423,11 +423,11 @@
   .capsule-options > button { width: 24px; }
 }
 /* Content scrolls beneath the titlebar so backdrop blur has real content to sample. */
-.titlebar.glass-surface { position: absolute; inset: 0 0 auto; border-width: 0 0 1px; box-shadow: 0 4px 20px rgb(0 0 0 / 5%); }
+.titlebar { position: absolute; inset: 0 0 auto; }
+.titlebar.glass-surface { border-width: 0 0 1px; box-shadow: 0 4px 20px rgb(0 0 0 / 5%); }
 .music-workspace { padding-top: 48px; }
 .music-library { padding-top: 88px; padding-bottom: 112px; margin-top: -48px; }
 #music-content > .relative.overflow-auto { padding-bottom: 112px; }
-.now-playing .titlebar.glass-surface { background: rgb(0 0 0 / 16%); border-color: rgb(255 255 255 / 8%); }
 .playback-capsule .capsule-center .music-range { appearance: none; background: transparent; }
 .playback-capsule .capsule-center .music-range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--music-accent) var(--seek-progress), var(--muted) var(--seek-progress)); }
 .playback-capsule .capsule-center .music-range::-webkit-slider-thumb { appearance: none; width: 5px; height: 5px; margin-top: -0.5px; border-radius: 50%; background: var(--music-accent); }
