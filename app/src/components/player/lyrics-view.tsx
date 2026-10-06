@@ -12,11 +12,13 @@ import { Cover } from "./cover";
 import { AlbumBackground } from "./album-background";
 import { NowPlayingControls } from "./now-playing-controls";
 
+class EmptyLyricsError extends Error {}
+
 function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
   const result = value.format === "ttml" ? parseTTML(value.content).lines : value.format === "yrc" ? parseYrc(value.content) : parseLrc(value.content);
   const translations = value.translation ? new Map(parseLrc(value.translation).map((line) => [line.startTime, line.words.map((word) => word.word).join("")])) : undefined;
   const romans = value.romanization ? new Map(parseLrc(value.romanization).map((line) => [line.startTime, line.words.map((word) => word.word).join("")])) : undefined;
-  if (!result.length) throw new Error("歌词没有可显示的时间轴。");
+  if (!result.length) throw new EmptyLyricsError();
   return result.map((line, index) => {
     const end = Number.isFinite(line.endTime) && line.endTime > line.startTime ? line.endTime : result[index + 1]?.startTime ?? Math.max(duration, line.startTime + 5000);
     if (!Number.isFinite(line.startTime) || line.startTime < 0 || end < line.startTime) throw new Error("歌词时间轴无效。");
@@ -108,7 +110,9 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
         if (generation.current === serial) apply(value, track.durationMs);
       }
     };
-    void load().catch((cause) => { if (generation.current === serial) setError(errorText(cause)); }).finally(() => { if (generation.current === serial) setLoading(false); });
+    void load().catch((cause) => {
+      if (generation.current === serial && !(cause instanceof EmptyLyricsError)) setError(errorText(cause));
+    }).finally(() => { if (generation.current === serial) setLoading(false); });
     return () => { generation.current++; };
   }, [track?.key, refresh, apply]);
   useEffect(() => {
