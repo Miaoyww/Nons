@@ -10,10 +10,14 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@applemusic-like-lyrics/core": "^0.6.0",
+    "@applemusic-like-lyrics/lyric": "^1.1.0",
+    "@applemusic-like-lyrics/react": "^0.6.0",
     "@base-ui/react": "^1.8.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-dialog": "^2.8.1",
+    "@tauri-apps/plugin-opener": "^2.7.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^1.48.0",
