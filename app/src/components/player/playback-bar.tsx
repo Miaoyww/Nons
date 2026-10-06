@@ -4,6 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { trackDisplayTitle } from "./track-title";
+import { VolumeControl } from "./volume-control";
 
 export function Timeline({ onError }: { onError: (error: unknown) => void }) {
   const progress = useProgress();
@@ -26,7 +27,7 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qu
   const track = state.index !== null ? state.queue[state.index] : undefined;
   const playing = ["playing", "buffering", "loading"].includes(state.status);
   const [preview, setPreview] = useState<"previous" | "next" | null>(null);
-  const looping = state.repeatMode !== "off";
+  const looping = state.repeatMode === "all" || state.repeatMode === "one";
   const previous = state.index === null ? undefined : state.queue[state.index - 1] ?? (looping ? state.queue[state.queue.length - 1] : undefined);
   const next = state.index === null ? undefined : state.queue[state.index + 1] ?? (looping ? state.queue[0] : undefined);
   const previewTrack = preview === "previous" ? previous : preview === "next" ? next : undefined;
@@ -51,5 +52,6 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qu
       </div>
       <span className="sr-only">{statusLabels[state.status]}{state.actualQuality && ` · 实际音质 ${state.actualQuality}`}</span>
     </div>
+    <VolumeControl onError={onError} />
   </footer>;
 }

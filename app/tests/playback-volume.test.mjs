@@ -9,13 +9,15 @@ import ts from "typescript";
 function volumeControl({ failure, desktop = true } = {}) {
   const calls = [];
   const errors = [];
-  let localVolume;
+  const slots = [];
+  let cursor = 0;
   const jsx = (type, props) => ({ type, props });
   const modules = {
     "react/jsx-runtime": { jsx, jsxs: jsx },
     react: {
-      useState: (initial) => [initial, (value) => { localVolume = value; }],
+      useState: (initial) => { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], (value) => { slots[i] = value; }]; },
       useEffect: () => {},
+      useRef: (current) => { const i = cursor++; return slots[i] ??= { current }; },
     },
     "@tauri-apps/api/core": { isTauri: () => desktop },
     "@/lib/player": {
@@ -30,7 +32,7 @@ function volumeControl({ failure, desktop = true } = {}) {
     "./action-button": {},
     "./cover": {},
   };
-  const source = readFileSync(new URL("../src/components/player/playback-bar.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/components/player/volume-control.tsx", import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   });
@@ -42,7 +44,8 @@ function volumeControl({ failure, desktop = true } = {}) {
       return modules[name];
     },
   });
-  const tree = exports.PlaybackBar({ onLyrics() {}, onQueue() {}, onError: (error) => errors.push(error) });
+  function render() { cursor = 0; return exports.VolumeControl({ onError: (error) => errors.push(error) }); }
+  const tree = render();
   function findVolume(node) {
     if (!node || typeof node !== "object") return;
     if (node.type === "input" && node.props["aria-label"] === "音量") return node.props;
@@ -53,8 +56,21 @@ function volumeControl({ failure, desktop = true } = {}) {
   }
   const input = findVolume(tree);
   assert.ok(input, "playback bar must expose a volume range");
-  return { input, calls, errors, get localVolume() { return localVolume; } };
+  return { input, calls, errors, render, get localVolume() { return slots[0]; } };
 }
+
+test("mute button restores the volume selected before muting", () => {
+  const control = volumeControl();
+  control.input.onChange({ target: { value: "0.35" } });
+  let button = control.render().props.children[0].props;
+  assert.equal(button["aria-label"], "静音");
+  button.onClick();
+  assert.equal(control.calls.at(-1).volume, 0);
+  button = control.render().props.children[0].props;
+  assert.equal(button["aria-label"], "取消静音");
+  button.onClick();
+  assert.equal(control.calls.at(-1).volume, 0.35);
+});
 
 test("volume changes reach native playback before pointer/key release, including mute", () => {
   const control = volumeControl();

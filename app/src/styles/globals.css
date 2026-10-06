@@ -405,3 +405,18 @@
   .playback-capsule .capsule-options { width: 132px; max-width: 132px; opacity: 1; visibility: visible; overflow: visible; }
   .playback-capsule .capsule-navigation { height: 28px; opacity: 1; visibility: visible; overflow: visible; }
 }
+.volume-control { position: relative; flex-shrink: 0; pointer-events: auto; }
+.volume-control .volume-button { width: 48px; height: 48px; border-radius: 50%; }
+.volume-card-slot { position: absolute; right: 0; bottom: 100%; width: 192px; padding-bottom: 12px; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(4px); transition: opacity 160ms, transform 160ms, visibility 160ms; }
+.volume-card { padding: 16px; border-radius: 20px; background: color-mix(in oklch, var(--background) 85%, transparent); }
+.volume-control:is(:hover, :focus-within):not([data-dismissed="true"]) .volume-card-slot { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+.now-playing .music-workspace { padding-bottom: 0; }
+@media (max-width: 480px) {
+  .floating-playback { gap: 8px; width: calc(100% - 16px); }
+  .playback-capsule, .playback-capsule:hover, .playback-capsule:focus-within { padding: 8px; gap: 4px; }
+  .playback-capsule .capsule-play { width: 32px; max-width: 32px; height: 40px; }
+  .playback-capsule .capsule-options { width: 112px; max-width: 112px; }
+  .capsule-options [data-slot="select-trigger"] { padding-inline: 6px; font-size: 12px; }
+  .capsule-options button { flex-shrink: 0; }
+  .capsule-options > button { width: 24px; }
+}
