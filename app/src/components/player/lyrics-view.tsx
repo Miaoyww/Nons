@@ -9,6 +9,8 @@ import { RefreshCw } from "lucide-react";
 import { currentPosition, errorText, nativeCall, usePlayer, useProgress, type Lyrics } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { Cover } from "./cover";
+import { AlbumBackground } from "./album-background";
+import { NowPlayingControls } from "./now-playing-controls";
 
 function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
   const result = value.format === "ttml" ? parseTTML(value.content).lines : value.format === "yrc" ? parseYrc(value.content) : parseLrc(value.content);
@@ -26,37 +28,46 @@ function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
 function LyricRenderer({ lines }: { lines: LyricLine[] }) {
   const [visible, setVisible] = useState(document.visibilityState !== "hidden");
   const progress = useProgress(visible);
-  const ref = useRef<LyricPlayerRef>(null);
+  const [renderer, setRenderer] = useState<LyricPlayerRef | null>(null);
+  const retainRenderer = useCallback((value: LyricPlayerRef | null) => setRenderer(value), []);
+  const [layoutVersion, setLayoutVersion] = useState(0);
   const reduced = useReducedMotion();
   const playing = progress.status === "playing";
+  const pausedPosition = playing ? 0 : progress.positionMs;
   useEffect(() => {
     const changed = () => setVisible(document.visibilityState !== "hidden");
     document.addEventListener("visibilitychange", changed);
     return () => document.removeEventListener("visibilitychange", changed);
   }, []);
   useEffect(() => {
-    if (!visible || !playing) return;
+    if (!renderer?.wrapperEl || !visible) return;
+    const observer = new ResizeObserver(() => setLayoutVersion((version) => version + 1));
+    observer.observe(renderer.wrapperEl);
+    return () => observer.disconnect();
+  }, [renderer, visible]);
+  useEffect(() => {
+    const player = renderer?.lyricPlayer;
+    if (!visible || !player) return;
     let frame = 0;
     let previous = performance.now();
+    const started = previous;
     const tick = (now: number) => {
-      const player = ref.current?.lyricPlayer;
-      if (player) { player.setCurrentTime(currentPosition(now)); player.update(Math.min(50, now - previous)); }
+      player.setCurrentTime(playing ? currentPosition(now) : pausedPosition);
+      player.update(Math.min(50, now - previous));
       previous = now;
-      frame = requestAnimationFrame(tick);
+      // Let initial/seek/resize layout settle even when entering a paused song.
+      if (playing || now - started < 1000) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [visible, playing]);
-  useEffect(() => {
-    if (!playing && visible) { ref.current?.lyricPlayer?.setCurrentTime(progress.positionMs); ref.current?.lyricPlayer?.update(0); }
-  }, [playing, visible, progress.positionMs]);
+  }, [visible, playing, pausedPosition, renderer, lines, layoutVersion]);
   // AMLL's automatic frame loop is disabled; only the visible lyric subtree
   // receives an interpolated clock. React does not render on every frame.
-  return visible ? <LyricPlayer ref={ref} className="h-full w-full" lyricLines={lines} disabled playing={playing} currentTime={progress.positionMs}
-    enableBlur={false} enableScale={!reduced} enableSpring={!reduced} alignPosition={0.35} /> : null;
+  return visible ? <LyricPlayer ref={retainRenderer} className="h-full w-full" lyricLines={lines} disabled playing={playing} currentTime={progress.positionMs}
+    enableBlur={!reduced} enableScale={!reduced} enableSpring={!reduced} alignPosition={0.4} /> : null;
 }
 
-export default function LyricsView() {
+export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const state = usePlayer();
   const track = state.index !== null ? state.queue[state.index] : undefined;
   const [lines, setLines] = useState<LyricLine[]>([]);
@@ -73,7 +84,7 @@ export default function LyricsView() {
   }, []);
   useEffect(() => {
     const serial = ++generation.current;
-    setLines([]); setSource(undefined); setError(undefined);
+    setLines([]); setSource(undefined); setError(undefined); setLoading(false);
     if (!track || !isTauri()) return;
     setLoading(true);
     const load = async () => {
@@ -104,18 +115,22 @@ export default function LyricsView() {
     return () => { disposed = true; stop?.(); };
   }, [track?.key, apply]);
 
-  return <section className="nons-lyrics grid h-full min-h-0 grid-cols-[minmax(240px,0.8fr)_minmax(360px,1.2fr)] gap-10 px-10 py-8" aria-label="正在播放的歌词">
-    <div className="flex min-h-0 min-w-0 flex-col gap-6 overflow-y-auto">
-      <Cover cover={track?.cover} className="aspect-square w-full max-w-52 rounded-2xl" />
-      <div><h1 className="text-2xl font-semibold tracking-tight">{track?.title ?? "让音乐开始"}</h1><p className="mt-2 text-muted-foreground">{track?.artist ?? "选择歌曲后，在这里查看同步歌词。"}</p>{track && <p className="mt-1 text-sm text-muted-foreground">{track.album}</p>}</div>
-      <div className="flex items-center gap-3"><span className="text-xs text-muted-foreground">{source ?? "暂无歌词"}</span><ActionButton variant="ghost" size="icon-sm" disabled={!track || loading} aria-label="刷新歌词" onClick={refreshTrack}><RefreshCw aria-hidden="true" /></ActionButton></div>
+  const showLyrics = lines.length > 0 || loading;
+  return <section className="nons-lyrics absolute inset-0 flex flex-col pt-12" aria-label="正在播放">
+    <AlbumBackground cover={track?.cover} playing={state.status === "playing"} hasLyrics={lines.length > 0} />
+    <div className={`now-playing-layout relative min-h-0 flex-1 ${showLyrics ? "has-lyrics" : ""}`}>
+    <div className="now-playing-details flex min-h-0 min-w-0 flex-col justify-center gap-5 overflow-y-auto">
+      <Cover cover={track?.cover} className="now-playing-cover aspect-square w-full rounded-xl shadow-2xl" />
+      <div className="flex items-start justify-between gap-4"><div className="min-w-0"><h1 className="truncate text-xl font-semibold tracking-tight">{track?.title ?? "让音乐开始"}</h1><p className="mt-1 truncate text-muted-foreground">{track?.artist ?? "选择一首喜欢的音乐"}</p></div><ActionButton variant="ghost" size="icon-sm" disabled={!track || loading} aria-label="刷新歌词" title={`刷新歌词 · ${source ?? "暂无歌词"}`} onClick={refreshTrack}><RefreshCw aria-hidden="true" /></ActionButton></div>
+      <NowPlayingControls onQueue={onQueue} onError={(cause) => setError(errorText(cause))} />
       {track?.source.kind === "local" && <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">匹配在线歌词</summary><form className="mt-3 space-y-2" onSubmit={(event) => {
         event.preventDefault(); const id = Number(binding);
         if (!Number.isSafeInteger(id) || id <= 0) { setError("请输入有效的网易云歌曲 ID。"); return; }
         void nativeCall("bind_local_lyrics", { key: track.key, neteaseId: id }).then(refreshTrack).catch((cause) => setError(errorText(cause)));
       }}><label htmlFor="lyric-binding">对应版本的网易云歌曲 ID</label><div className="flex gap-2"><input id="lyric-binding" inputMode="numeric" value={binding} onChange={(e) => setBinding(e.target.value)} className="music-input min-w-0 flex-1" /><ActionButton type="submit" variant="secondary" disabled={loading}>绑定</ActionButton></div><p className="text-xs text-muted-foreground">请确认是同一录音版本，本地歌词文件始终优先。</p></form></details>}
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {(error || state.error || state.mediaError) && <p role="alert" className="text-sm">{error ?? state.error ?? state.mediaError}</p>}
     </div>
-    <div className="min-h-0 min-w-0 overflow-hidden">{lines.length ? <LyricRenderer key={track?.key} lines={lines} /> : <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">{loading ? "正在查找歌词…" : track ? "这首音乐暂时没有可用歌词。" : "音乐与歌词，在同一个节奏里。"}</div>}</div>
+    {showLyrics && <div className="now-playing-lyrics min-h-0 min-w-0 overflow-hidden">{lines.length ? <LyricRenderer key={track?.key} lines={lines} /> : <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">正在查找歌词…</div>}</div>}
+    </div>
   </section>;
 }

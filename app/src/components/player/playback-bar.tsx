@@ -1,11 +1,11 @@
-import { ListMusic, Mic2, Pause, Play, SkipBack, SkipForward, Volume2 } from "lucide-react";
+import { ListMusic, Pause, Play, SkipBack, SkipForward, Volume2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { Cover } from "./cover";
 
-function Timeline({ onError }: { onError: (error: unknown) => void }) {
+export function Timeline({ onError }: { onError: (error: unknown) => void }) {
   const progress = useProgress();
   const [drag, setDrag] = useState<number | null>(null);
   return <div className="flex w-full items-center gap-3 text-xs tabular-nums text-muted-foreground">
@@ -29,7 +29,7 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qu
   useEffect(() => setVolume(state.volume), [state.volume]);
   const action = (action: string) => void nativeCall("player_action", { action }).catch(onError);
   return <footer className="grid h-28 shrink-0 grid-cols-[minmax(180px,1fr)_minmax(280px,1.4fr)_minmax(180px,1fr)] items-center gap-6 border-t border-border bg-background px-6" aria-label="播放控制">
-    <div className="flex min-w-0 items-center gap-3"><Cover cover={track?.cover} className="size-14" /><div className="min-w-0"><p className="truncate text-sm font-semibold">{track?.title ?? "选择一首音乐"}</p><p className="mt-1 truncate text-xs text-muted-foreground">{track?.artist ?? "网易云音乐与本地曲库"}</p><p className="mt-1 text-xs text-muted-foreground">{statusLabels[state.status]}{state.actualQuality && ` · ${state.actualQuality}`}</p></div></div>
+    <button type="button" className="flex min-w-0 items-center gap-3 rounded-lg text-left outline-none hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring" aria-label="打开正在播放" onClick={onLyrics}><Cover cover={track?.cover} className="size-14" /><div className="min-w-0"><p className="truncate text-sm font-semibold">{track?.title ?? "选择一首音乐"}</p><p className="mt-1 truncate text-xs text-muted-foreground">{track?.artist ?? "网易云音乐与本地曲库"}</p><p className="mt-1 text-xs text-muted-foreground">{statusLabels[state.status]}{state.actualQuality && ` · ${state.actualQuality}`}</p></div></button>
     <div className="flex flex-col items-center gap-3"><div className="flex items-center gap-5">
       <ActionButton variant="ghost" size="icon" aria-label="上一首" disabled={!track || !isTauri()} onClick={() => action("previous")}><SkipBack aria-hidden="true" /></ActionButton>
       <ActionButton size="icon-lg" className="rounded-full" aria-label={playing ? "暂停" : "播放"} disabled={!track || !isTauri()} onClick={() => action(playing ? "pause" : "resume")}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</ActionButton>
@@ -37,7 +37,6 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qu
     </div><Timeline onError={onError} /></div>
     <div className="flex items-center justify-end gap-3">
       {qualityControl}
-      <ActionButton variant="ghost" size="icon" aria-label="显示歌词" onClick={onLyrics}><Mic2 aria-hidden="true" /></ActionButton>
       <ActionButton variant="ghost" size="icon" aria-label="显示播放队列" onClick={onQueue}><ListMusic aria-hidden="true" /></ActionButton>
       <Volume2 className="size-4 text-muted-foreground" aria-hidden="true" />
       <input type="range" aria-label="音量" min={0} max={1} step={0.01} value={volume} disabled={!isTauri()} onChange={(event) => {

@@ -2,13 +2,13 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { Copy, Minus, Square, X } from "lucide-react";
+import { ChevronDown, Copy, Minus, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { LoginDialog } from "@/components/player/login-dialog";
 import appIcon from "@/assets/icon.png";
 
-export function Titlebar() {
+export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean; onBack?: () => void }) {
   const native = isTauri();
   const [maximized, setMaximized] = useState(false);
   const [focused, setFocused] = useState(true);
@@ -76,22 +76,21 @@ export function Titlebar() {
   return (
     <>
       <header
-        className="titlebar flex h-12 shrink-0 select-none items-center border-b border-border/70 bg-background"
+        className={`titlebar relative z-10 flex h-12 shrink-0 select-none items-center ${playerMode ? "bg-transparent" : "border-b border-border/70 bg-background"}`}
         data-focused={focused}
       >
         <div
           className="flex h-full min-w-0 flex-1 items-center gap-2.5 pl-7"
           onMouseDown={drag}
         >
-          <img src={appIcon} alt="" className="size-7" draggable={false} />
-          <span className="text-sm font-semibold">NonsPlayer</span>
+          {playerMode ? <Button autoFocus variant="ghost" size="sm" aria-label="返回音乐" onMouseDown={(event) => event.stopPropagation()} onClick={onBack}><ChevronDown aria-hidden="true" />返回</Button> : <><img src={appIcon} alt="" className="size-7" draggable={false} />
+          <span className="text-sm font-semibold">NonsPlayer</span></>}
         </div>
 
         <div className="flex h-full shrink-0 items-center gap-1 pr-1.5">
-          <LoginDialog />
-          <SettingsDialog />
+          <div className={playerMode ? "hidden" : "flex items-center gap-1"}><LoginDialog /><SettingsDialog /></div>
 
-          <span className="mx-1.5 h-4 w-px bg-border" aria-hidden="true" />
+          {!playerMode && <span className="mx-1.5 h-4 w-px bg-border" aria-hidden="true" />}
           <Button
             variant="ghost"
             size="icon-sm"
