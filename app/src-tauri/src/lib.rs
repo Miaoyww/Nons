@@ -1,3 +1,4 @@
+mod audio;
 mod library;
 mod lyrics;
 mod media;

@@ -2,11 +2,13 @@ import { BackgroundRender, MeshGradientRenderer } from "@applemusic-like-lyrics/
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
 import { coverSource } from "@/lib/player";
+import { useLyricsSettings } from "@/hooks/use-lyrics-settings";
 
 export function AlbumBackground({ cover, playing, hasLyrics }: { cover?: string; playing: boolean; hasLyrics: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const renderer = useRef<BackgroundRender<MeshGradientRenderer> | null>(null);
   const reduced = useReducedMotion();
+  const { backgroundSpeed } = useLyricsSettings();
   const [visible, setVisible] = useState(document.visibilityState !== "hidden");
   const album = cover ? coverSource(cover) : undefined;
   useEffect(() => {
@@ -20,7 +22,6 @@ export function AlbumBackground({ cover, playing, hasLyrics }: { cover?: string;
     try {
       background = BackgroundRender.new(MeshGradientRenderer);
       background.setFPS(30);
-      background.setFlowSpeed(4);
       background.setRenderScale(0.5);
       const element = background.getElement();
       element.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
@@ -37,10 +38,11 @@ export function AlbumBackground({ cover, playing, hasLyrics }: { cover?: string;
   useEffect(() => {
     const background = renderer.current;
     if (!background) return;
+    background.setFlowSpeed(backgroundSpeed);
     background.setHasLyric(hasLyrics);
     background.setStaticMode(!!reduced);
     if (visible && playing && !reduced) background.resume(); else background.pause();
-  }, [album, visible, playing, reduced, hasLyrics]);
+  }, [album, visible, playing, reduced, hasLyrics, backgroundSpeed]);
   return <div className="album-background pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
     {album && <img src={album} alt="" className="absolute size-full scale-125 object-cover opacity-70 blur-3xl" />}
     <div ref={host} className="absolute inset-0" />

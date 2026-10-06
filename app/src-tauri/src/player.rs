@@ -429,14 +429,17 @@ impl Actor {
                     match *result {
                         Ok(resolved) => {
                             self.state.actual_quality = resolved.quality;
-                            self.playbin.set_property("uri", &resolved.uri);
-                            self.playbin
-                                .set_state(if self.desired_playing && self.pending_seek.is_none() {
+                            crate::audio::start_stream(
+                                &self.playbin,
+                                &resolved.uri,
+                                self.state.volume,
+                                if self.desired_playing && self.pending_seek.is_none() {
                                     gst::State::Playing
                                 } else {
                                     gst::State::Paused
-                                })
-                                .map_err(|e| e.to_string())?;
+                                },
+                            )
+                            .map_err(|e| e.to_string())?;
                         }
                         Err(error) => {
                             self.state.status = PlaybackStatus::Error;

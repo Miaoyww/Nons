@@ -45,6 +45,7 @@ pnpm tauri dev
 - GStreamer 集成测试通过：两段 48 kHz、双声道、16-bit WAV，playbin3 `about-to-finish` 预置下一曲，fakesink 捕获的输出 PCM 与原始连续样本逐字节相同。此测试验证引擎的解码衔接，不覆盖物理设备输出、网络供给或有损编码延迟处理。
 - 桌面窗口实际启动：用合成 15 秒 WAV 导入两首曲目，验证曲库列表与重启后保留、原生播放进度、自动切到第二曲、本地 LRC 显示、暂停和暂停时定位后的歌词高亮。AMLL 默认使用白色和 plus-lighter 混合，已按应用主题覆写颜色并使用 normal 混合，实际浅色显示通过。
 - 暂无可据此宣称“极快极轻”的 Release 性能数据。
+- 音量回归（Windows x64、GStreamer 1.28.7）：静音 WAV 经默认 autoaudiosink 重建输出时，修复前 WASAPI 实际音量由 0.45 变为 1.0，启动新音源前重新应用全局音量后保持 0.45。`native.ps1 -Task test -ExtraArgs @('--test','volume','--','--ignored','--nocapture')` 显式运行依赖输出设备的静音测试；普通测试另以 fakesink 检查两次加载的 PCM 峰值均为原始幅度的约 45%，含首个输出缓冲。
 - 单次开发模式占用快照：2026-10-06 21:24:27，AMLL 页面可见、合成 WAV 暂停，NonsPlayer 与其 WebView 子进程共 7 个，工作集之和 563.65 MiB。此口径可能重复计入共享页，且包含开发模式，不能作为 Release 预算或私有内存数值。`scripts/measure-memory.ps1` 可重复获取相同口径；后续需补充 Release 多次采样与私有内存/共享页口径。
 - 实际联网探测通过：2026-10-06，Windows x64 开发模式、GStreamer 1.28.7，网易云搜索返回 50 首，解析 standard 全曲资源，歌词接口返回有效内容；`nonshttpsrc` 在线解码后跳到 30 秒，实际进度继续推进到 30.201 秒（fakesink，不发出真实音乐声音）。源响应为 206 且无 Accept-Ranges，修复前定位查询为 false、seek 失败，修复后为 true。此为单个匿名可用资源探测，不等于完整账号、格式或网络矩阵验收。
 - 两项离线 HTTP 集成回归：无 Accept-Ranges 的 Range 音源向前/向后及暂停定位后实际进度正确；忽略 Range 的服务器仍拒绝定位并继续原播放。临时恢复旧判断时第一项测试在 seek 处失败，确认测试覆盖本次根因。
