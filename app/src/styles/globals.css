@@ -44,7 +44,7 @@
   gap: clamp(12px, 1.8vh, 24px);
 }
 .now-playing-controls { gap: clamp(8px, 1.5vh, 20px); }
-.now-playing-controls .now-playing-transport { justify-content: space-evenly; gap: 28px; }
+.now-playing-controls .now-playing-transport { justify-content: center; gap: 28px; }
 .now-playing-cover-slot {
   container-type: size;
   display: grid;

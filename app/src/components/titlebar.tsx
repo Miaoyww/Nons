@@ -80,7 +80,7 @@ export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean;
         data-focused={focused}
       >
         <div
-          className="flex h-full min-w-0 flex-1 items-center gap-2.5 pl-7"
+          className={`flex h-full min-w-0 flex-1 gap-2.5 ${playerMode ? "items-start" : "items-center pl-7"}`}
           onMouseDown={drag}
         >
           {playerMode ? <Button autoFocus variant="ghost" size="icon-lg" className="now-playing-back" aria-label="返回音乐" title="返回音乐" onMouseDown={(event) => event.stopPropagation()} onClick={onBack}><ChevronDown aria-hidden="true" /></Button> : <><img src={appIcon} alt="" className="size-7" draggable={false} />
