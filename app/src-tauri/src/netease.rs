@@ -169,11 +169,7 @@ impl Netease {
     pub async fn qr_login(&self) -> AppResult<QrLogin> {
         let query = self.query()?;
         let body = checked(self.client.login_qr_key(&query)).await?;
-        let key = body
-            .pointer("/data/unikey")
-            .and_then(Value::as_str)
-            .ok_or("无法生成登录二维码")?
-            .to_string();
+        let key = qr_key(&body)?.to_string();
         let query = Query::new().param("key", &key);
         let body = checked(self.client.login_qr_create(&query)).await?;
         let url = body
@@ -291,6 +287,18 @@ async fn checked<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>>>(
     }
 }
 
+fn qr_key(body: &Value) -> AppResult<&str> {
+    body.get("unikey")
+        .and_then(Value::as_str)
+        .filter(|key| !key.trim().is_empty())
+        .or_else(|| {
+            body.pointer("/data/unikey")
+                .and_then(Value::as_str)
+                .filter(|key| !key.trim().is_empty())
+        })
+        .ok_or_else(|| "网易云二维码响应缺少有效登录 key，请重新生成".into())
+}
+
 fn track_from_json(song: &Value) -> Option<Track> {
     let id = song.get("id")?.as_u64()?;
     let artists = song.get("ar").or_else(|| song.get("artists"))?.as_array()?;
@@ -326,4 +334,37 @@ fn track_from_json(song: &Value) -> Option<Track> {
             .into(),
         source: TrackSource::Netease { id },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::qr_key;
+    use serde_json::json;
+
+    #[test]
+    fn qr_key_accepts_sdk_root_response() {
+        assert_eq!(
+            qr_key(&json!({"code": 200, "unikey": "test-key"})).unwrap(),
+            "test-key"
+        );
+    }
+
+    #[test]
+    fn qr_key_accepts_wrapped_response() {
+        assert_eq!(
+            qr_key(&json!({"code": 200, "data": {"unikey": "test-key"}})).unwrap(),
+            "test-key"
+        );
+    }
+
+    #[test]
+    fn qr_key_rejects_invalid_response() {
+        for body in [
+            json!({"code": 200}),
+            json!({"unikey": ""}),
+            json!({"unikey": 123}),
+        ] {
+            assert!(qr_key(&body).is_err());
+        }
+    }
 }

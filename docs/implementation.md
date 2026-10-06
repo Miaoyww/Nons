@@ -9,12 +9,15 @@ cd app
 pnpm install --frozen-lockfile
 cd ..
 python scripts/bootstrap-gstreamer.py
-./scripts/native.ps1 -Task dev
+cd app
+pnpm tauri dev
 ```
 
 依赖脚本从官方 PyPI 获取固定版本 1.28.7 的 GStreamer wheel，校验 SHA256 后只解压到忽略目录 `.local/gstreamer`，用现有 MSVC 工具生成 Rust 链接所需 import libraries。不会运行安装程序，也不会永久更改系统环境。此完整开发运行时约 252.3 MiB，包含开发工具及额外插件，不能当作最终安装包体积。
 
 `native.ps1 -Task check|test|clippy` 为当前进程设置原生依赖路径。发布打包尚未接通，`-Task build` 会明确拒绝执行，避免生成遗漏 DLL 的安装包。Cargo.lock 暂将 kstring 固定到 2.0.2；更新依赖时遵守 manifest 的 Rust 1.95 最低版本。
+
+`pnpm tauri dev` 自动为子进程配置项目内 GStreamer 链接库、DLL 和插件路径，并启动 Vite。`pnpm dev` 只启动 WebUI 预览，无需与桌面命令同时运行。也可以在仓库根目录使用 `native.ps1 -Task dev`。
 
 ## 模块
 
@@ -38,6 +41,7 @@ python scripts/bootstrap-gstreamer.py
 - `pnpm build` 通过。主 JS 约 496 kB（gzip 160 kB），按需歌词 JS 约 466 kB（gzip 140 kB）。这是传输/构建体积，不是运行内存。
 - Cargo 检查及所有目标 Clippy（warnings 视为错误）通过。
 - 4 项单元测试通过：队列末尾边界、非法/截断 XML、真实缺失与过期缓存区别、过大歌词拒绝写入。
+- 二维码解析新增 3 项回归测试通过：SDK 根层 key、嵌套 key、无效返回；真实 `qr_probe` 请求确认登录 key 和可解码 SVG 图片生成成功，不输出 key、登录地址或图片内容，也不自动扫码。
 - GStreamer 集成测试通过：两段 48 kHz、双声道、16-bit WAV，playbin3 `about-to-finish` 预置下一曲，fakesink 捕获的输出 PCM 与原始连续样本逐字节相同。此测试验证引擎的解码衔接，不覆盖物理设备输出、网络供给或有损编码延迟处理。
 - 桌面窗口实际启动：用合成 15 秒 WAV 导入两首曲目，验证曲库列表与重启后保留、原生播放进度、自动切到第二曲、本地 LRC 显示、暂停和暂停时定位后的歌词高亮。AMLL 默认使用白色和 plus-lighter 混合，已按应用主题覆写颜色并使用 normal 混合，实际浅色显示通过。
 - 暂无可据此宣称“极快极轻”的 Release 性能数据。
@@ -49,6 +53,7 @@ python scripts/bootstrap-gstreamer.py
 
 ```powershell
 ./scripts/native.ps1 -Task probe -Example network_probe
+./scripts/native.ps1 -Task probe -Example qr_probe
 # 先在运行中的 NonsPlayer 选中一首歌
 ./scripts/native.ps1 -Task probe -Example media_probe
 python scripts/create-audio-fixtures.py
