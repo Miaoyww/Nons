@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEven
 import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPlus, Library, ListMusic, Mic2, Music2, Plus, Search, X } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import { connectPlayer, errorText, nativeCall, usePlayer, type Track } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { PlaybackBar } from "./playback-bar";
@@ -100,7 +101,11 @@ export function MusicWorkspace({ nowPlaying, onNowPlayingChange }: { nowPlaying:
   }, [onError]);
 
   return <div className="flex min-h-0 flex-1 flex-col">
-    {nowPlaying ? <Suspense fallback={<div role="status" className="m-auto">正在加载播放器…</div>}><LyricsView onQueue={() => { setView("queue"); onNowPlayingChange(false); }} /></Suspense> : null}
+    <Suspense fallback={<div role="status" className="m-auto">正在加载播放器…</div>}>
+      <AnimatePresence>
+        {nowPlaying && <LyricsView key="now-playing" onQueue={() => { setView("queue"); onNowPlayingChange(false); }} />}
+      </AnimatePresence>
+    </Suspense>
     <div className={nowPlaying ? "hidden" : "flex min-h-0 flex-1"}>
       <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-muted/20 px-4 py-6">
         <p className="mb-3 px-3 text-xs text-muted-foreground">你的音乐</p>

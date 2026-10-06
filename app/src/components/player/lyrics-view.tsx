@@ -4,7 +4,7 @@ import "@applemusic-like-lyrics/core/style.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
-import { useReducedMotion } from "motion/react";
+import { motion, useIsPresent, useReducedMotion } from "motion/react";
 import { RefreshCw } from "lucide-react";
 import { currentPosition, errorText, nativeCall, usePlayer, useProgress, type Lyrics } from "@/lib/player";
 import { ActionButton } from "./action-button";
@@ -72,6 +72,8 @@ function LyricRenderer({ lines, onError }: { lines: LyricLine[]; onError: (cause
 }
 
 export default function LyricsView({ onQueue }: { onQueue: () => void }) {
+  const reduced = useReducedMotion();
+  const isPresent = useIsPresent();
   const state = usePlayer();
   const track = state.index !== null ? state.queue[state.index] : undefined;
   const [lines, setLines] = useState<LyricLine[]>([]);
@@ -120,7 +122,11 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   }, [track?.key, apply]);
 
   const showLyrics = lines.length > 0 || loading;
-  return <section className="nons-lyrics now-playing-enter absolute inset-0 flex flex-col pt-12" aria-label="正在播放">
+  return <motion.section className="nons-lyrics now-playing absolute inset-0 z-[5] flex flex-col pt-12" aria-label="正在播放" aria-hidden={!isPresent} inert={!isPresent}
+    initial={{ y: reduced ? 0 : "100%" }}
+    animate={{ y: 0 }}
+    transition={{ type: "tween", duration: reduced ? 0 : 0.42, ease: [0.22, 0, 0.18, 1] }}
+    exit={{ y: reduced ? 0 : "100%", transition: { type: "tween", duration: reduced ? 0 : 0.3, ease: [0.4, 0, 1, 1] } }}>
     <AlbumBackground cover={track?.cover} playing={state.status === "playing"} hasLyrics={lines.length > 0} />
     <div className={`now-playing-layout relative min-h-0 flex-1 ${showLyrics ? "has-lyrics" : ""}`}>
     <div className="now-playing-details flex min-h-0 min-w-0 flex-col justify-center gap-5 overflow-y-auto">
@@ -136,5 +142,5 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
     </div>
     {showLyrics && <div className="now-playing-lyrics min-h-0 min-w-0 overflow-hidden">{lines.length ? <LyricRenderer key={track?.key} lines={lines} onError={(cause) => setError(errorText(cause))} /> : <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">正在查找歌词…</div>}</div>}
     </div>
-  </section>;
+  </motion.section>;
 }

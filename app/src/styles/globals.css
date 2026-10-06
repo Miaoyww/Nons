@@ -24,11 +24,6 @@
 }
 
 .album-background { background: oklch(0.23 0.015 260); }
-.now-playing-enter { animation: now-playing-rise 280ms linear both; }
-@keyframes now-playing-rise {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
 .album-background-scrim {
   background: linear-gradient(180deg, rgb(0 0 0 / 28%), rgb(0 0 0 / 48%));
 }
