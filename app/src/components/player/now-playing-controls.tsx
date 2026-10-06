@@ -15,7 +15,7 @@ export function NowPlayingControls({ onQueue, onError }: { onQueue: () => void; 
   const action = (action: string) => void nativeCall("player_action", { action }).catch(onError);
   return <div className="now-playing-controls flex shrink-0 flex-col" aria-label="正在播放控制">
     <Timeline onError={onError} />
-    <div className="flex items-center justify-center gap-7">
+    <div className="now-playing-transport flex items-center justify-center gap-7">
       <ActionButton variant="ghost" size="icon-lg" disabled={disabled} aria-label="上一首" onClick={() => action("previous")}><SkipBack aria-hidden="true" /></ActionButton>
       <ActionButton variant="ghost" size="icon-lg" className="now-playing-toggle" disabled={disabled} aria-label={playing ? "暂停" : "播放"} onClick={() => action(playing ? "pause" : "resume")}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</ActionButton>
       <ActionButton variant="ghost" size="icon-lg" disabled={disabled || (state.index ?? 0) + 1 >= state.queue.length} aria-label="下一首" onClick={() => action("next")}><SkipForward aria-hidden="true" /></ActionButton>

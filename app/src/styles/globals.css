@@ -37,12 +37,19 @@
   grid-template-columns: minmax(280px, 0.85fr) minmax(320px, 1.2fr);
   gap: clamp(40px, 7vw, 120px);
 }
-.now-playing-details { width: 100%; max-width: 380px; margin-inline: auto; gap: 12px; }
-.now-playing-controls { gap: 8px; }
+.now-playing-details {
+  width: 100%;
+  max-width: clamp(380px, min(29.6875vw, 47.5vh), 760px);
+  margin-inline: auto;
+  gap: clamp(12px, 1.8vh, 24px);
+}
+.now-playing-controls { gap: clamp(8px, 1.5vh, 20px); }
+.now-playing-controls .now-playing-transport { justify-content: space-evenly; gap: 28px; }
 .now-playing-cover-slot {
   container-type: size;
   display: grid;
-  flex: 1;
+  flex: 0 1 auto;
+  aspect-ratio: 1;
   min-height: 0;
   place-items: center;
 }
