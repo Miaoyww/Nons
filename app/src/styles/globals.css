@@ -450,3 +450,4 @@
 .playback-capsule:is(:hover, :focus-within, :has(.quality-control[data-open="true"])) .capsule-glass { background: color-mix(in oklch, var(--background) 78%, transparent); }
 .playback-capsule:is(:hover, :focus-within, :has(.quality-control[data-open="true"])) .volume-control { margin-left: 0; }
 @media (hover: none), (max-width: 600px) { .playback-capsule .volume-control { margin-left: 0; } }
+.playback-capsule .quality-control [data-slot="select-trigger"] { border-color: transparent; }
