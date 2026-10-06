@@ -118,6 +118,7 @@
 }
 
 :root {
+  --music-accent: oklch(0.54 0.23 264);
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -153,6 +154,7 @@
 }
 
 .dark {
+  --music-accent: oklch(0.76 0.13 264);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -244,7 +246,7 @@
 
 .music-range {
   height: 1.5rem;
-  accent-color: var(--primary);
+  accent-color: var(--music-accent);
   cursor: pointer;
 }
 
@@ -269,12 +271,12 @@
 /* YesPlayMusic library layout, adapted to NonsPlayer theme and bounded pages.
    Copyright (c) 2020-2023 qier222, MIT; notices/YesPlayMusic-LICENSE.txt. */
 .music-library {
-  --library-primary: oklch(0.54 0.23 264);
+  --library-primary: var(--music-accent);
   --library-primary-bg: oklch(0.96 0.025 264);
   position: relative; isolation: isolate; flex: 1; min-height: 0; overflow-y: auto;
   padding: 40px clamp(32px, 8vw, 160px) 32px;
 }
-.dark .music-library { --library-primary: oklch(0.76 0.13 264); --library-primary-bg: oklch(0.26 0.055 264); }
+.dark .music-library { --library-primary: var(--music-accent); --library-primary-bg: oklch(0.26 0.055 264); }
 .library-profile { display: flex; align-items: center; gap: 12px; }
 .library-avatar { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; object-fit: cover; }
 .library-heading { font-size: clamp(30px, 3.5vw, 42px); font-weight: 700; letter-spacing: -0.035em; line-height: 1.25; overflow-wrap: anywhere; }
@@ -407,8 +409,8 @@
 }
 .volume-control { position: relative; flex-shrink: 0; pointer-events: auto; }
 .volume-control .volume-button { width: 48px; height: 48px; border-radius: 50%; }
-.volume-card-slot { position: absolute; right: 0; bottom: 100%; width: 192px; padding-bottom: 12px; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(4px); transition: opacity 160ms, transform 160ms, visibility 160ms; }
-.volume-card { padding: 16px; border-radius: 20px; background: color-mix(in oklch, var(--background) 85%, transparent); }
+.volume-card-slot { position: absolute; right: 0; bottom: 100%; width: 48px; padding-bottom: 12px; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(4px); transition: opacity 160ms, transform 160ms, visibility 160ms; }
+.volume-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 8px 8px; border-radius: 8px; background: color-mix(in oklch, var(--background) 95%, transparent); box-shadow: 0 2px 12px rgb(0 0 0 / 16%); }
 .volume-control:is(:hover, :focus-within):not([data-dismissed="true"]) .volume-card-slot { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
 .now-playing .music-workspace { padding-bottom: 0; }
 @media (max-width: 480px) {
@@ -427,8 +429,20 @@
 #music-content > .relative.overflow-auto { padding-bottom: 112px; }
 .now-playing .titlebar.glass-surface { background: rgb(0 0 0 / 16%); border-color: rgb(255 255 255 / 8%); }
 .playback-capsule .music-range { appearance: none; background: transparent; }
-.playback-capsule .music-range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--foreground) var(--seek-progress), var(--muted) var(--seek-progress)); }
-.playback-capsule .music-range::-webkit-slider-thumb { appearance: none; width: 5px; height: 5px; margin-top: -0.5px; border-radius: 50%; background: var(--foreground); }
+.playback-capsule .music-range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--music-accent) var(--seek-progress), var(--muted) var(--seek-progress)); }
+.playback-capsule .music-range::-webkit-slider-thumb { appearance: none; width: 5px; height: 5px; margin-top: -0.5px; border-radius: 50%; background: var(--music-accent); }
 .playback-capsule .music-range::-moz-range-track { height: 4px; border-radius: 999px; background: var(--muted); }
-.playback-capsule .music-range::-moz-range-progress { height: 4px; background: var(--foreground); }
-.playback-capsule .music-range::-moz-range-thumb { width: 5px; height: 5px; border: 0; border-radius: 50%; background: var(--foreground); }
+.playback-capsule .music-range::-moz-range-progress { height: 4px; background: var(--music-accent); }
+.playback-capsule .music-range::-moz-range-thumb { width: 5px; height: 5px; border: 0; border-radius: 50%; background: var(--music-accent); }
+.playback-capsule .capsule-play { background: var(--music-accent); color: white; }
+.playback-capsule .capsule-play:hover:not(:disabled) { background: var(--music-accent); filter: brightness(1.08); }
+.volume-card::after { content: ""; position: absolute; bottom: -5px; left: calc(50% - 5px); width: 10px; height: 10px; transform: rotate(45deg); background: var(--background); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.volume-percentage { font-size: 10px; line-height: 16px; color: var(--muted-foreground); }
+.volume-range { appearance: none; writing-mode: vertical-lr; direction: rtl; width: 20px; height: 96px; background: transparent; }
+.volume-range::-webkit-slider-runnable-track { width: 4px; border-radius: 999px; background: linear-gradient(to top, var(--music-accent) var(--volume-progress), var(--muted) var(--volume-progress)); }
+.volume-range::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; margin-left: -4px; border-radius: 50%; background: var(--background); border: 1px solid var(--border); box-shadow: 0 1px 3px rgb(0 0 0 / 15%); }
+.volume-range::-moz-range-track { width: 4px; height: 100%; border-radius: 999px; background: var(--muted); }
+.volume-range::-moz-range-progress { width: 4px; background: var(--music-accent); }
+.volume-range::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--background); border: 1px solid var(--border); box-shadow: 0 1px 3px rgb(0 0 0 / 15%); }
+/* Override the shared horizontal range height for this vertical control. */
+.volume-card .volume-range { height: 96px; }
