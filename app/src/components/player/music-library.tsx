@@ -180,7 +180,7 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
       {!profile ? <div className="library-empty"><p>登录网易云音乐后查看这个收藏。</p><LoginDialog /></div>
         : detailError ? <div role="alert" className="library-empty text-destructive"><p>{detailError}</p>{retry}</div>
         : detailBusy ? <p role="status" className="library-empty">正在加载歌曲…</p>
-        : detail.tracks.length ? <TrackList tracks={detail.tracks} currentKey={currentKey} busy={playing} onPlay={(index) => playPage(detail.tracks, index)} onAppend={append} />
+        : detail.tracks.length ? <TrackList offset={detailOffset} tracks={detail.tracks} currentKey={currentKey} busy={playing} onPlay={(index) => playPage(detail.tracks, index)} onAppend={append} />
         : <p className="library-empty">这里还没有歌曲。</p>}
       {profile && !detailError && <Pagination offset={detailOffset} size={100} more={detail.more} busy={detailBusy} onChange={setDetailOffset} />}
     </> : <>
@@ -219,7 +219,7 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
       {!profile ? <p className="library-empty text-muted-foreground">登录后查看收藏的歌单、专辑和艺人。</p>
         : listError ? <div role="alert" className="library-empty text-destructive"><p>{listError}</p>{retry}</div>
         : listBusy ? <div role="status" className="library-cover-grid">{Array.from({ length: 5 }, (_, index) => <div className="library-cover-skeleton" key={index}><span /><span /><span /></div>)}</div>
-        : tab === "history" ? history.tracks.length ? <TrackList tracks={history.tracks} busy={playing} currentKey={currentKey} onPlay={(index) => playPage(history.tracks, index)} onAppend={append} /> : <p className="library-empty text-muted-foreground">这段时间还没有听歌记录。</p>
+        : tab === "history" ? history.tracks.length ? <TrackList offset={offset} tracks={history.tracks} busy={playing} currentKey={currentKey} onPlay={(index) => playPage(history.tracks, index)} onAppend={append} /> : <p className="library-empty text-muted-foreground">这段时间还没有听歌记录。</p>
         : collections.items.length ? <CollectionCards items={collections.items} busy={playing} onOpen={openCollection} onPlay={(item) => void playCollection(item)} /> : <p className="library-empty text-muted-foreground">{tab === "playlist" ? "这一页没有符合筛选条件的歌单。" : `还没有收藏${tab === "album" ? "专辑" : "艺人"}。`}</p>}
       {profile && !listError && <Pagination offset={offset} size={tab === "history" ? 100 : 30} more={tab === "history" ? history.more : collections.more} busy={listBusy} onChange={setOffset} />}
     </>}
