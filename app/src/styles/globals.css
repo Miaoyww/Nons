@@ -256,3 +256,11 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Keep the search hit area near the icon; reveal it on hover or keyboard focus. */
+.titlebar-search { position: relative; display: flex; align-items: center; padding: 6px; margin-block: -6px; }
+.titlebar-search input { width: 0; opacity: 0; padding: 0; border: 0; background: transparent; font-size: 14px; outline: none; transition: opacity 160ms; }
+.titlebar-search:hover, .titlebar-search:focus-within { background: var(--muted); border-radius: 10px; }
+.titlebar-search:hover input, .titlebar-search:focus-within input { width: clamp(120px, 14vw, 200px); opacity: 1; padding-inline: 4px 8px; }
+.titlebar-search:focus-within { outline: 2px solid var(--ring); outline-offset: 1px; }
+@media (max-width: 950px) { .titlebar > div:first-child span { display: none; } }

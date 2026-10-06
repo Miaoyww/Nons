@@ -1,15 +1,20 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { ChevronDown, Copy, Minus, Square, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, ChevronDown, Copy, Minus, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { LoginDialog } from "@/components/player/login-dialog";
+import { useMusicNavigation } from "@/components/player/music-navigation";
 import appIcon from "@/assets/icon.png";
 
 export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean; onBack?: () => void }) {
   const native = isTauri();
+  const { page, navigate, back, forward, canBack, canForward } = useMusicNavigation();
+  const [keyword, setKeyword] = useState(page.query);
+  const searchInput = useRef<HTMLInputElement>(null);
+  useEffect(() => setKeyword(page.query), [page]);
   const [maximized, setMaximized] = useState(false);
   const [focused, setFocused] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,12 +85,28 @@ export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean;
         data-focused={focused}
       >
         <div
-          className={`flex h-full min-w-0 flex-1 gap-2.5 ${playerMode ? "items-start" : "items-center pl-7"}`}
+          className={`flex h-full min-w-0 gap-2.5 ${playerMode ? "items-start flex-1" : "items-center pl-4 pr-4"}`}
           onMouseDown={drag}
         >
           {playerMode ? <Button autoFocus variant="ghost" size="icon-lg" className="now-playing-back" aria-label="返回音乐" title="返回音乐" onMouseDown={(event) => event.stopPropagation()} onClick={onBack}><ChevronDown aria-hidden="true" /></Button> : <><img src={appIcon} alt="" className="size-7" draggable={false} />
           <span className="text-sm font-semibold">NonsPlayer</span></>}
         </div>
+
+        {!playerMode && <>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon-sm" aria-label="后退" disabled={!canBack} onClick={back}><ChevronLeft aria-hidden="true" /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label="前进" disabled={!canForward} onClick={forward}><ChevronRight aria-hidden="true" /></Button>
+          </div>
+          <div className="h-full min-w-2 flex-1" onMouseDown={drag} />
+          <nav aria-label="音乐导航" className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1">
+            {([['library', '音乐库'], ['discover', '发现'], ['local', '本地']] as const).map(([view, label]) => <Button key={view} variant={page.view === view || (view === 'discover' && page.view === 'search') ? 'secondary' : 'ghost'} aria-current={page.view === view || (view === 'discover' && page.view === 'search') ? 'page' : undefined} onClick={() => navigate(view)}>{label}</Button>)}
+          </nav>
+          <div className="h-full min-w-2 flex-1" onMouseDown={drag} />
+          <form className="titlebar-search mr-2" onSubmit={(event) => { event.preventDefault(); if (keyword.trim()) navigate(page.view === 'local' ? 'local' : 'search', keyword.trim()); }}>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label="展开音乐搜索" onClick={() => searchInput.current?.focus()}><Search aria-hidden="true" /></Button>
+            <input ref={searchInput} aria-label={page.view === 'local' ? '搜索本地曲库' : '搜索网易云音乐'} placeholder={page.view === 'local' ? '搜索本地曲库' : '搜索网易云音乐'} value={keyword} maxLength={128} onChange={(event) => setKeyword(event.target.value)} />
+          </form>
+        </>}
 
         <div className="flex h-full shrink-0 items-center gap-1 pr-1.5">
           <div className={playerMode ? "hidden" : "flex items-center gap-1"}><LoginDialog /><SettingsDialog /></div>
