@@ -39,9 +39,11 @@ export function PlaybackBar({ onLyrics, onQueue, onError }: { onLyrics: () => vo
       <ActionButton variant="ghost" size="icon" aria-label="显示歌词" onClick={onLyrics}><Mic2 aria-hidden="true" /></ActionButton>
       <ActionButton variant="ghost" size="icon" aria-label="显示播放队列" onClick={onQueue}><ListMusic aria-hidden="true" /></ActionButton>
       <Volume2 className="size-4 text-muted-foreground" aria-hidden="true" />
-      <input type="range" aria-label="音量" min={0} max={1} step={0.01} value={volume} disabled={!isTauri()} onChange={(e) => setVolume(Number(e.target.value))}
-        onPointerUp={(event) => void nativeCall("player_volume", { volume: Number(event.currentTarget.value) }).catch(onError)}
-        onKeyUp={(event) => void nativeCall("player_volume", { volume: Number(event.currentTarget.value) }).catch(onError)} className="music-range w-20" />
+      <input type="range" aria-label="音量" min={0} max={1} step={0.01} value={volume} disabled={!isTauri()} onChange={(event) => {
+        const value = Number(event.target.value);
+        setVolume(value);
+        void nativeCall("player_volume", { volume: value }).catch(onError);
+      }} className="music-range w-20" />
     </div>
   </footer>;
 }
