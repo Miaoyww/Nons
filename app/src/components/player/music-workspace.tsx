@@ -14,7 +14,7 @@ const LyricsView = lazy(() => import("./lyrics-view"));
 const MusicLibrary = lazy(() => import("./music-library"));
 interface ImportReport { imported: number; skipped: number; errors: string[] }
 
-export function MusicWorkspace({ nowPlaying, onNowPlayingChange }: { nowPlaying: boolean; onNowPlayingChange: (value: boolean) => void }) {
+export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, onPlayerExitComplete }: { nowPlaying: boolean; playerVisible: boolean; onNowPlayingChange: (value: boolean) => void; onPlayerExitComplete: () => void }) {
   const state = usePlayer();
   const { page, navigate } = useMusicNavigation();
   const view = page.view;
@@ -29,6 +29,12 @@ export function MusicWorkspace({ nowPlaying, onNowPlayingChange }: { nowPlaying:
   const generation = useRef(0);
   const onError = useCallback((cause: unknown) => setError(errorText(cause)), []);
   const current = state.index !== null ? state.queue[state.index] : undefined;
+  const wasPlayerVisible = useRef(playerVisible);
+
+  useEffect(() => {
+    if (wasPlayerVisible.current && !playerVisible) document.querySelector<HTMLButtonElement>('[aria-label="打开正在播放"]')?.focus();
+    wasPlayerVisible.current = playerVisible;
+  }, [playerVisible]);
 
 
   useEffect(() => {
@@ -37,7 +43,7 @@ export function MusicWorkspace({ nowPlaying, onNowPlayingChange }: { nowPlaying:
       if (event.key === "Escape" && !event.defaultPrevented) onNowPlayingChange(false);
     };
     document.addEventListener("keydown", exit);
-    return () => { document.removeEventListener("keydown", exit); document.querySelector<HTMLButtonElement>('[aria-label="打开正在播放"]')?.focus(); };
+    return () => { document.removeEventListener("keydown", exit); };
   }, [nowPlaying, onNowPlayingChange]);
 
   useEffect(() => {
@@ -90,7 +96,7 @@ export function MusicWorkspace({ nowPlaying, onNowPlayingChange }: { nowPlaying:
 
   return <div className="music-workspace flex min-h-0 flex-1 flex-col">
     <Suspense fallback={<div role="status" className="m-auto">正在加载播放器…</div>}>
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={onPlayerExitComplete}>
         {nowPlaying && <LyricsView key="now-playing" onQueue={() => { navigate("queue"); onNowPlayingChange(false); }} />}
       </AnimatePresence>
     </Suspense>
@@ -110,6 +116,6 @@ export function MusicWorkspace({ nowPlaying, onNowPlayingChange }: { nowPlaying:
         </>}
       </main>
     </div>
-    {!nowPlaying && <PlaybackBar qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={() => navigate("queue")} onError={onError} />}
+    {!playerVisible && <PlaybackBar qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={() => navigate("queue")} onError={onError} />}
   </div>;
 }
