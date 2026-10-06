@@ -22,6 +22,7 @@ if (process.platform === "win32" && existsSync(join(gst, "VERSION"))) {
     GOBJECT_2_0: "gobject-2.0-0",
     GIO_2_0: "gio-2.0-0",
     GSTREAMER_1_0: "gstreamer-1.0-0",
+    GSTREAMER_BASE_1_0: "gstbase-1.0-0",
   })) {
     env[`SYSTEM_DEPS_${key}_NO_PKG_CONFIG`] = "1";
     env[`SYSTEM_DEPS_${key}_LIB`] = library;

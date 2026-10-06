@@ -2,9 +2,9 @@
 use gstreamer::{self as gst, prelude::*};
 
 pub fn prefer_http_source() {
-    if let Some(factory) = gst::ElementFactory::find("reqwesthttpsrc") {
-        factory.set_rank(gst::Rank::PRIMARY);
-    }
+    static REGISTER: std::sync::Once = std::sync::Once::new();
+    REGISTER
+        .call_once(|| gstreqwest::plugin_register_static().expect("register bundled HTTP source"));
 }
 
 pub fn configure_source(source: &gst::Element) {

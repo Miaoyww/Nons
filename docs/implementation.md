@@ -27,7 +27,7 @@ pnpm tauri dev
 - `storage.rs` 使用 SQLite，列表分页；`library.rs` 使用 Lofty 读取元数据，批量入库。
 - `lyrics.rs` 管理歌词来源、超时与缓存；AMLL 负责前端解析和显示。
 - `media.rs` 从同一播放状态同步 Windows SMTC；StartTime/MinSeekTime 为 0，EndTime/MaxSeekTime 为曲目时长，Position 限定在有效范围。
-- `network.rs` 优先选择现成的 Rust `reqwesthttpsrc` 插件。当前完整运行时的 `curlhttpsrc` 在线准备阶段超时，不能作为已验证路径。Windows 原生来源读取手动系统代理与 bypass（不修改系统设置），明确环境变量优先；PAC 动态解析尚未接通。HTTP 请求超时 12 秒，有重试能力的来源限制为 2 次。
+- `network.rs` 静态注册随应用固定的 Rust reqwest HTTP 插件（0.15.4，`vendor/gst-plugin-reqwest`），使用独立的 `nonshttpsrc` 名称避免运行时插件冲突。首次请求发送开放 Range，以实际 206/Content-Range 确认定位能力，兼容网易云 CDN 缺少 Accept-Ranges 的响应；忽略 Range 的服务器仍不可定位。不新增整曲下载或缓存，播放缓冲仍为 4 MiB / 10 秒上限。当前完整运行时的 `curlhttpsrc` 在线准备阶段超时，不能作为已验证路径。Windows 原生来源读取手动系统代理与 bypass（不修改系统设置），明确环境变量优先；PAC 动态解析尚未接通。HTTP 请求超时 12 秒，有重试能力的来源限制为 2 次。Windows 开发脚本同时生成并链接 gstbase 的 import library。
 - WebUI 的队列/元数据状态与 4 Hz 播放进度分开订阅；AMLL 单独按需加载，歌词页卸载后停止动画。
 
 ## 当前资源约束
@@ -46,7 +46,8 @@ pnpm tauri dev
 - 桌面窗口实际启动：用合成 15 秒 WAV 导入两首曲目，验证曲库列表与重启后保留、原生播放进度、自动切到第二曲、本地 LRC 显示、暂停和暂停时定位后的歌词高亮。AMLL 默认使用白色和 plus-lighter 混合，已按应用主题覆写颜色并使用 normal 混合，实际浅色显示通过。
 - 暂无可据此宣称“极快极轻”的 Release 性能数据。
 - 单次开发模式占用快照：2026-10-06 21:24:27，AMLL 页面可见、合成 WAV 暂停，NonsPlayer 与其 WebView 子进程共 7 个，工作集之和 563.65 MiB。此口径可能重复计入共享页，且包含开发模式，不能作为 Release 预算或私有内存数值。`scripts/measure-memory.ps1` 可重复获取相同口径；后续需补充 Release 多次采样与私有内存/共享页口径。
-- 实际联网探测通过：网易云搜索返回 50 首，解析 standard 全曲资源，歌词接口返回有效内容；GStreamer `reqwesthttpsrc` 在线解码并推进至少 500 ms（fakesink，不发出真实音乐声音）。此为单个匿名可用资源探测，不等于完整账号、格式或网络矩阵验收。
+- 实际联网探测通过：2026-10-06，Windows x64 开发模式、GStreamer 1.28.7，网易云搜索返回 50 首，解析 standard 全曲资源，歌词接口返回有效内容；`nonshttpsrc` 在线解码后跳到 30 秒，实际进度继续推进到 30.201 秒（fakesink，不发出真实音乐声音）。源响应为 206 且无 Accept-Ranges，修复前定位查询为 false、seek 失败，修复后为 true。此为单个匿名可用资源探测，不等于完整账号、格式或网络矩阵验收。
+- 两项离线 HTTP 集成回归：无 Accept-Ranges 的 Range 音源向前/向后及暂停定位后实际进度正确；忽略 Range 的服务器仍拒绝定位并继续原播放。临时恢复旧判断时第一项测试在 seek 处失败，确认测试覆盖本次根因。
 - 通过 Windows 官方 SMTC 读取 API 验证 NonsPlayer 会话：测试曲目标题、艺术家/专辑占位信息均非空，封面可读取（5584 bytes），Start/MinSeek=0、End/MaxSeek=15 秒。播放中 Position 实际推进至 6.93 秒。系统按钮与定位回调还需交互验收。
 
 可重复的手动探测（不纳入离线单元测试，也不自动扫码）：

@@ -62,7 +62,7 @@ def bootstrap():
     tools = sorted((Path(installation) / "VC/Tools/MSVC").glob("*/bin/Hostx64/x64"))[-1]
     libdir = DEST / "lib"
     libdir.mkdir(exist_ok=True)
-    for name in ("glib-2.0-0", "gobject-2.0-0", "gio-2.0-0", "gstreamer-1.0-0"):
+    for name in ("glib-2.0-0", "gobject-2.0-0", "gio-2.0-0", "gstreamer-1.0-0", "gstbase-1.0-0"):
         dll = DEST / "bin" / f"{name}.dll"
         exports = subprocess.check_output([str(tools / "dumpbin.exe"), "/exports", str(dll)], text=True)
         names = re.findall(r"^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]+\s+(\S+)", exports, re.MULTILINE)
