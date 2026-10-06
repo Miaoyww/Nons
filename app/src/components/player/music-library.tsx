@@ -1,3 +1,4 @@
+import { CollectionHeader } from "./collection-header";
 import { TrackTitle } from "./track-title";
 // Layout and interaction adapted from YesPlayMusic src/views/library.vue.
 // Copyright (c) 2020-2023 qier222, MIT. See notices/YesPlayMusic-LICENSE.txt.
@@ -174,10 +175,7 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
   return <section className="music-library" aria-label="网易云音乐库">
     {notice && <p role="status" className="mb-4 text-sm text-muted-foreground">{notice}</p>}
     {showingDetail ? <>
-      <header className="library-detail-header">
-        <Cover cover={collection.cover} className={`aspect-square w-48 ${collection.kind === "artist" ? "rounded-full" : "rounded-2xl"}`} />
-        <div className="min-w-0"><p className="mb-2 text-sm text-muted-foreground">{collection.kind === "playlist" ? "歌单" : collection.kind === "album" ? "专辑" : "艺人 · 热门歌曲"}</p><h1 className="library-heading">{collection.name}</h1><p className="mt-3 text-sm text-muted-foreground">{collection.subtitle}{detail.total > 0 ? ` · ${detail.total} 首音乐` : ""}</p><ActionButton className="mt-5" disabled={playing || !profile || detailBusy || !detail.tracks.length} onClick={() => void playCollection(collection)} title="播放收藏（最多 1000 首）"><Play aria-hidden="true" />{playing ? "正在加载…" : "播放"}</ActionButton></div>
-      </header>
+      <CollectionHeader key={`${collection.kind}:${collection.id}`} collection={collection} description={detail.description} total={detail.total || collection.trackCount} busy={playing} disabled={playing || !profile || detailBusy || !detail.tracks.length} onPlay={() => void playCollection(collection)} />
       {!profile ? <div className="library-empty"><p>登录网易云音乐后查看这个收藏。</p><LoginDialog /></div>
         : detailError ? <div role="alert" className="library-empty text-destructive"><p>{detailError}</p>{retry}</div>
         : detailBusy ? <p role="status" className="library-empty">正在加载歌曲…</p>

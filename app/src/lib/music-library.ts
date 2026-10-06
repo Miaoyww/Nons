@@ -11,7 +11,7 @@ export interface LibrarySummary {
   likedError: string | null;
 }
 export interface CollectionPage { items: MusicCollection[]; more: boolean }
-export interface CollectionTracks { tracks: Track[]; total: number; more: boolean }
+export interface CollectionTracks { description?: string | null; tracks: Track[]; total: number; more: boolean }
 export const getMusicLibrary = () => nativeCall<LibrarySummary>("music_library");
 export const getLibraryCollections = (kind: LibraryTab, offset: number, filter: PlaylistFilter) =>
   nativeCall<CollectionPage>("library_collections", { kind, offset, filter });

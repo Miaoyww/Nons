@@ -28,6 +28,7 @@ pub struct CollectionPage {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackPage {
+    pub description: Option<String>,
     pub tracks: Vec<Track>,
     pub total: usize,
     pub more: bool,
@@ -157,8 +158,10 @@ impl Netease {
                 let playlist = body.get("playlist").ok_or("歌单详情缺失")?;
                 let ids = playlist_ids(playlist, offset as usize, limit);
                 let total = array(playlist, "trackIds").len();
+                let description = collection_description(playlist);
                 if ids.is_empty() {
                     return Ok(TrackPage {
+                        description,
                         tracks: Vec::new(),
                         total,
                         more: false,
@@ -171,6 +174,7 @@ impl Netease {
                 let songs = checked(self.client.song_detail(&query)).await?;
                 // Match detail results to the playlist's order, including removed/unavailable songs.
                 Ok(TrackPage {
+                    description,
                     tracks: ordered_tracks(&ids, array(&songs, "songs")),
                     total,
                     more: (offset as usize).saturating_add(limit) < total,
@@ -238,6 +242,15 @@ fn array<'a>(value: &'a Value, key: &str) -> &'a [Value] {
 fn text<'a>(value: &'a Value, key: &str) -> &'a str {
     value.get(key).and_then(Value::as_str).unwrap_or_default()
 }
+fn collection_description(value: &Value) -> Option<String> {
+    value
+        .get("description")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.chars().take(16_000).collect())
+}
+
 fn collection(value: &Value, kind: &str) -> Option<Collection> {
     let id = value.get("id")?.as_u64().filter(|id| *id > 0)?;
     if kind == "playlist"
@@ -312,6 +325,7 @@ fn track_page<'a>(
     limit: usize,
 ) -> TrackPage {
     TrackPage {
+        description: None,
         tracks: songs
             .skip(offset)
             .take(limit)
@@ -326,6 +340,21 @@ fn track_page<'a>(
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn playlist_description_preserves_lines_and_omits_missing_content() {
+        assert_eq!(
+            collection_description(&json!({"description":"  第一行\n第二行  "})).as_deref(),
+            Some("第一行\n第二行")
+        );
+        for value in [
+            json!({}),
+            json!({"description":null}),
+            json!({"description":"  "}),
+        ] {
+            assert!(collection_description(&value).is_none());
+        }
+    }
+
     #[test]
     fn liked_playlist_is_identified_by_type_not_position() {
         let regular = json!({"id":1,"name":"Created","creator":{"userId":123},"specialType":0});
