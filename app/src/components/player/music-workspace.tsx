@@ -2,9 +2,10 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEven
 import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPlus, Library, ListMusic, Mic2, Music2, Plus, Search, X } from "lucide-react";
-import { connectPlayer, errorText, nativeCall, usePlayer, type OutputDevice, type Track } from "@/lib/player";
+import { connectPlayer, errorText, nativeCall, usePlayer, type Track } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { PlaybackBar } from "./playback-bar";
+import { QualitySelect } from "./music-options";
 import { TrackList } from "./track-list";
 
 const LyricsView = lazy(() => import("./lyrics-view"));
@@ -29,9 +30,6 @@ export function MusicWorkspace() {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
-  const [devices, setDevices] = useState<OutputDevice[]>([]);
-  const [quality, setQuality] = useState("exhigh");
-  const [downgrade, setDowngrade] = useState(true);
   const generation = useRef(0);
   const onError = useCallback((cause: unknown) => setError(errorText(cause)), []);
   const current = state.index !== null ? state.queue[state.index] : undefined;
@@ -41,15 +39,6 @@ export function MusicWorkspace() {
     let stop: (() => void) | undefined;
     void connectPlayer().then((cleanup) => { if (disposed) cleanup(); else stop = cleanup; }).catch(onError);
     return () => { disposed = true; stop?.(); };
-  }, [onError]);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    let disposed = false;
-    void nativeCall<{ quality: string; allowDowngrade: boolean }>("music_options").then((options) => {
-      if (!disposed) { setQuality(options.quality); setDowngrade(options.allowDowngrade); }
-    }).catch(onError);
-    return () => { disposed = true; };
   }, [onError]);
 
   const load = useCallback(async (page: number, search: string, target: "local" | "search") => {
@@ -120,13 +109,8 @@ export function MusicWorkspace() {
           </div>
           {view !== "queue" && <div className="flex h-14 shrink-0 items-center justify-between border-t border-border/50 px-8 text-xs text-muted-foreground"><span>{tracks.length ? `${offset + 1}–${offset + tracks.length}` : ""}</span><div className="flex gap-2"><ActionButton size="sm" variant="ghost" disabled={!offset || busy} onClick={() => void load(Math.max(0, offset - (view === "local" ? 100 : 50)), appliedKeyword, view)}>上一页</ActionButton><ActionButton size="sm" variant="ghost" disabled={!hasMore || busy} onClick={() => void load(offset + (view === "local" ? 100 : 50), appliedKeyword, view)}>下一页</ActionButton></div></div>}
         </>}
-        <div className="flex shrink-0 flex-wrap items-center gap-4 border-t border-border/50 px-8 py-3 text-xs text-muted-foreground">
-          <label className="flex items-center gap-2" htmlFor="output-device">输出设备<select id="output-device" className="music-select max-w-48" value={state.deviceId ?? ""} disabled={!isTauri()} onFocus={() => void nativeCall<OutputDevice[]>("output_devices").then(setDevices).catch(onError)} onChange={(e) => void nativeCall("player_device", { deviceId: e.target.value || null }).catch(onError)}><option value="">跟随系统默认</option>{devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
-          <label className="flex items-center gap-2" htmlFor="audio-quality">音质<select id="audio-quality" className="music-select" value={quality} disabled={!isTauri()} onChange={(e) => { const value = e.target.value; setQuality(value); void nativeCall("set_music_options", { quality: value, allowDowngrade: downgrade }).catch(onError); }}><option value="standard">标准</option><option value="higher">较高</option><option value="exhigh">极高</option><option value="lossless">无损</option><option value="hires">Hi-Res</option></select></label>
-          <label className="flex items-center gap-2"><input type="checkbox" checked={downgrade} disabled={!isTauri()} onChange={(e) => { const value = e.target.checked; setDowngrade(value); void nativeCall("set_music_options", { quality, allowDowngrade: value }).catch(onError); }} />不可用时允许降低音质</label>
-        </div>
       </main>
     </div>
-    <PlaybackBar onLyrics={() => setView("lyrics")} onQueue={() => setView("queue")} onError={onError} />
+    <PlaybackBar qualityControl={<QualitySelect />} onLyrics={() => setView("lyrics")} onQueue={() => setView("queue")} onError={onError} />
   </div>;
 }

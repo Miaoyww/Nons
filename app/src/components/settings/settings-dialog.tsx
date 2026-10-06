@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { Info, Settings, X } from "lucide-react";
+import { Info, Settings, Volume2, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
 import { useTheme } from "@/hooks/use-theme";
 import { GeneralPage } from "./pages/general";
 import { AboutPage } from "./pages/about";
+import { PlaybackPage } from "./pages/playback";
 import { version } from "../../../package.json";
 
 export function SettingsDialog() {
-  const [section, setSection] = useState<"general" | "about">("general");
+  const [section, setSection] = useState<"general" | "playback" | "about">("general");
   const [theme, setTheme] = useTheme();
   const reducedMotion = useReducedMotion();
 
@@ -39,6 +40,10 @@ export function SettingsDialog() {
                 aria-current={section === "general" ? "page" : undefined} onClick={() => setSection("general")}>
                 <Settings aria-hidden="true" /><span>常规设置</span>
               </Button>
+              <Button variant={section === "playback" ? "secondary" : "ghost"} className="justify-start gap-2.5 rounded-lg px-3"
+                aria-current={section === "playback" ? "page" : undefined} onClick={() => setSection("playback")}>
+                <Volume2 aria-hidden="true" /><span>播放</span>
+              </Button>
               <Button variant={section === "about" ? "secondary" : "ghost"} className="mt-auto justify-start gap-2.5 rounded-lg px-3"
                 aria-current={section === "about" ? "page" : undefined} onClick={() => setSection("about")}>
                 <Info aria-hidden="true" /><span>关于</span>
@@ -49,9 +54,9 @@ export function SettingsDialog() {
               <span className="text-xs text-muted-foreground">Version {version}</span>
             </div>
           </aside>
-          <section aria-label={section === "general" ? "常规设置" : "关于 Nons"} className="min-w-0 flex-1 overflow-auto bg-background p-5 pt-14 sm:p-10">
+          <section aria-label={section === "general" ? "常规设置" : section === "playback" ? "播放设置" : "关于 Nons"} className="min-w-0 flex-1 overflow-auto bg-background p-5 pt-14 sm:p-10">
             <motion.div key={section} initial={{ opacity: reducedMotion ? 1 : 0, y: reducedMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-              {section === "general" ? <GeneralPage theme={theme} onThemeChange={setTheme} /> : <AboutPage version={version} />}
+              {section === "general" ? <GeneralPage theme={theme} onThemeChange={setTheme} /> : section === "playback" ? <PlaybackPage /> : <AboutPage version={version} />}
             </motion.div>
           </section>
         </div>

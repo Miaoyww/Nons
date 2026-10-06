@@ -1,5 +1,5 @@
 import { ListMusic, Mic2, Pause, Play, SkipBack, SkipForward, Volume2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
 import { ActionButton } from "./action-button";
@@ -21,7 +21,7 @@ function Timeline({ onError }: { onError: (error: unknown) => void }) {
   </div>;
 }
 
-export function PlaybackBar({ onLyrics, onQueue, onError }: { onLyrics: () => void; onQueue: () => void; onError: (error: unknown) => void }) {
+export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qualityControl?: ReactNode; onLyrics: () => void; onQueue: () => void; onError: (error: unknown) => void }) {
   const state = usePlayer();
   const track = state.index !== null ? state.queue[state.index] : undefined;
   const playing = state.status === "playing" || state.status === "buffering" || state.status === "loading";
@@ -36,6 +36,7 @@ export function PlaybackBar({ onLyrics, onQueue, onError }: { onLyrics: () => vo
       <ActionButton variant="ghost" size="icon" aria-label="下一首" disabled={state.index === null || state.index + 1 >= state.queue.length || !isTauri()} onClick={() => action("next")}><SkipForward aria-hidden="true" /></ActionButton>
     </div><Timeline onError={onError} /></div>
     <div className="flex items-center justify-end gap-3">
+      {qualityControl}
       <ActionButton variant="ghost" size="icon" aria-label="显示歌词" onClick={onLyrics}><Mic2 aria-hidden="true" /></ActionButton>
       <ActionButton variant="ghost" size="icon" aria-label="显示播放队列" onClick={onQueue}><ListMusic aria-hidden="true" /></ActionButton>
       <Volume2 className="size-4 text-muted-foreground" aria-hidden="true" />

@@ -1,0 +1,55 @@
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { errorText, nativeCall } from "@/lib/player";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+interface Options { quality: string; allowDowngrade: boolean }
+const qualities = [
+  { value: "standard", label: "标准" }, { value: "higher", label: "较高" },
+  { value: "exhigh", label: "极高" }, { value: "lossless", label: "无损" },
+  { value: "hires", label: "Hi-Res" },
+];
+const OptionsContext = createContext<{
+  options: Options; busy: boolean; error?: string; update: (patch: Partial<Options>) => void;
+} | null>(null);
+
+export function MusicOptionsProvider({ children }: { children: ReactNode }) {
+  const [options, setOptions] = useState<Options>({ quality: "exhigh", allowDowngrade: true });
+  const [busy, setBusy] = useState(isTauri());
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false;
+    void nativeCall<Options>("music_options").then((value) => { if (!disposed) setOptions(value); })
+      .catch((cause) => { if (!disposed) setError(errorText(cause)); })
+      .finally(() => { if (!disposed) setBusy(false); });
+    return () => { disposed = true; };
+  }, []);
+  function update(patch: Partial<Options>) {
+    if (busy) return;
+    const next = { ...options, ...patch };
+    setBusy(true); setError(undefined);
+    void nativeCall("set_music_options", next).then(() => setOptions(next))
+      .catch((cause) => setError(errorText(cause))).finally(() => setBusy(false));
+  }
+  return <OptionsContext.Provider value={{ options, busy, error, update }}>{children}</OptionsContext.Provider>;
+}
+
+export function useMusicOptions() {
+  const value = useContext(OptionsContext);
+  if (!value) throw new Error("MusicOptionsProvider is required");
+  return value;
+}
+
+export function QualitySelect() {
+  const { options, busy, error, update } = useMusicOptions();
+  return <div className="flex flex-col gap-1">
+    <Select items={qualities} value={options.quality} disabled={busy || !isTauri()}
+      onValueChange={(quality) => { if (quality) update({ quality }); }}>
+      <SelectTrigger size="sm" aria-label="音质" title="播放音质"><SelectValue /></SelectTrigger>
+      <SelectContent alignItemWithTrigger={false}><SelectGroup>{qualities.map(({ value, label }) =>
+        <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent>
+    </Select>
+    {error && <p role="alert" className="max-w-48 text-xs text-destructive">{error}</p>}
+  </div>;
+}
