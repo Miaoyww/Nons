@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { Popover } from "@base-ui/react/popover";
 import { LogOut, UserRound } from "lucide-react";
 import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
 import { errorText, nativeCall } from "@/lib/player";
@@ -10,6 +11,8 @@ interface Status { code: number; message: string }
 interface Profile { nickname: string; avatarUrl: string }
 
 export function LoginDialog() {
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountError, setAccountError] = useState("");
   const [open, setOpen] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -59,11 +62,30 @@ export function LoginDialog() {
   }, [open, qr]);
 
   async function logout() {
-    setBusy(true);
-    try { await nativeCall("logout"); setLoggedIn(false); setProfile(null); setMessage("已退出登录。"); setOpen(false); }
-    catch (cause) { setMessage(errorText(cause)); setOpen(true); }
+    setBusy(true); setAccountError("");
+    try { await nativeCall("logout"); setAccountOpen(false); setLoggedIn(false); setProfile(null); setMessage("已退出登录。"); setOpen(false); }
+    catch (cause) { setAccountError(errorText(cause)); }
     finally { setBusy(false); }
   }
+
+  const accountIdentity = <>
+    {profile?.avatarUrl && !avatarFailed ? <img src={profile.avatarUrl} alt="" className="size-6 rounded-full object-cover" onError={() => setAvatarFailed(true)} /> : <UserRound aria-hidden="true" />}
+    <span className="max-w-24 truncate">{profile?.nickname ?? "网易云已登录"}</span>
+  </>;
+  if (loggedIn) return <Popover.Root open={accountOpen} onOpenChange={setAccountOpen}>
+    <Popover.Trigger openOnHover delay={180} closeDelay={250} render={<ActionButton variant="ghost" size="sm" className="gap-2" aria-label="网易云账号" />}>{accountIdentity}</Popover.Trigger>
+    <Popover.Portal><Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-50">
+      <Popover.Popup className="w-72 rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-lg outline-none">
+        <p className="mb-4 text-xs text-muted-foreground">账号来源 · 网易云</p>
+        <div className="flex items-center gap-3">
+          {profile?.avatarUrl && !avatarFailed ? <img src={profile.avatarUrl} alt="" className="size-12 rounded-full object-cover" onError={() => setAvatarFailed(true)} /> : <UserRound className="size-12 rounded-full bg-muted p-3" aria-hidden="true" />}
+          <div className="min-w-0"><Popover.Title className="truncate text-sm font-semibold">{profile?.nickname ?? "网易云已登录"}</Popover.Title><Popover.Description className="mt-1 text-xs text-muted-foreground">当前账号已登录</Popover.Description></div>
+        </div>
+        {accountError && <p role="alert" className="mt-3 text-sm text-destructive">{accountError}</p>}
+        <div className="mt-4 border-t border-border pt-3"><ActionButton variant="ghost" className="w-full justify-start" disabled={busy} onClick={() => void logout()}><LogOut aria-hidden="true" />{busy ? "正在登出…" : "登出"}</ActionButton></div>
+      </Popover.Popup>
+    </Popover.Positioner></Popover.Portal>
+  </Popover.Root>;
 
   return <div className="flex items-center gap-1"><Dialog open={open} onOpenChange={(value) => {
     setOpen(value);
@@ -83,5 +105,5 @@ export function LoginDialog() {
         <DialogClose render={<ActionButton variant="outline" />}>关闭</DialogClose>
       </div>
     </DialogPopup>
-  </Dialog>{loggedIn && <ActionButton variant="ghost" size="icon-sm" aria-label="退出网易云登录" title="退出登录" disabled={busy} onClick={() => void logout()}><LogOut aria-hidden="true" /></ActionButton>}</div>;
+  </Dialog></div>;
 }
