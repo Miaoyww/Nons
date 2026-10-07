@@ -1,6 +1,8 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import type { Theme } from "@/hooks/use-theme";
 import { SettingsCard } from "../settings-card";
+import { FontPicker } from "../font-picker";
+import { useFontSettings } from "@/hooks/use-font-settings";
 
 const themes = [
   { value: "light", label: "浅色", icon: Sun },
@@ -9,6 +11,7 @@ const themes = [
 ] as const;
 
 export function GeneralPage({ theme, onThemeChange }: { theme: Theme; onThemeChange: (theme: Theme) => void }) {
+  const { fonts, setFont } = useFontSettings();
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -27,6 +30,9 @@ export function GeneralPage({ theme, onThemeChange }: { theme: Theme; onThemeCha
             </label>
           ))}
         </div>
+      </SettingsCard>
+      <SettingsCard title="应用字体" description="搜索并选择已安装字体，即时生效并自动保存。缺失字符由系统字体补全。">
+        <FontPicker label="应用字体" value={fonts.app} onChange={(family) => setFont("app", family)} defaultLabel="应用默认字体" />
       </SettingsCard>
     </div>
   );

@@ -15,10 +15,13 @@ import { NowPlayingMenu } from "./now-playing-menu";
 import { useLyricSources } from "@/hooks/use-lyric-sources";
 import { loadLyrics } from "@/lib/load-lyrics";
 import { EmptyLyricsError, parseLyrics } from "@/lib/parse-lyrics";
+import { useFontSettings } from "@/hooks/use-font-settings";
 
 function LyricRenderer({ lines, showTranslation = true, showPronunciation = true, onError }: {
   lines: LyricLine[]; showTranslation?: boolean; showPronunciation?: boolean; onError: (cause: unknown) => void;
 }) {
+  const { fonts } = useFontSettings();
+  const lyricFont = fonts.lyrics || fonts.app;
   // AMLL consumes immutable lyric lines; retain the original auxiliary lyrics for restoring them.
   const displayedLines = useMemo(() => showTranslation && showPronunciation ? lines : lines.map((line) => ({
     ...line,
@@ -34,6 +37,21 @@ function LyricRenderer({ lines, showTranslation = true, showPronunciation = true
   const reduced = useReducedMotion();
   const playing = progress.status === "playing";
   const pausedPosition = playing ? 0 : progress.positionMs;
+  useEffect(() => {
+    const player = renderer?.lyricPlayer;
+    if (!visible || !player) return;
+    let disposed = false;
+    let frame = 0;
+    // Font metrics affect word masks as well as line positions, including while paused.
+    void document.fonts.ready.then(() => {
+      if (disposed) return;
+      frame = requestAnimationFrame(() => {
+        player.rebuildLyricView();
+        setLayoutVersion((version) => version + 1);
+      });
+    });
+    return () => { disposed = true; cancelAnimationFrame(frame); };
+  }, [lyricFont, renderer, visible]);
   useEffect(() => {
     const changed = () => setVisible(document.visibilityState !== "hidden");
     document.addEventListener("visibilitychange", changed);

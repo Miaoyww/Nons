@@ -1,4 +1,5 @@
 mod audio;
+mod fonts;
 mod library;
 mod local_folders;
 mod lyrics;
@@ -580,6 +581,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            fonts::system_fonts,
             player_snapshot,
             search_music,
             music_library,

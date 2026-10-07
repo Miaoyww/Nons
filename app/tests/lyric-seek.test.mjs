@@ -12,6 +12,7 @@ function lyricControl({ failure, desktop = true } = {}) {
     "react/jsx-runtime": { jsx, jsxs: jsx },
     react: { useState: (initial) => [initial, () => {}], useEffect() {}, useCallback: (fn) => fn, useMemo: (fn) => fn() },
     "@applemusic-like-lyrics/react": { LyricPlayer: "lyric-player" },
+    "@/hooks/use-font-settings": { useFontSettings: () => ({ fonts: { app: "", lyrics: "" } }) },
     "@applemusic-like-lyrics/lyric": {},
     "@applemusic-like-lyrics/core/style.css": {},
     "@tauri-apps/api/event": {},

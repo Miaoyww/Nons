@@ -2,14 +2,20 @@ import { Button } from "@/components/ui/button";
 import { defaultBackgroundSpeed, useLyricsSettings } from "@/hooks/use-lyrics-settings";
 import { useLyricSources } from "@/hooks/use-lyric-sources";
 import { SettingsCard } from "../settings-card";
+import { FontPicker } from "../font-picker";
+import { useFontSettings } from "@/hooks/use-font-settings";
 
 export function LyricsPage() {
+  const { fonts, setFont } = useFontSettings();
   const { backgroundSpeed, setBackgroundSpeed } = useLyricsSettings();
   const { sources, ready, busy, error, setSources } = useLyricSources();
   return <div className="flex flex-col gap-8">
     <div><h2 className="text-xl font-bold">歌词</h2><p className="mt-2 text-sm text-muted-foreground">调整歌词显示与在线歌词来源。</p></div>
     <section aria-labelledby="lyrics-display-heading" className="flex flex-col gap-8">
     <h3 id="lyrics-display-heading" className="text-base font-semibold">歌词显示</h3>
+    <SettingsCard title="歌词字体" description="为歌词、翻译与发音单独选择字体，即时生效并自动保存。默认跟随应用字体。">
+      <FontPicker label="歌词字体" value={fonts.lyrics} onChange={(family) => setFont("lyrics", family)} defaultLabel="跟随应用字体" />
+    </SettingsCard>
     <SettingsCard title="背景流速" description="调整封面背景的流动速度，即时生效并自动保存。设为 0 可停止流动；系统减少动态效果设置优先。">
       <div className="flex w-60 flex-col gap-2">
         <div className="flex items-center gap-3">
