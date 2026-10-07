@@ -4,6 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { trackDisplayTitle } from "./track-title";
+import { PlaybackNotice, type PlaybackNoticeMessage } from "./playback-notice";
 import { VolumeControl } from "./volume-control";
 
 export function Timeline({ onError }: { onError: (error: unknown) => void }) {
@@ -23,7 +24,7 @@ export function Timeline({ onError }: { onError: (error: unknown) => void }) {
   </div>;
 }
 
-export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qualityControl?: ReactNode; onLyrics: () => void; onQueue: () => void; onError: (error: unknown) => void }) {
+export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl, notice }: { notice?: PlaybackNoticeMessage; qualityControl?: ReactNode; onLyrics: () => void; onQueue: () => void; onError: (error: unknown) => void }) {
   const state = usePlayer();
   const track = state.index !== null ? state.queue[state.index] : undefined;
   const playing = ["playing", "buffering", "loading"].includes(state.status);
@@ -36,6 +37,7 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qu
   const action = (action: string) => void nativeCall("player_action", { action }).catch(onError);
   const repeatLabel = state.repeatMode === "one" ? "单曲循环" : state.repeatMode === "all" ? "列表循环" : "顺序播放";
   return <footer className="floating-playback" aria-label="播放控制">
+    <PlaybackNotice notice={notice} />
     <div className="playback-capsule">
       <div className="capsule-glass glass-surface" aria-hidden="true" />
       <div className="capsule-main">

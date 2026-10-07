@@ -6,6 +6,7 @@ import { AnimatePresence } from "motion/react";
 import { connectPlayer, errorText, nativeCall, usePlayer, type Track } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { PlaybackBar } from "./playback-bar";
+import type { PlaybackNoticeMessage } from "./playback-notice";
 import { useMusicNavigation } from "./music-navigation";
 import { QualitySelect } from "./music-options";
 import { TrackList } from "./track-list";
@@ -22,7 +23,14 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
   const view = page.view;
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string>();
-  const [notice, setNotice] = useState<string>();
+  const [notice, setNotice] = useState<PlaybackNoticeMessage>();
+  const noticeSerial = useRef(0);
+  const showNotice = useCallback((message: string) => setNotice({ id: ++noticeSerial.current, message }), []);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(undefined), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   const [refresh, setRefresh] = useState(0);
   const onError = useCallback((cause: unknown) => setError(errorText(cause)), []);
   const current = state.index !== null ? state.queue[state.index] : undefined;
@@ -66,7 +74,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
       if (!selected) return;
       setImporting(true);
       const report = await nativeCall<ImportReport>("import_music", { paths: Array.isArray(selected) ? selected : [selected] });
-      setNotice(`已导入 ${report.imported} 首音乐${report.skipped ? `，跳过 ${report.skipped} 个无法读取的文件` : ""}。`);
+      showNotice(`已导入 ${report.imported} 首音乐${report.skipped ? `，跳过 ${report.skipped} 个无法读取的文件` : ""}。`);
       if (report.errors.length) setError(report.errors.join("；"));
       if (view === "local") setRefresh((value) => value + 1); else navigate("local");
     } catch (cause) { onError(cause); }
@@ -77,8 +85,8 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
     void nativeCall(view === "queue" ? "player_jump" : "play_queue", view === "queue" ? { index } : { keys: tracks.map((t) => t.key), index }).catch(onError);
   }, [view, tracks, onError]);
   const append = useCallback((track: Track) => {
-    void nativeCall("append_queue", { keys: [track.key] }).then(() => setNotice(`已将「${track.title}」加入播放队列。`)).catch(onError);
-  }, [onError]);
+    void nativeCall("append_queue", { keys: [track.key] }).then(() => showNotice(`已将「${track.title}」加入播放队列。`)).catch(onError);
+  }, [onError, showNotice]);
 
   return <div className="music-workspace flex min-h-0 flex-1 flex-col">
     <Suspense fallback={<div role="status" className="m-auto">正在加载播放器…</div>}>
@@ -90,8 +98,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
       <main id="music-content" className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="音乐工作区">
         {!isTauri() && <p role="status" className="border-b border-border bg-muted/50 px-8 py-3 text-sm text-muted-foreground">这是界面预览。播放、搜索和导入功能需要在桌面应用中使用。</p>}
         {(error || state.error || state.mediaError) && <div role="alert" className="flex items-start gap-3 border-b border-border bg-destructive/5 px-8 py-3 text-sm text-destructive"><p className="min-w-0 flex-1">{error ?? state.error ?? state.mediaError}</p>{error && <ActionButton variant="ghost" size="icon-sm" aria-label="关闭提示" onClick={() => setError(undefined)}><X aria-hidden="true" /></ActionButton>}</div>}
-        {notice && <p role="status" className="border-b border-border px-8 py-2 text-sm text-muted-foreground">{notice}</p>}
-        {view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} /></Suspense> : <>
+        {view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} onNotice={showNotice} /></Suspense> : <>
           <header className="flex shrink-0 items-center justify-between gap-6 px-8 pb-6 pt-8"><div><h1 className="text-2xl font-semibold tracking-tight">{view === "local" ? "本地音乐" : view === "search" ? "搜索音乐" : view === "discover" ? "发现" : "播放队列"}</h1><p className="mt-2 text-sm text-muted-foreground">{view === "local" ? "熟悉的收藏，随时聆听。" : view === "search" || view === "discover" ? "在网易云音乐中寻找下一首。" : `${state.queue.length} 首音乐，按顺序播放。`}</p></div>
           </header>
           {view === "local" && <div className="flex gap-2 px-8 pb-4"><ActionButton variant="secondary" disabled={importing || !isTauri()} onClick={() => void importMusic(false)}><Plus aria-hidden="true" />打开文件</ActionButton><ActionButton variant="outline" disabled={importing || !isTauri()} onClick={() => void importMusic(true)}><FolderPlus aria-hidden="true" />{importing ? "正在导入…" : "导入目录"}</ActionButton></div>}
@@ -103,6 +110,6 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
         </>}
       </main>
     </div>
-    {!playerVisible && <PlaybackBar qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={() => navigate("queue")} onError={onError} />}
+    {!playerVisible && <PlaybackBar notice={notice} qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={() => navigate("queue")} onError={onError} />}
   </div>;
 }

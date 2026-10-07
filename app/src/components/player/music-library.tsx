@@ -86,7 +86,7 @@ function CollectionCards({ items, busy, onOpen, onPlay }: { items: MusicCollecti
   </article>)}</div>;
 }
 
-export default function MusicLibrary({ onError }: { onError: (cause: unknown) => void }) {
+export default function MusicLibrary({ onError, onNotice }: { onError: (cause: unknown) => void; onNotice: (message: string) => void }) {
   const { profile, loading: accountLoading, error: accountError, likesRevision } = useAccount();
   const { page, navigate } = useMusicNavigation();
   const player = usePlayer();
@@ -99,13 +99,12 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
   const [week, setWeek] = useState(true);
   const collection = page.collection;
   const [playing, setPlaying] = useState(false);
-  const [notice, setNotice] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const showingDetail = page.view === "collection" && !!collection;
 
   useEffect(() => {
     let disposed = false;
-    setSummary(undefined); setSummaryError(undefined); setSummaryBusy(false); setNotice(undefined);
+    setSummary(undefined); setSummaryError(undefined); setSummaryBusy(false);
     if (!profile || !isTauri()) return;
     setSummaryBusy(true);
     void getMusicLibrary().then((value) => { if (!disposed) setSummary(value); })
@@ -137,10 +136,10 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
   function openCollection(item: MusicCollection) { navigate("collection", "", item); }
   async function playCollection(item: MusicCollection, key?: string) {
     if (playing) return;
-    setPlaying(true); setNotice(undefined);
+    setPlaying(true);
     try {
       const truncated = await playLibraryCollection(item, key);
-      if (truncated) setNotice("已将前 1000 首歌曲加入播放队列。其余歌曲可在收藏详情中继续浏览并播放。");
+      if (truncated) onNotice("已将前 1000 首歌曲加入播放队列。其余歌曲可在收藏详情中继续浏览并播放。");
     } catch (cause) { onError(cause); }
     finally { setPlaying(false); }
   }
@@ -154,7 +153,6 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
   const retry = <ActionButton size="sm" variant="ghost" onClick={() => setRefresh((value) => value + 1)}><RefreshCw aria-hidden="true" />重试</ActionButton>;
 
   return <section className="music-library" aria-label="网易云音乐库">
-    {notice && <p role="status" className="mb-4 text-sm text-muted-foreground">{notice}</p>}
     {showingDetail ? <>
       <CollectionHeader key={`${collection.kind}:${collection.id}`} collection={collection} description={detail.description} total={detail.total || collection.trackCount} busy={playing} disabled={playing || !profile || detailBusy || !detail.tracks.length} onPlay={() => void playCollection(collection)} />
       {!profile ? <div className="library-empty"><p>登录网易云音乐后查看这个收藏。</p><LoginDialog /></div>
