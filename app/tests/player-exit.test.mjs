@@ -31,6 +31,7 @@ function harness() {
     "@/components/player/music-options": { MusicOptionsProvider: "MusicOptionsProvider" },
     "@/components/player/music-navigation": { MusicNavigationProvider: "MusicNavigationProvider" },
     "@/components/player/account": { AccountProvider: "AccountProvider" },
+    "@/plugins/host": { PluginProvider: "PluginProvider", PluginSlot: "PluginSlot" },
   }).default;
   const MusicWorkspace = load("../src/components/player/music-workspace.tsx", {
     react: { useState: (value) => [value, () => {}], useRef: (current) => ({ current }), useCallback: (fn) => fn, useEffect() {}, lazy: () => "LazyView", Suspense: "Suspense" },
@@ -39,6 +40,7 @@ function harness() {
     "motion/react": { AnimatePresence: "AnimatePresence" },
     "@/lib/player": { usePlayer: () => ({ index: null, queue: [] }) },
     "./action-button": { ActionButton: "ActionButton" }, "./playback-bar": { PlaybackBar: "PlaybackBar" },
+    "@/plugins/host": { PluginPageHost: "PluginPageHost" },
     "./music-navigation": { useMusicNavigation: () => ({ page: { view: "local", query: "" } }) },
     "./infinite-load": {}, "@/lib/use-paged-list": { usePagedList: () => ({ items: [], more: false, busy: false }) },
     "./music-options": { QualitySelect: "QualitySelect" }, "./track-list": {}, "./queue-page": { QueuePage: "QueuePage" }, "./song-actions": { SongActionsProvider: "SongActionsProvider" },

@@ -8,13 +8,16 @@ import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { LoginDialog } from "@/components/player/login-dialog";
 import { useMusicNavigation } from "@/components/player/music-navigation";
 import appIcon from "@/assets/icon.png";
+import { usePlugins } from "@/plugins/host";
+import { pluginPath } from "@/plugins/types";
 
 export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean; onBack?: () => void }) {
+  const { plugins } = usePlugins();
   const native = isTauri();
   const { page, navigate, back, forward, canBack, canForward } = useMusicNavigation();
-  const [keyword, setKeyword] = useState(page.query);
+  const [keyword, setKeyword] = useState(page.view === "plugin" ? "" : page.query);
   const searchInput = useRef<HTMLInputElement>(null);
-  useEffect(() => setKeyword(page.query), [page]);
+  useEffect(() => setKeyword(page.view === "plugin" ? "" : page.query), [page]);
   const [maximized, setMaximized] = useState(false);
   const [focused, setFocused] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +106,12 @@ export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean;
         </div>
         {!playerMode && <nav aria-label="音乐导航" className="flex shrink-0 items-center gap-1">
             {([['library', '音乐库'], ['discover', '发现'], ['local', '本地']] as const).map(([view, label]) => <Button key={view} variant={page.view === view || (view === 'library' && page.view === 'collection') || (view === 'discover' && page.view === 'search') ? 'secondary' : 'ghost'} aria-current={page.view === view || (view === 'library' && page.view === 'collection') || (view === 'discover' && page.view === 'search') ? 'page' : undefined} onClick={() => navigate(view)}>{label}</Button>)}
+            {plugins.filter((p) => p.loaded).flatMap((plugin) => plugin.manifest.contributes.navigation.map((item) => {
+              const target = plugin.manifest.contributes.pages.find((p) => p.id === item.page)!;
+              const path = pluginPath(plugin.manifest.id, target.path);
+              const selected = page.view === "plugin" && (page.query === path || page.query.startsWith(`${path.replace(/\/$/, "")}/`));
+              return <Button key={`${plugin.manifest.id}:${item.id}`} variant={selected ? "secondary" : "ghost"} aria-current={selected ? "page" : undefined} onClick={() => navigate("plugin", path)}>{item.label}</Button>;
+            }))}
           </nav>}
         <div className="flex h-full min-w-0 items-center justify-end pl-3">
           {!playerMode && <div className="titlebar-search-slot mr-2"><form className="titlebar-search" onSubmit={(event) => { event.preventDefault(); if (keyword.trim()) navigate(page.view === 'local' ? 'local' : 'search', keyword.trim()); }}>

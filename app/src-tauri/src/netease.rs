@@ -54,6 +54,19 @@ pub struct SongCredit {
 }
 
 impl Netease {
+    pub async fn song(&self, id: u64) -> AppResult<Track> {
+        if id == 0 || id > 9_007_199_254_740_991 {
+            return Err("歌曲 ID 无效".into());
+        }
+        let body = checked(
+            self.client
+                .song_detail(&self.query()?.param("ids", &id.to_string())),
+        )
+        .await?;
+        body.pointer("/songs/0")
+            .and_then(track_from_json)
+            .ok_or_else(|| "歌曲详情缺失".into())
+    }
     pub fn new() -> AppResult<Self> {
         let credential = keyring::Entry::new("NonsPlayer", "netease-session")
             .map_err(|_| "系统凭据存储不可用")?;

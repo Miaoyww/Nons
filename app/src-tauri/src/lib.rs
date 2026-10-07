@@ -8,6 +8,7 @@ mod model;
 mod netease;
 mod network;
 mod player;
+mod plugins;
 mod qq_lyrics;
 mod qrc_decrypt;
 mod storage;
@@ -502,29 +503,61 @@ async fn qr_login(backend: State<'_, Backend>) -> AppResult<QrLogin> {
     backend.netease.qr_login().await
 }
 #[tauri::command]
-async fn poll_login(key: String, backend: State<'_, Backend>) -> AppResult<LoginStatus> {
-    backend.netease.poll_login(&key).await
+async fn poll_login(
+    key: String,
+    backend: State<'_, Backend>,
+    plugins: State<'_, Arc<plugins::PluginManager>>,
+) -> AppResult<LoginStatus> {
+    let result = backend.netease.poll_login(&key).await?;
+    if result.code == 803 {
+        plugins.account_changed().await;
+    }
+    Ok(result)
 }
 #[tauri::command]
-async fn login_session(backend: State<'_, Backend>) -> AppResult<bool> {
-    backend.netease.session().await
+async fn login_session(
+    backend: State<'_, Backend>,
+    plugins: State<'_, Arc<plugins::PluginManager>>,
+) -> AppResult<bool> {
+    let result = backend.netease.session().await?;
+    if !result {
+        plugins.account_changed().await;
+    }
+    Ok(result)
 }
 #[tauri::command]
 async fn account_profile(backend: State<'_, Backend>) -> AppResult<Option<AccountProfile>> {
     backend.netease.profile().await
 }
 #[tauri::command]
-fn logout(backend: State<'_, Backend>) -> AppResult<()> {
-    backend.netease.logout()
+async fn logout(
+    backend: State<'_, Backend>,
+    plugins: State<'_, Arc<plugins::PluginManager>>,
+) -> AppResult<()> {
+    backend.netease.logout()?;
+    plugins.account_changed().await;
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(not(feature = "plugin-probe"))]
+    let context = tauri::generate_context!();
+    #[cfg(feature = "plugin-probe")]
+    let context = {
+        let mut context = tauri::generate_context!();
+        context.config_mut().app.windows[0].visible = false;
+        context
+    };
     let app = tauri::Builder::default()
+        .register_uri_scheme_protocol("plugin", plugins::protocol)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            #[cfg(not(feature = "plugin-probe"))]
             let data = app.path().app_data_dir()?;
+            #[cfg(feature = "plugin-probe")]
+            let data = plugins::probe::directory();
             std::fs::create_dir_all(&data)?;
             let covers = app.path().app_cache_dir()?.join("covers");
             std::fs::create_dir_all(&covers)?;
@@ -563,6 +596,18 @@ pub fn run() {
                 netease.clone(),
                 hwnd,
             )?);
+            let plugin_manager = plugins::PluginManager::new(
+                app.handle().clone(),
+                &data,
+                netease.clone(),
+                player.clone(),
+            )?;
+            app.manage(plugin_manager.clone());
+            #[cfg(feature = "plugin-probe")]
+            plugins::probe::start(plugin_manager.clone());
+            tauri::async_runtime::spawn(async move {
+                plugin_manager.startup().await;
+            });
             app.manage(Backend {
                 store,
                 netease,
@@ -581,6 +626,16 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            #[cfg(feature = "plugin-probe")]
+            plugins::probe::plugin_probe_report,
+            plugins::plugin_list,
+            plugins::plugin_discover,
+            plugins::plugin_install,
+            plugins::plugin_action,
+            plugins::plugin_call,
+            plugins::plugin_host_call,
+            plugins::plugin_ready,
+            plugins::plugin_fault,
             fonts::system_fonts,
             player_snapshot,
             search_music,
@@ -628,10 +683,11 @@ pub fn run() {
             set_song_liked,
             logout
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("无法启动 NonsPlayer");
     app.run(|app, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            app.state::<Arc<plugins::PluginManager>>().stop();
             app.state::<Backend>().player.shutdown();
         }
     });

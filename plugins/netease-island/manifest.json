@@ -1,0 +1,14 @@
+{
+  "id": "netease-island",
+  "name": "灵动岛",
+  "version": "1.0.0",
+  "backend": "backend.wasm",
+  "frontend": "ui.mjs",
+  "permissions": ["clipboard:music-links", "music:metadata", "ui"],
+  "engines": { "app": "^0.1.0", "pluginApi": "^1.0.0", "uiApi": "^1.0.0" },
+  "contributes": {
+    "views": [{ "id": "island", "slot": "main.overlay", "export": "DynamicIsland" }],
+    "pages": [],
+    "navigation": []
+  }
+}

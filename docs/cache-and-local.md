@@ -2,6 +2,14 @@
 
 修改资源获取、缓存设置或目录管理时阅读本文。这里定义复用边界；容量常量与已注册命令以对应实现文件为准。
 
+## 插件资源与歌曲信息
+
+插件 React SDK 仍通过 `nativeCall` 调用 scoped IPC，封面沿用 `useCoverSource`／`runtime_cover`。方法调用、权限检查、生命周期、存储与插件列表不加入查询缓存：每次必须验证当前加载代次，不能由缓存绕过禁用或权限判断。
+
+WASM 无法调用 WebUI 的 `nativeCall`，因此 `plugins/capability.rs` 的 `SongService` 为高层 `music.get-song` 提供独立、共享的 Rust 运行时缓存，底层继续使用同一网易云 Client。成功结果 TTL 10 分钟，不延长命中 TTL；128 条上限，每个公开 DTO 最多 64KiB，有效载荷估算上限约 8MiB。查询串行合并重复请求，失败不缓存、不持久化，单次网络预算 3 秒。
+
+扫码登录成功、会话失效和退出推进账号代次并清空该缓存；旧请求不得写回。缓存只保存公开歌曲元数据，不提供 Cookie、临时播放地址或本地文件路径。插件专属键值存储位于 `plugins.sqlite3`，不属于可清理资源缓存；关闭插件保留数据，卸载插件删除其分区。动态 UI／资产使用加载代次 URL 和 no-store，禁用后拒绝新资源请求；浏览器已经加载的 ESM 模块记录不能主动回收。
+
 ## 运行时缓存的接入
 
 前端资源读取统一调用 `app/src/lib/player.ts` 的 `nativeCall`。`app/src/lib/runtime-cache.ts` 使用 lru-cache 实现 10 分钟 TTL、LRU 容量限制和同键并发请求合并；读取不延长 TTL。页面组件保留展示状态，资源缓存由统一入口管理。
