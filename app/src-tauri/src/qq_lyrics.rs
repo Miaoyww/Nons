@@ -542,7 +542,7 @@ mod tests {
         assert!(decode_qrc_response("<response><content/></response>")
             .unwrap()
             .is_none());
-        assert!(decode_qrc_field(&fixture["oversized"].as_str().unwrap()).is_err());
+        assert!(decode_qrc_field(fixture["oversized"].as_str().unwrap()).is_err());
         assert!(decode_qrc_field("0").is_err());
         assert!(decode_qrc_field("0000000000000000").is_err());
     }

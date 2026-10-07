@@ -2,7 +2,11 @@
 use gstreamer::{self as gst, prelude::*};
 use std::sync::{Arc, Mutex};
 #[path = "../src/audio.rs"]
+#[allow(dead_code)]
 mod audio;
+#[path = "../src/model.rs"]
+#[allow(dead_code)]
+mod model;
 
 #[test]
 #[cfg(windows)]
