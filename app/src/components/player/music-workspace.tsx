@@ -9,6 +9,8 @@ import { PlaybackBar } from "./playback-bar";
 import { useMusicNavigation } from "./music-navigation";
 import { QualitySelect } from "./music-options";
 import { TrackList } from "./track-list";
+import { InfiniteLoad } from "./infinite-load";
+import { usePagedList } from "@/lib/use-paged-list";
 
 const LyricsView = lazy(() => import("./lyrics-view"));
 const MusicLibrary = lazy(() => import("./music-library"));
@@ -18,15 +20,10 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
   const state = usePlayer();
   const { page, navigate } = useMusicNavigation();
   const view = page.view;
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [appliedKeyword, setAppliedKeyword] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
-  const generation = useRef(0);
+  const [refresh, setRefresh] = useState(0);
   const onError = useCallback((cause: unknown) => setError(errorText(cause)), []);
   const current = state.index !== null ? state.queue[state.index] : undefined;
   const wasPlayerVisible = useRef(playerVisible);
@@ -53,25 +50,14 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
     return () => { disposed = true; stop?.(); };
   }, [onError]);
 
-  const load = useCallback(async (page: number, search: string, target: "local" | "search") => {
-    const serial = ++generation.current;
-    if (!isTauri()) { setTracks([]); return; }
-    setBusy(true); setError(undefined);
-    try {
-      const values = await nativeCall<Track[]>(target === "local" ? "local_music" : "search_music", { keyword: search, offset: page });
-      if (generation.current !== serial) return;
-      // Keep only one page in memory and the DOM, even for a large local library.
-      setTracks(values); setOffset(page); setAppliedKeyword(search);
-      setHasMore(values.length === (target === "local" ? 100 : 50));
-    } catch (cause) { if (generation.current === serial) onError(cause); }
-    finally { if (generation.current === serial) setBusy(false); }
-  }, [onError]);
-
-  useEffect(() => {
-    generation.current++; setBusy(false); setAppliedKeyword(""); setTracks([]); setOffset(0); setHasMore(false);
-    if (view === "local" || view === "search") void load(0, page.query, view);
-    return () => { generation.current++; };
-  }, [page, load]);
+  const loader = useCallback(async (offset: number) => {
+    const target = page.view === "local" ? "local" : "search";
+    const values = await nativeCall<Track[]>(target === "local" ? "local_music" : "search_music", { keyword: page.query, offset });
+    return { items: values, more: values.length === (target === "local" ? 100 : 50) };
+  }, [page, refresh]);
+  const { items: tracks, more: hasMore, busy, error: loadError, loadMore } = usePagedList(loader, view === "local" ? 100 : 50,
+    isTauri() && (view === "local" || (view === "search" && !!page.query.trim())));
+  const appliedKeyword = page.query;
 
   async function importMusic(directory: boolean) {
     setError(undefined); setNotice(undefined);
@@ -82,7 +68,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
       const report = await nativeCall<ImportReport>("import_music", { paths: Array.isArray(selected) ? selected : [selected] });
       setNotice(`已导入 ${report.imported} 首音乐${report.skipped ? `，跳过 ${report.skipped} 个无法读取的文件` : ""}。`);
       if (report.errors.length) setError(report.errors.join("；"));
-      if (view === "local") await load(0, appliedKeyword, "local"); else navigate("local");
+      if (view === "local") setRefresh((value) => value + 1); else navigate("local");
     } catch (cause) { onError(cause); }
     finally { setImporting(false); }
   }
@@ -110,9 +96,10 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
           </header>
           {view === "local" && <div className="flex gap-2 px-8 pb-4"><ActionButton variant="secondary" disabled={importing || !isTauri()} onClick={() => void importMusic(false)}><Plus aria-hidden="true" />打开文件</ActionButton><ActionButton variant="outline" disabled={importing || !isTauri()} onClick={() => void importMusic(true)}><FolderPlus aria-hidden="true" />{importing ? "正在导入…" : "导入目录"}</ActionButton></div>}
           <div className="relative isolate min-h-0 flex-1 overflow-auto px-8">
-            {(view === "queue" ? state.queue.length : tracks.length) > 0 ? <TrackList offset={view === "queue" ? 0 : offset} tracks={view === "queue" ? state.queue : tracks} currentKey={current?.key} busy={busy} onPlay={play} onAppend={view === "queue" ? undefined : append} /> : <div className="flex min-h-72 flex-col items-center justify-center gap-4 text-center"><Music2 className="size-10 text-muted-foreground/60" aria-hidden="true" /><p className="font-medium">{busy ? "正在查找音乐…" : view === "local" ? "把你的音乐带进来" : view === "search" || view === "discover" ? appliedKeyword ? "没有找到匹配的音乐" : "下一首喜欢的音乐，等你发现" : "队列还是空的"}</p><p className="max-w-sm text-sm leading-6 text-muted-foreground">{view === "local" ? "打开音频文件，或导入一个音乐目录。曲库会在下次启动时保留。" : view === "search" || view === "discover" ? "在顶部搜索框输入歌曲或艺术家名称开始搜索。" : "从搜索结果或本地曲库，将歌曲加入播放队列。"}</p></div>}
+            {(view === "queue" ? state.queue.length : tracks.length) > 0 ? <TrackList tracks={view === "queue" ? state.queue : tracks} currentKey={current?.key} busy={false} onPlay={play} onAppend={view === "queue" ? undefined : append} /> : <div className="flex min-h-72 flex-col items-center justify-center gap-4 text-center"><Music2 className="size-10 text-muted-foreground/60" aria-hidden="true" /><p className="font-medium">{busy ? "正在查找音乐…" : view === "local" ? "把你的音乐带进来" : view === "search" || view === "discover" ? appliedKeyword ? "没有找到匹配的音乐" : "下一首喜欢的音乐，等你发现" : "队列还是空的"}</p><p className="max-w-sm text-sm leading-6 text-muted-foreground">{view === "local" ? "打开音频文件，或导入一个音乐目录。曲库会在下次启动时保留。" : view === "search" || view === "discover" ? "在顶部搜索框输入歌曲或艺术家名称开始搜索。" : "从搜索结果或本地曲库，将歌曲加入播放队列。"}</p></div>}
+            {(view === "local" || view === "search") && <InfiniteLoad more={hasMore} busy={busy} error={loadError} onLoad={loadMore} />}
           </div>
-          {(view === "local" || view === "search") && <div className="flex h-14 shrink-0 items-center justify-between border-t border-border/50 px-8 text-xs text-muted-foreground"><span>{tracks.length ? `${offset + 1}–${offset + tracks.length}` : ""}</span><div className="flex gap-2"><ActionButton size="sm" variant="ghost" disabled={!offset || busy} onClick={() => void load(Math.max(0, offset - (view === "local" ? 100 : 50)), appliedKeyword, view)}>上一页</ActionButton><ActionButton size="sm" variant="ghost" disabled={!hasMore || busy} onClick={() => void load(offset + (view === "local" ? 100 : 50), appliedKeyword, view)}>下一页</ActionButton></div></div>}
+
         </>}
       </main>
     </div>

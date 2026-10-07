@@ -39,6 +39,7 @@ function harness() {
     "@/lib/player": { usePlayer: () => ({ index: null, queue: [] }) },
     "./action-button": { ActionButton: "ActionButton" }, "./playback-bar": { PlaybackBar: "PlaybackBar" },
     "./music-navigation": { useMusicNavigation: () => ({ page: { view: "local", query: "" } }) },
+    "./infinite-load": {}, "@/lib/use-paged-list": { usePagedList: () => ({ items: [], more: false, busy: false }) },
     "./music-options": { QualitySelect: "QualitySelect" }, "./track-list": {},
   }).MusicWorkspace;
   function render() {

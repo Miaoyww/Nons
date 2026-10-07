@@ -2,12 +2,12 @@ import { CollectionHeader } from "./collection-header";
 import { TrackTitle } from "./track-title";
 // Layout and interaction adapted from YesPlayMusic src/views/library.vue.
 // Copyright (c) 2020-2023 qier222, MIT. See notices/YesPlayMusic-LICENSE.txt.
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { Heart, Play, Plus, RefreshCw, UserRound } from "lucide-react";
 import { errorText, nativeCall, usePlayer, type Lyrics, type Track } from "@/lib/player";
 import { getLibraryCollections, getLibraryHistory, getLibraryTracks, getMusicLibrary, playLibraryCollection,
-  type CollectionPage, type CollectionTracks, type LibrarySummary, type LibraryTab, type PlaylistFilter } from "@/lib/music-library";
+  type CollectionTracks, type LibrarySummary, type LibraryTab, type PlaylistFilter } from "@/lib/music-library";
 import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ActionButton } from "./action-button";
@@ -16,6 +16,8 @@ import { Cover } from "./cover";
 import { LoginDialog } from "./login-dialog";
 import { useMusicNavigation, type MusicCollection } from "./music-navigation";
 import { TrackList } from "./track-list";
+import { InfiniteLoad } from "./infinite-load";
+import { usePagedList } from "@/lib/use-paged-list";
 
 const filters = [{ value: "all", label: "全部歌单" }, { value: "mine", label: "创建的歌单" }, { value: "liked", label: "收藏的歌单" }];
 const tabs = [{ value: "playlist", label: "歌单" }, { value: "album", label: "专辑" }, { value: "artist", label: "艺人" }, { value: "history", label: "听歌记录" }] as const;
@@ -48,13 +50,6 @@ function CreatePlaylist({ onCreated }: { onCreated: () => void }) {
       </form>
     </DialogPopup>
   </Dialog>;
-}
-
-function Pagination({ offset, size, more, busy, onChange }: { offset: number; size: number; more: boolean; busy: boolean; onChange: (value: number) => void }) {
-  return <div className="library-pagination"><span>第 {Math.floor(offset / size) + 1} 页</span><div className="flex gap-2">
-    <ActionButton size="sm" variant="ghost" disabled={busy || offset === 0} onClick={() => onChange(Math.max(0, offset - size))}>上一页</ActionButton>
-    <ActionButton size="sm" variant="ghost" disabled={busy || !more} onClick={() => onChange(offset + size)}>下一页</ActionButton>
-  </div></div>;
 }
 
 function LyricExcerpt({ track }: { track?: Track }) {
@@ -102,18 +97,7 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
   const [tab, setTab] = useState<LibraryTab>("playlist");
   const [filter, setFilter] = useState<PlaylistFilter>("all");
   const [week, setWeek] = useState(true);
-  const [offset, setOffset] = useState(0);
-  const [collections, setCollections] = useState<CollectionPage>({ items: [], more: false });
-  const [history, setHistory] = useState<CollectionTracks>({ tracks: [], total: 0, more: false });
-  const [listBusy, setListBusy] = useState(false);
-  const [listError, setListError] = useState<string>();
-  const [detail, setDetail] = useState<CollectionTracks>({ tracks: [], total: 0, more: false });
   const collection = page.collection;
-  const [detailPage, setDetailPage] = useState<{ collection?: MusicCollection; offset: number }>({ offset: 0 });
-  const detailOffset = detailPage.collection === collection ? detailPage.offset : 0;
-  const setDetailOffset = (offset: number) => setDetailPage({ collection, offset });
-  const [detailBusy, setDetailBusy] = useState(false);
-  const [detailError, setDetailError] = useState<string>();
   const [playing, setPlaying] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [refresh, setRefresh] = useState(0);
@@ -130,28 +114,25 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
     return () => { disposed = true; };
   }, [profile, refresh, likesRevision]);
 
-  useEffect(() => {
-    let disposed = false;
-    setCollections({ items: [], more: false }); setHistory({ tracks: [], total: 0, more: false }); setListError(undefined); setListBusy(false);
-    if (!profile || !isTauri() || showingDetail) return;
-    setListBusy(true);
-    const request = tab === "history" ? getLibraryHistory(week, offset).then((value) => { if (!disposed) setHistory(value); })
-      : getLibraryCollections(tab, offset, filter).then((value) => { if (!disposed) setCollections(value); });
-    void request.catch((cause) => { if (!disposed) setListError(errorText(cause)); })
-      .finally(() => { if (!disposed) setListBusy(false); });
-    return () => { disposed = true; };
-  }, [profile, tab, filter, week, offset, refresh, showingDetail]);
-
-  useEffect(() => {
-    let disposed = false;
-    setDetail({ tracks: [], total: 0, more: false }); setDetailError(undefined); setDetailBusy(false);
-    if (!collection || !profile || !showingDetail || !isTauri()) return;
-    setDetailBusy(true);
-    void getLibraryTracks(collection, detailOffset).then((value) => { if (!disposed) setDetail(value); })
-      .catch((cause) => { if (!disposed) setDetailError(errorText(cause)); })
-      .finally(() => { if (!disposed) setDetailBusy(false); });
-    return () => { disposed = true; };
-  }, [collection, profile, detailOffset, refresh, showingDetail, likesRevision]);
+  const listLoader = useCallback(async (offset: number) => {
+    if (tab === "history") {
+      const value = await getLibraryHistory(week, offset);
+      return { items: value.tracks, more: value.more };
+    }
+    const value = await getLibraryCollections(tab, offset, filter);
+    return { items: value.items, more: value.more };
+  }, [profile, tab, filter, week, refresh, showingDetail]);
+  const list = usePagedList<Track | MusicCollection>(listLoader, tab === "history" ? 100 : 30, !!profile && isTauri() && !showingDetail);
+  const collections = { items: list.items as MusicCollection[], more: list.more };
+  const history = { tracks: list.items as Track[], more: list.more };
+  const listBusy = list.busy;
+  const detailLoader = useCallback(async (offset: number) => {
+    const value = await getLibraryTracks(collection!, offset);
+    return { items: value.tracks, more: value.more, metadata: value };
+  }, [collection, profile, refresh, showingDetail, likesRevision]);
+  const detailList = usePagedList<Track, CollectionTracks>(detailLoader, 100, !!collection && !!profile && showingDetail && isTauri());
+  const detail = { ...detailList.metadata, tracks: detailList.items, total: detailList.metadata?.total ?? 0, more: detailList.more };
+  const detailBusy = detailList.busy;
 
   function openCollection(item: MusicCollection) { navigate("collection", "", item); }
   async function playCollection(item: MusicCollection, key?: string) {
@@ -159,7 +140,7 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
     setPlaying(true); setNotice(undefined);
     try {
       const truncated = await playLibraryCollection(item, key);
-      if (truncated) setNotice("已将前 1000 首歌曲加入播放队列。其余歌曲可在收藏详情中分页播放。");
+      if (truncated) setNotice("已将前 1000 首歌曲加入播放队列。其余歌曲可在收藏详情中继续浏览并播放。");
     } catch (cause) { onError(cause); }
     finally { setPlaying(false); }
   }
@@ -177,11 +158,10 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
     {showingDetail ? <>
       <CollectionHeader key={`${collection.kind}:${collection.id}`} collection={collection} description={detail.description} total={detail.total || collection.trackCount} busy={playing} disabled={playing || !profile || detailBusy || !detail.tracks.length} onPlay={() => void playCollection(collection)} />
       {!profile ? <div className="library-empty"><p>登录网易云音乐后查看这个收藏。</p><LoginDialog /></div>
-        : detailError ? <div role="alert" className="library-empty text-destructive"><p>{detailError}</p>{retry}</div>
-        : detailBusy ? <p role="status" className="library-empty">正在加载歌曲…</p>
-        : detail.tracks.length ? <TrackList offset={detailOffset} tracks={detail.tracks} currentKey={currentKey} busy={playing} onPlay={(index) => playPage(detail.tracks, index)} onAppend={append} />
+        : detailBusy && !detail.tracks.length ? <p role="status" className="library-empty">正在加载歌曲…</p>
+        : detail.tracks.length ? <TrackList tracks={detail.tracks} currentKey={currentKey} busy={playing} onPlay={(index) => playPage(detail.tracks, index)} onAppend={append} />
         : <p className="library-empty">这里还没有歌曲。</p>}
-      {profile && !detailError && <Pagination offset={detailOffset} size={100} more={detail.more} busy={detailBusy} onChange={setDetailOffset} />}
+      {profile && <InfiniteLoad more={detail.more} busy={detailBusy} error={detailList.error} onLoad={detailList.loadMore} />}
     </> : <>
       <header className="library-profile">
         {profile?.avatarUrl ? <img src={profile.avatarUrl} alt="" className="library-avatar" /> : <UserRound className="library-avatar bg-muted p-2" aria-hidden="true" />}
@@ -207,20 +187,19 @@ export default function MusicLibrary({ onError }: { onError: (cause: unknown) =>
       <div className="library-tabs-row">
         <div className="library-tabs" aria-label="音乐收藏分类">
           <div className="library-playlist-tab" data-active={tab === "playlist"}>
-            <ActionButton variant="ghost" className="library-tab" aria-pressed={tab === "playlist"} onClick={() => { setTab("playlist"); setOffset(0); }}>{filters.find((item) => item.value === filter)?.label}</ActionButton>
-            <Select items={filters} value={filter} onValueChange={(value) => { if (value) { setFilter(value as PlaylistFilter); setTab("playlist"); setOffset(0); } }}><SelectTrigger size="sm" aria-label="筛选歌单" className="library-filter-trigger"><span className="sr-only"><SelectValue /></span></SelectTrigger><SelectContent alignItemWithTrigger={false}><SelectGroup>{filters.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent></Select>
+            <ActionButton variant="ghost" className="library-tab" aria-pressed={tab === "playlist"} onClick={() => { setTab("playlist"); }}>{filters.find((item) => item.value === filter)?.label}</ActionButton>
+            <Select items={filters} value={filter} onValueChange={(value) => { if (value) { setFilter(value as PlaylistFilter); setTab("playlist"); } }}><SelectTrigger size="sm" aria-label="筛选歌单" className="library-filter-trigger"><span className="sr-only"><SelectValue /></span></SelectTrigger><SelectContent alignItemWithTrigger={false}><SelectGroup>{filters.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent></Select>
           </div>
-          {tabs.slice(1).map((item) => <ActionButton key={item.value} variant="ghost" className="library-tab" data-active={tab === item.value} aria-pressed={tab === item.value} onClick={() => { setTab(item.value); setOffset(0); }}>{item.label}</ActionButton>)}
+          {tabs.slice(1).map((item) => <ActionButton key={item.value} variant="ghost" className="library-tab" data-active={tab === item.value} aria-pressed={tab === item.value} onClick={() => { setTab(item.value); }}>{item.label}</ActionButton>)}
         </div>
-        {tab === "playlist" && profile && <CreatePlaylist onCreated={() => { setOffset(0); setRefresh((value) => value + 1); }} />}
+        {tab === "playlist" && profile && <CreatePlaylist onCreated={() => { setRefresh((value) => value + 1); }} />}
       </div>
-      {tab === "history" && <div className="mb-5 flex gap-2"><ActionButton variant={week ? "secondary" : "ghost"} size="sm" aria-pressed={week} onClick={() => { setWeek(true); setOffset(0); }}>最近一周</ActionButton><ActionButton variant={!week ? "secondary" : "ghost"} size="sm" aria-pressed={!week} onClick={() => { setWeek(false); setOffset(0); }}>所有时间</ActionButton></div>}
+      {tab === "history" && <div className="mb-5 flex gap-2"><ActionButton variant={week ? "secondary" : "ghost"} size="sm" aria-pressed={week} onClick={() => { setWeek(true); }}>最近一周</ActionButton><ActionButton variant={!week ? "secondary" : "ghost"} size="sm" aria-pressed={!week} onClick={() => { setWeek(false); }}>所有时间</ActionButton></div>}
       {!profile ? <p className="library-empty text-muted-foreground">登录后查看收藏的歌单、专辑和艺人。</p>
-        : listError ? <div role="alert" className="library-empty text-destructive"><p>{listError}</p>{retry}</div>
-        : listBusy ? <div role="status" className="library-cover-grid">{Array.from({ length: 5 }, (_, index) => <div className="library-cover-skeleton" key={index}><span /><span /><span /></div>)}</div>
-        : tab === "history" ? history.tracks.length ? <TrackList offset={offset} tracks={history.tracks} busy={playing} currentKey={currentKey} onPlay={(index) => playPage(history.tracks, index)} onAppend={append} /> : <p className="library-empty text-muted-foreground">这段时间还没有听歌记录。</p>
-        : collections.items.length ? <CollectionCards items={collections.items} busy={playing} onOpen={openCollection} onPlay={(item) => void playCollection(item)} /> : <p className="library-empty text-muted-foreground">{tab === "playlist" ? "这一页没有符合筛选条件的歌单。" : `还没有收藏${tab === "album" ? "专辑" : "艺人"}。`}</p>}
-      {profile && !listError && <Pagination offset={offset} size={tab === "history" ? 100 : 30} more={tab === "history" ? history.more : collections.more} busy={listBusy} onChange={setOffset} />}
+        : listBusy && !list.items.length ? <div role="status" className="library-cover-grid">{Array.from({ length: 5 }, (_, index) => <div className="library-cover-skeleton" key={index}><span /><span /><span /></div>)}</div>
+        : tab === "history" ? history.tracks.length ? <TrackList tracks={history.tracks} busy={playing} currentKey={currentKey} onPlay={(index) => playPage(history.tracks, index)} onAppend={append} /> : <p className="library-empty text-muted-foreground">这段时间还没有听歌记录。</p>
+        : collections.items.length ? <CollectionCards items={collections.items} busy={playing} onOpen={openCollection} onPlay={(item) => void playCollection(item)} /> : <p className="library-empty text-muted-foreground">{tab === "playlist" ? "没有符合筛选条件的歌单。" : `还没有收藏${tab === "album" ? "专辑" : "艺人"}。`}</p>}
+      {profile && <InfiniteLoad more={list.more} busy={listBusy} error={list.error} onLoad={list.loadMore} />}
     </>}
   </section>;
 }
