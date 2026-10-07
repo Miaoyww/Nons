@@ -5,6 +5,7 @@ use crate::{
     storage::MAX_LYRIC_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
+use quick_xml::{events::Event, Reader};
 use regex::Regex;
 use serde_json::{json, Value};
 use std::{sync::LazyLock, time::Duration};
@@ -13,6 +14,7 @@ pub const MINIMUM_SCORE: u32 = 80;
 
 #[derive(Debug)]
 struct Candidate {
+    id: Option<u64>,
     mid: String,
     title: String,
     artists: Vec<String>,
@@ -20,14 +22,25 @@ struct Candidate {
     duration: f64,
 }
 
-pub async fn lookup(client: &reqwest::Client, track: &Track) -> AppResult<Option<Lyrics>> {
+pub async fn lookup(
+    client: &reqwest::Client,
+    track: &Track,
+    skip_qrc: bool,
+) -> AppResult<Option<Lyrics>> {
     // A single bounded stage; timeout and transport errors must remain retryable.
-    tokio::time::timeout(Duration::from_secs(3), lookup_inner(client, track))
-        .await
-        .map_err(|_| "QQ 歌词查询超时".to_string())?
+    tokio::time::timeout(
+        Duration::from_secs(3),
+        lookup_inner(client, track, skip_qrc),
+    )
+    .await
+    .map_err(|_| "QQ 歌词查询超时".to_string())?
 }
 
-async fn lookup_inner(client: &reqwest::Client, track: &Track) -> AppResult<Option<Lyrics>> {
+async fn lookup_inner(
+    client: &reqwest::Client,
+    track: &Track,
+    skip_qrc: bool,
+) -> AppResult<Option<Lyrics>> {
     if track.title.trim().is_empty() || track.artist.trim().is_empty() {
         return Ok(None);
     }
@@ -71,7 +84,28 @@ async fn lookup_inner(client: &reqwest::Client, track: &Track) -> AppResult<Opti
             Ok(None)
         };
     };
-    // Use the helper's legacy LRC endpoint; no QQ login or audio resource is needed.
+    if let Some(id) = candidate.id.filter(|_| !skip_qrc) {
+        // Reserve time for the legacy LRC request within the shared 3-second budget.
+        let request = client
+            .post("https://c.y.qq.com/qqmusic/fcgi-bin/lyric_download.fcg")
+            .header("Referer", "https://c.y.qq.com/")
+            .form(&[
+                ("version", "15"),
+                ("miniversion", "82"),
+                ("lrctype", "4"),
+                ("musicid", &id.to_string()),
+            ]);
+        let qrc = async {
+            let response = read_text(request).await?;
+            tauri::async_runtime::spawn_blocking(move || decode_qrc_response(&response))
+                .await
+                .map_err(|e| e.to_string())?
+        };
+        if let Ok(Ok(Some(lyrics))) = tokio::time::timeout(Duration::from_millis(900), qrc).await {
+            return Ok(Some(lyrics));
+        }
+    }
+    // QRC missing, damaged or unavailable: keep the matched song's legacy LRC.
     let request = client
         .get("https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg")
         .header("Referer", "https://c.y.qq.com/")
@@ -90,6 +124,10 @@ async fn lookup_inner(client: &reqwest::Client, track: &Track) -> AppResult<Opti
 }
 
 async fn read_json(request: reqwest::RequestBuilder) -> AppResult<Value> {
+    serde_json::from_str(&read_text(request).await?).map_err(|e| e.to_string())
+}
+
+async fn read_text(request: reqwest::RequestBuilder) -> AppResult<String> {
     let mut response = request
         .timeout(Duration::from_millis(1400))
         .send()
@@ -109,7 +147,7 @@ async fn read_json(request: reqwest::RequestBuilder) -> AppResult<Value> {
         }
         bytes.extend_from_slice(&chunk);
     }
-    serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+    String::from_utf8(bytes).map_err(|e| e.to_string())
 }
 
 fn candidates(value: Value) -> AppResult<Vec<Candidate>> {
@@ -143,6 +181,7 @@ fn candidates(value: Value) -> AppResult<Vec<Candidate>> {
                 .filter(|s| !s.is_empty() && s.len() <= 128)
             {
                 result.push(Candidate {
+                    id: entry["id"].as_u64().filter(|id| *id > 0),
                     mid: mid.into(),
                     title: entry["title"].as_str().unwrap_or_default().into(),
                     artists: entry["singer"]
@@ -158,6 +197,120 @@ fn candidates(value: Value) -> AppResult<Vec<Candidate>> {
         }
     }
     Ok(result)
+}
+
+fn decode_qrc_response(response: &str) -> AppResult<Option<Lyrics>> {
+    let response = response
+        .trim()
+        .trim_start_matches("<!--")
+        .trim_end_matches("-->")
+        .trim();
+    let mut reader = Reader::from_str(response);
+    let mut field = None;
+    let mut original = String::new();
+    let mut translation = String::new();
+    let mut romanization = String::new();
+    loop {
+        match reader.read_event().map_err(|_| "QQ QRC 响应 XML 无效")? {
+            Event::Start(e) => {
+                field = match e.local_name().as_ref() {
+                    b"content" => Some(0),
+                    b"contentts" => Some(1),
+                    b"contentroma" => Some(2),
+                    _ => None,
+                };
+            }
+            Event::CData(e) => {
+                if let Some(field) = field {
+                    let text = e.decode().map_err(|_| "QQ QRC 字段编码无效")?;
+                    match field {
+                        0 => original.push_str(&text),
+                        1 => translation.push_str(&text),
+                        _ => romanization.push_str(&text),
+                    }
+                }
+            }
+            Event::Text(e) => {
+                if let Some(field) = field {
+                    let text = e.xml_content().map_err(|_| "QQ QRC 字段编码无效")?;
+                    match field {
+                        0 => original.push_str(&text),
+                        1 => translation.push_str(&text),
+                        _ => romanization.push_str(&text),
+                    }
+                }
+            }
+            Event::End(_) => field = None,
+            Event::DocType(_) => return Err("QQ QRC 不支持 DTD".into()),
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    if original.trim().is_empty() {
+        return Ok(None);
+    }
+    let content = decode_qrc_field(&original)?;
+    static WORDS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?m)^\[\d+,\d+\].+\(\d+,\d+\)").unwrap());
+    if !WORDS.is_match(&content) {
+        return Err("QQ QRC 缺少逐词时间轴".into());
+    }
+    // Auxiliary failures must not discard usable word-level lyrics.
+    let auxiliary = |text: &str| {
+        (!text.trim().is_empty())
+            .then(|| decode_qrc_field(text).ok())
+            .flatten()
+    };
+    let translation = auxiliary(&translation);
+    let romanization = auxiliary(&romanization);
+    if content.len()
+        + translation.as_ref().map_or(0, String::len)
+        + romanization.as_ref().map_or(0, String::len)
+        > MAX_LYRIC_BYTES
+    {
+        return Err("QQ QRC 正文与附加歌词过大".into());
+    }
+    Ok(Some(Lyrics {
+        source: "qq".into(),
+        format: "qrc".into(),
+        content,
+        translation,
+        romanization,
+    }))
+}
+
+fn decode_qrc_field(text: &str) -> AppResult<String> {
+    // Some lyric_download fields contain plaintext LRC rather than ciphertext.
+    let text = if text.trim_start().starts_with('[') {
+        text.to_owned()
+    } else {
+        crate::qrc_decrypt::decrypt(text)?
+    };
+    if !text.trim_start().starts_with('<') {
+        return Ok(text);
+    }
+    let mut reader = Reader::from_str(&text);
+    let mut content = None;
+    loop {
+        match reader.read_event().map_err(|_| "QRC 正文 XML 无效")? {
+            Event::Start(e) | Event::Empty(e) if e.local_name().as_ref() == b"Lyric_1" => {
+                for attribute in e.attributes() {
+                    let attribute = attribute.map_err(|_| "QRC 正文属性无效")?;
+                    if attribute.key.as_ref() == b"LyricContent" {
+                        content = Some(
+                            attribute
+                                .decode_and_unescape_value(reader.decoder())
+                                .map_err(|_| "QRC 正文编码无效")?
+                                .into_owned(),
+                        );
+                    }
+                }
+            }
+            Event::DocType(_) => return Err("QRC 正文不支持 DTD".into()),
+            Event::Eof => return content.ok_or_else(|| "QRC 缺少 LyricContent".into()),
+            _ => {}
+        }
+    }
 }
 
 fn decode_lyrics(value: Value) -> AppResult<Option<Lyrics>> {
@@ -365,19 +518,53 @@ mod tests {
     use super::*;
     use crate::model::TrackSource;
     #[test]
+    fn encrypted_qrc_xml_auxiliary_fields_and_failures() {
+        // Ciphertext generated by AMLL encryptQrcHex from original synthetic text.
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/qrc.json")).unwrap();
+        let response = format!("<!--<response><content><![CDATA[{}]]></content><contentts><![CDATA[{}]]></contentts><contentroma><![CDATA[{}]]></contentroma></response>-->",
+            fixture["encrypted"].as_str().unwrap(), fixture["translation"].as_str().unwrap(), fixture["romanization"].as_str().unwrap());
+        let result = decode_qrc_response(&response).unwrap().unwrap();
+        assert_eq!(result.format, "qrc");
+        assert_eq!(result.content, fixture["main"].as_str().unwrap());
+        assert_eq!(
+            result.translation.as_deref(),
+            Some("[00:01.00]你好世界\n[00:03.00]再次")
+        );
+        assert!(result.romanization.unwrap().contains("(1000,400)"));
+        let bad_auxiliary = response.replace(fixture["translation"].as_str().unwrap(), "damaged");
+        assert!(decode_qrc_response(&bad_auxiliary)
+            .unwrap()
+            .unwrap()
+            .translation
+            .is_none());
+        assert!(decode_qrc_response("<response><content>not-hex</content></response>").is_err());
+        assert!(decode_qrc_response("<response><content/></response>")
+            .unwrap()
+            .is_none());
+        assert!(decode_qrc_field(&fixture["oversized"].as_str().unwrap()).is_err());
+        assert!(decode_qrc_field("0").is_err());
+        assert!(decode_qrc_field("0000000000000000").is_err());
+    }
+    #[test]
     #[ignore = "requires the live QQ Music service"]
-    fn live_qq_search_and_lrc_download() {
+    fn live_qq_search_and_qrc_download() {
         let client = reqwest::Client::builder()
             .user_agent("NonsPlayer/0.1")
             .connect_timeout(Duration::from_millis(500))
             .build()
             .unwrap();
-        let value = tauri::async_runtime::block_on(lookup(&client, &track()))
+        let value = tauri::async_runtime::block_on(lookup(&client, &track(), false))
             .unwrap()
             .expect("晴天 should have matched QQ lyrics");
         assert_eq!(value.source, "qq");
+        assert_eq!(value.format, "qrc");
         assert!(value.content.contains("["));
         println!("QQ live lookup: {} UTF-8 bytes", value.content.len());
+        let lrc = tauri::async_runtime::block_on(lookup(&client, &track(), true))
+            .unwrap()
+            .unwrap();
+        assert_eq!(lrc.format, "lrc");
     }
     fn track() -> Track {
         Track {
@@ -393,6 +580,7 @@ mod tests {
     }
     fn candidate() -> Candidate {
         Candidate {
+            id: Some(97773),
             mid: "abc".into(),
             title: "晴天".into(),
             artists: vec!["周杰伦".into()],

@@ -1,5 +1,4 @@
 import { LyricPlayer, type LyricPlayerRef } from "@applemusic-like-lyrics/react";
-import { parseLrc, parseTTML, parseYrc } from "@applemusic-like-lyrics/lyric";
 import type { LyricLine } from "@applemusic-like-lyrics/core";
 import "@applemusic-like-lyrics/core/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,21 +14,7 @@ import { NowPlayingControls } from "./now-playing-controls";
 import { NowPlayingMenu } from "./now-playing-menu";
 import { useLyricSources } from "@/hooks/use-lyric-sources";
 import { loadLyrics } from "@/lib/load-lyrics";
-
-class EmptyLyricsError extends Error {}
-
-function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
-  const result = value.format === "ttml" ? parseTTML(value.content).lines : value.format === "yrc" ? parseYrc(value.content) : parseLrc(value.content);
-  const translations = value.translation ? new Map(parseLrc(value.translation).map((line) => [line.startTime, line.words.map((word) => word.word).join("")])) : undefined;
-  const romans = value.romanization ? new Map(parseLrc(value.romanization).map((line) => [line.startTime, line.words.map((word) => word.word).join("")])) : undefined;
-  if (!result.length) throw new EmptyLyricsError();
-  return result.map((line, index) => {
-    const end = Number.isFinite(line.endTime) && line.endTime > line.startTime ? line.endTime : result[index + 1]?.startTime ?? Math.max(duration, line.startTime + 5000);
-    if (!Number.isFinite(line.startTime) || line.startTime < 0 || end < line.startTime) throw new Error("歌词时间轴无效。");
-    return { ...line, endTime: end, words: line.words.map((word) => ({ ...word, endTime: Number.isFinite(word.endTime) && word.endTime > word.startTime ? word.endTime : end })),
-      translatedLyric: translations?.get(line.startTime) ?? line.translatedLyric, romanLyric: romans?.get(line.startTime) ?? line.romanLyric };
-  });
-}
+import { EmptyLyricsError, parseLyrics } from "@/lib/parse-lyrics";
 
 function LyricRenderer({ lines, showTranslation = true, showPronunciation = true, onError }: {
   lines: LyricLine[]; showTranslation?: boolean; showPronunciation?: boolean; onError: (cause: unknown) => void;

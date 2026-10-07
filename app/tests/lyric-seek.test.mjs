@@ -18,6 +18,7 @@ function lyricControl({ failure, desktop = true } = {}) {
     "@tauri-apps/api/core": { isTauri: () => desktop },
     "@/hooks/use-lyric-sources": {},
     "@/lib/load-lyrics": {},
+    "@/lib/parse-lyrics": {},
     "motion/react": { useReducedMotion: () => false },
     "lucide-react": {},
     "@/lib/player": {

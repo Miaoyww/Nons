@@ -19,7 +19,7 @@ export interface Progress {
   revision: number; positionMs: number; durationMs: number; status: PlaybackStatus; receivedAt: number;
 }
 export interface Lyrics {
-  source: "amll" | "qq" | "netease" | "local"; format: "ttml" | "yrc" | "lrc";
+  source: "amll" | "qq" | "netease" | "local"; format: "ttml" | "yrc" | "qrc" | "lrc";
   content: string; translation: string | null; romanization: string | null;
 }
 export interface OutputDevice { id: string; name: string }

@@ -14,7 +14,7 @@
 - 优先采用现有库，尤其 Rust 库。必要的重复实现须先告知用户。
 - 歌词显示指定使用 [AMLL](https://github.com/amll-dev/applemusic-like-lyrics)。
 - 在线歌词依次从 [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db)、QQ 音乐、网易云获取；未命中、超时、错误、损坏及解析失败继续下一来源。AMLL DB 和 QQ 音乐默认开启，可在设置 → 歌词 → 歌词来源独立关闭；都关闭时仅查询网易云。歌词不阻塞音频。初始 DB 查询总预算 1 秒；官方文件地址与可配置镜像按顺序尝试，最多 3 个，不并发放大请求。
-- QQ 音乐按歌名和歌手搜索，包含搜索结果的分组曲目；搜索协议来自 Lyricify-Lyrics-Helper。评分移植 AF-Media-Bar 的 LyricsMetadataScore：标题/歌手/专辑/时长权重 40%/40%/10%/10%，使用 F23 Jaro–Winkler 与偶数舍入，时差 ≤1 秒满分、≥10 秒零分，中间线性衰减。歌手按 Nons 的结构化分隔符 ` / ` 取最佳匹配。沿用 QQ 优先阶段 80 分采纳阈值，低于阈值直接使用网易云，不保留低分结果参与跨源比较。QQ 阶段总预算 3 秒、最多 3 个搜索词、每页 20 首，使用旧接口的同步 LRC 和独立译文；QRC 逐字取词暂未接入。
+- QQ 音乐按歌名和歌手搜索，包含搜索结果的分组曲目；搜索协议来自 Lyricify-Lyrics-Helper。评分移植 AF-Media-Bar 的 LyricsMetadataScore：标题/歌手/专辑/时长权重 40%/40%/10%/10%，使用 F23 Jaro–Winkler 与偶数舍入，时差 ≤1 秒满分、≥10 秒零分，中间线性衰减。歌手按 Nons 的结构化分隔符 ` / ` 取最佳匹配。沿用 QQ 优先阶段 80 分采纳阈值，低于阈值直接使用网易云，不保留低分结果参与跨源比较。QQ 阶段总预算 3 秒、最多 3 个搜索词、每页 20 首；达标曲目优先按数字 ID 下载 QRC，QRC 下载/解码子阶段预算 900 毫秒，失败时按 songmid 查询旧接口 LRC。QQ QRC 解密复用 lyrics-crypto 0.5.0 的算法并增加有界解压，解密在阻塞工作线程执行；响应、单字段解压与合并正文均限制为 2MiB。WebUI 使用已有 `@applemusic-like-lyrics/lyric` 的 `parseQrc` 保留逐词起止时间；前端解析失败也先重试 QQ LRC，再回退网易云。QRC 的独立 LRC/QRC 翻译与发音按行起始时间合并。
 - 本地歌曲优先同名歌词文件，再根据可靠关联或手动绑定的网易云 ID 查询 AMLL DB/网易云；当前不做歌名模糊匹配。
 - 新鲜缓存立即显示，过期命中立即显示并后台更新。确认缺失约 24 小时后复查，网络错误不能记为永久缺失；缓存有容量上限并支持手动刷新。
 - 播放核心首阶段包含 Windows SMTC，完整同步封面、Title、Artist、Album、Position、StartTime、EndTime。

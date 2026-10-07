@@ -2937,9 +2937,11 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "cookie",
+ "flate2",
  "glob",
  "gst-plugin-reqwest",
  "gstreamer",
+ "hex",
  "keyring",
  "lofty",
  "ncm-api-rs",

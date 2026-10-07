@@ -37,3 +37,13 @@ test("late responses are discarded and final-source failures do not loop", async
   await assert.rejects(terminal.load(), /invalid lyrics/);
   assert.equal(terminal.calls.length, 1);
 });
+
+test("invalid QRC tries QQ LRC before disabling QQ and requesting NetEase", async () => {
+  const { load, calls } = harness([
+    { source: "qq", format: "qrc", content: "broken" },
+    { source: "qq", format: "lrc", content: "broken" },
+    { source: "netease", format: "yrc", content: "usable" },
+  ]);
+  assert.equal((await load()).parsed, "usable");
+  assert.deepEqual(calls.map((c) => [c.skipQq, c.skipQrc]), [[false, false], [false, true], [true, true]]);
+});

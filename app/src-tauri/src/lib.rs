@@ -8,6 +8,7 @@ mod netease;
 mod network;
 mod player;
 mod qq_lyrics;
+mod qrc_decrypt;
 mod storage;
 #[cfg(test)]
 mod test_support;
@@ -398,11 +399,13 @@ async fn output_devices(backend: State<'_, Backend>) -> AppResult<Vec<OutputDevi
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Flat IPC arguments retain the existing source-skip contract.
 async fn track_lyrics(
     key: String,
     refresh: bool,
     skip_amll: bool,
     skip_qq: bool,
+    skip_qrc: Option<bool>,
     skip_local: bool,
     app: tauri::AppHandle,
     backend: State<'_, Backend>,
@@ -410,7 +413,17 @@ async fn track_lyrics(
     let track = backend.store.track(&key)?;
     backend
         .lyrics
-        .get(track, refresh, skip_amll, skip_qq, skip_local, app)
+        .get(
+            track,
+            refresh,
+            lyrics::LyricSkips {
+                amll: skip_amll,
+                qq: skip_qq,
+                qrc: skip_qrc.unwrap_or(false),
+                local: skip_local,
+            },
+            app,
+        )
         .await
 }
 

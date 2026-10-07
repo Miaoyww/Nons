@@ -49,6 +49,13 @@ enum Lookup {
     Failed,
 }
 
+pub struct LyricSkips {
+    pub amll: bool,
+    pub qq: bool,
+    pub qrc: bool,
+    pub local: bool,
+}
+
 impl LyricService {
     pub fn sources(&self) -> AppResult<LyricSources> {
         self.store
@@ -87,12 +94,10 @@ impl LyricService {
         self: &Arc<Self>,
         track: Track,
         refresh: bool,
-        skip_amll: bool,
-        skip_qq: bool,
-        skip_local: bool,
+        skips: LyricSkips,
         app: tauri::AppHandle,
     ) -> AppResult<Option<Lyrics>> {
-        if !skip_local {
+        if !skips.local {
             if let TrackSource::Local { path, .. } = &track.source {
                 if let Some(local) = local_lyrics(path).await? {
                     return Ok(Some(local));
@@ -106,17 +111,22 @@ impl LyricService {
         let amll_key = format!("amll:{id}");
         let ncm_key = format!("netease:{id}");
         // Metadata belongs in the key: local bindings and corrected tags can change matching.
-        let qq_key = format!(
-            "qq:{:x}",
+        let digest = format!(
+            "{:x}",
             Sha256::digest(serde_json::to_vec(&track).map_err(|e| e.to_string())?)
         );
+        let qrc_key = format!("qq:qrc-v1:{digest}");
+        let lrc_key = format!("qq:lrc-v1:{digest}");
+        let qq_key = if skips.qrc { &lrc_key } else { &qrc_key };
         if refresh {
-            self.disk.refresh_lyrics(&[&amll_key, &ncm_key, &qq_key])?;
+            self.disk
+                .refresh_lyrics(&[&amll_key, &ncm_key, &qrc_key, &lrc_key])?;
             let mut retries = self.retry_after.lock().map_err(|_| "歌词状态不可用")?;
             retries.remove(&amll_key);
-            retries.remove(&qq_key);
+            retries.remove(&qrc_key);
+            retries.remove(&lrc_key);
         }
-        if sources.amll && !skip_amll {
+        if sources.amll && !skips.amll {
             // Disk failure is a cache miss; it must never prevent online fallback.
             if let Some(cached) = self
                 .store
@@ -155,8 +165,8 @@ impl LyricService {
                 return Ok(Some(value));
             }
         }
-        if sources.qq && !skip_qq {
-            if let Some(value) = self.get_qq(&track, &qq_key, app.clone()).await? {
+        if sources.qq && !skips.qq {
+            if let Some(value) = self.get_qq(&track, qq_key, skips.qrc, app.clone()).await? {
                 return Ok(Some(value));
             }
         }
@@ -182,6 +192,7 @@ impl LyricService {
         self: &Arc<Self>,
         track: &Track,
         key: &str,
+        skip_qrc: bool,
         app: tauri::AppHandle,
     ) -> AppResult<Option<Lyrics>> {
         if let Some(cached) = self.store.cached_lyrics(key)? {
@@ -195,7 +206,8 @@ impl LyricService {
                     let track = track.clone();
                     let cache_key = key.to_owned();
                     tauri::async_runtime::spawn(async move {
-                        if let Ok(Some(lyrics)) = this.update_qq(&track, &cache_key).await {
+                        if let Ok(Some(lyrics)) = this.update_qq(&track, &cache_key, skip_qrc).await
+                        {
                             let _ = app.emit(
                                 "lyrics-updated",
                                 serde_json::json!({"key":track.key,"lyrics":lyrics}),
@@ -209,10 +221,15 @@ impl LyricService {
                 return Ok(Some(value));
             }
         }
-        self.update_qq(track, key).await
+        self.update_qq(track, key, skip_qrc).await
     }
 
-    async fn update_qq(&self, track: &Track, key: &str) -> AppResult<Option<Lyrics>> {
+    async fn update_qq(
+        &self,
+        track: &Track,
+        key: &str,
+        skip_qrc: bool,
+    ) -> AppResult<Option<Lyrics>> {
         let generation = self.disk.generation();
         if self
             .retry_after
@@ -223,7 +240,7 @@ impl LyricService {
         {
             return Ok(None);
         }
-        match crate::qq_lyrics::lookup(&self.client, track).await {
+        match crate::qq_lyrics::lookup(&self.client, track, skip_qrc).await {
             Ok(value) => {
                 let _ = self.disk.cache_result(
                     key,
