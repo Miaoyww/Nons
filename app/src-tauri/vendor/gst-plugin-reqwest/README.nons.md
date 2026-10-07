@@ -14,8 +14,17 @@ Nons changes:
   Content-Range and known length proves range support even when Accept-Ranges
   is missing. Servers ignoring Range retain upstream's nonseekable behavior.
 
+- Add a bounded `retries` property (default 2, maximum 10). On a read error
+  or timeout, resume a proven seekable resource at the last emitted byte offset.
+  The budget survives successful partial reads and is reset only for a new
+  request/seek. A changed size or ignored range is rejected; flushing cancels
+  recovery. Known byte boundaries produce EOS without an extra read.
+- Regression coverage includes disconnects in the speculative next source during
+  playbin3 gapless playback, comparing every decoded PCM sample across the seam.
+
 No custom transport, full-song predownload, or unbounded cache is introduced.
 The upstream response validation, cancellation, TLS and range requests remain
 in use. Updating upstream requires reapplying these small changes and running
-`tests/http_seek.rs` plus the opt-in `network_probe` (which verifies actual
+`tests/http_seek.rs`, `tests/http_recovery.rs`, `tests/http_gapless.rs` and the
+vendor HTTP/2 unit tests, plus the opt-in `network_probe` (which verifies actual
 timeline advancement after seeking, not just acceptance of the command).

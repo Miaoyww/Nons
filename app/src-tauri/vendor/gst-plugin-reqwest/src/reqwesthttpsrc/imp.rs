@@ -45,6 +45,7 @@ struct Settings {
     user_id: Option<String>,
     user_pw: Option<String>,
     timeout: u32,
+    retries: u32,
     compress: bool,
     extra_headers: Option<gst::Structure>,
     cookies: Vec<String>,
@@ -69,6 +70,7 @@ impl Default for Settings {
             user_id: None,
             user_pw: None,
             timeout: DEFAULT_TIMEOUT,
+            retries: 2,
             compress: DEFAULT_COMPRESS,
             extra_headers: None,
             cookies: Vec::new(),
@@ -127,6 +129,7 @@ enum State {
         uri: Url,
         response: Option<Response>,
         seekable: bool,
+        retries_left: u32,
         position: u64,
         size: Option<u64>,
         stop: Option<u64>,
@@ -622,6 +625,7 @@ impl ReqwestHttpSrc {
         Ok(State::Started {
             uri,
             response: Some(res),
+            retries_left: settings.retries,
             seekable,
             position,
             size,
@@ -736,6 +740,14 @@ impl ObjectImpl for ReqwestHttpSrc {
                     .readwrite()
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecUInt::builder("retries")
+                    .nick("Read retries")
+                    .blurb("Maximum byte-range recovery attempts per request")
+                    .maximum(10)
+                    .default_value(2)
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
                 glib::ParamSpecBoolean::builder("compress")
                     .nick("Compress")
                     .blurb("Allow compressed content encodings")
@@ -834,6 +846,10 @@ impl ObjectImpl for ReqwestHttpSrc {
                 settings.timeout = timeout;
                 Ok(())
             }
+            "retries" => {
+                self.settings.lock().unwrap().retries = value.get().expect("type checked upstream");
+                Ok(())
+            }
             "compress" => {
                 let mut settings = self.settings.lock().unwrap();
                 let compress = value.get().expect("type checked upstream");
@@ -930,6 +946,7 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let settings = self.settings.lock().unwrap();
                 settings.timeout.to_value()
             }
+            "retries" => self.settings.lock().unwrap().retries.to_value(),
             "compress" => {
                 let settings = self.settings.lock().unwrap();
                 settings.compress.to_value()
@@ -1164,14 +1181,24 @@ impl PushSrcImpl for ReqwestHttpSrc {
     ) -> Result<CreateSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
-        let (response, position, caps, tags) = match *state {
+        let (response, position, caps, tags, recovery) = match *state {
             State::Started {
                 ref mut response,
                 ref mut position,
                 ref mut tags,
                 ref mut caps,
-                ..
-            } => (response, position, caps, tags),
+                ref uri,
+                size,
+                stop,
+                seekable,
+                retries_left,
+            } => (
+                response,
+                position,
+                caps,
+                tags,
+                (uri.clone(), size, stop, seekable, retries_left),
+            ),
             State::Stopped => {
                 gst::element_imp_error!(self, gst::LibraryError::Failed, ["Not started yet"]);
 
@@ -1180,6 +1207,15 @@ impl PushSrcImpl for ReqwestHttpSrc {
         };
 
         let offset = *position;
+        let (uri, size, stop, seekable, retries_left) = recovery;
+        let end = match (size, stop) {
+            (Some(size), Some(stop)) => Some(size.min(stop)),
+            (size, stop) => size.or(stop),
+        };
+        // Do not read past the known byte boundary or mistake a truncated body for EOS.
+        if end.is_some_and(|end| offset >= end) {
+            return Err(gst::FlowError::Eos);
+        }
 
         let mut current_response = match response.take() {
             Some(response) => response,
@@ -1217,6 +1253,12 @@ impl PushSrcImpl for ReqwestHttpSrc {
                 })?;
                 match chunk {
                     Some(chunk) if chunk.is_empty() => continue,
+                    None if end.is_some_and(|end| offset < end) => {
+                        break Err(gst::error_msg!(
+                            gst::ResourceError::Read,
+                            ["Response ended before the advertised byte boundary"]
+                        ));
+                    }
                     chunk => break Ok(chunk),
                 }
             }
@@ -1225,8 +1267,36 @@ impl PushSrcImpl for ReqwestHttpSrc {
 
         let res = match res {
             Ok(res) => res,
-            Err(Some(err)) => {
-                gst::debug!(CAT, imp = self, "Error {:?}", err);
+            Err(Some(mut err)) => {
+                // Recover only a proven byte-seekable response. Continue from the
+                // last emitted buffer, with a total budget that survives progress.
+                if seekable && end.is_some_and(|end| offset < end) {
+                    for remaining in (0..retries_left).rev() {
+                        match self.do_request(uri.clone(), offset, stop) {
+                            Ok(mut resumed) => {
+                                if let State::Started {
+                                    size: resumed_size,
+                                    ref mut retries_left,
+                                    ..
+                                } = resumed
+                                {
+                                    if resumed_size != size {
+                                        err = gst::error_msg!(
+                                            gst::ResourceError::Read,
+                                            ["Resource size changed during recovery"]
+                                        );
+                                        break;
+                                    }
+                                    *retries_left = remaining;
+                                }
+                                *self.state.lock().unwrap() = resumed;
+                                return PushSrcImpl::create(self, _buffer);
+                            }
+                            Err(Some(cause)) => err = cause,
+                            Err(None) => return Err(gst::FlowError::Flushing),
+                        }
+                    }
+                }
                 self.post_error_message(err);
                 return Err(gst::FlowError::Error);
             }
