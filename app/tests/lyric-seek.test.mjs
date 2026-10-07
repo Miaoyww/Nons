@@ -16,6 +16,8 @@ function lyricControl({ failure, desktop = true } = {}) {
     "@applemusic-like-lyrics/core/style.css": {},
     "@tauri-apps/api/event": {},
     "@tauri-apps/api/core": { isTauri: () => desktop },
+    "@/hooks/use-lyric-sources": {},
+    "@/lib/load-lyrics": {},
     "motion/react": { useReducedMotion: () => false },
     "lucide-react": {},
     "@/lib/player": {

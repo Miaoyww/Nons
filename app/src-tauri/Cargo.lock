@@ -2946,6 +2946,7 @@ dependencies = [
  "notify",
  "qrcode",
  "quick-xml 0.39.4",
+ "regex 1.13.1",
  "reqwest 0.12.28",
  "rusqlite",
  "serde",

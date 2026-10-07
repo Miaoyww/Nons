@@ -44,6 +44,7 @@ tauri-plugin-dialog = "2"
 cookie = "0.18"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 base64 = "0.22"
+regex = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Foundation", "Media", "Media_Control", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT", "Win32_System_Com"] }

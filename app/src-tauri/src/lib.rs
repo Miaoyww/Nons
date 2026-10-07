@@ -7,6 +7,7 @@ mod model;
 mod netease;
 mod network;
 mod player;
+mod qq_lyrics;
 mod storage;
 #[cfg(test)]
 mod test_support;
@@ -401,6 +402,7 @@ async fn track_lyrics(
     key: String,
     refresh: bool,
     skip_amll: bool,
+    skip_qq: bool,
     skip_local: bool,
     app: tauri::AppHandle,
     backend: State<'_, Backend>,
@@ -408,7 +410,7 @@ async fn track_lyrics(
     let track = backend.store.track(&key)?;
     backend
         .lyrics
-        .get(track, refresh, skip_amll, skip_local, app)
+        .get(track, refresh, skip_amll, skip_qq, skip_local, app)
         .await
 }
 
@@ -427,6 +429,16 @@ fn bind_local_lyrics(
         _ => return Err("仅本地音乐需要手动绑定歌词".into()),
     }
     backend.store.save_tracks(&[track])
+}
+
+#[tauri::command]
+fn lyric_sources(backend: State<'_, Backend>) -> AppResult<lyrics::LyricSources> {
+    backend.lyrics.sources()
+}
+
+#[tauri::command]
+fn set_lyric_sources(sources: lyrics::LyricSources, backend: State<'_, Backend>) -> AppResult<()> {
+    backend.lyrics.set_sources(sources)
 }
 
 #[tauri::command]
@@ -587,6 +599,8 @@ pub fn run() {
             player_device,
             output_devices,
             track_lyrics,
+            lyric_sources,
+            set_lyric_sources,
             bind_local_lyrics,
             music_options,
             set_music_options,

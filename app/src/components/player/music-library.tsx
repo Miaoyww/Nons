@@ -19,6 +19,7 @@ import { useMusicNavigation, type MusicCollection } from "./music-navigation";
 import { TrackList } from "./track-list";
 import { InfiniteLoad } from "./infinite-load";
 import { usePagedList } from "@/lib/use-paged-list";
+import { useLyricSources } from "@/hooks/use-lyric-sources";
 
 const filters = [{ value: "all", label: "全部歌单" }, { value: "mine", label: "创建的歌单" }, { value: "liked", label: "收藏的歌单" }];
 const tabs = [{ value: "playlist", label: "歌单" }, { value: "album", label: "专辑" }, { value: "artist", label: "艺人" }, { value: "history", label: "听歌记录" }] as const;
@@ -54,12 +55,13 @@ function CreatePlaylist({ onCreated }: { onCreated: () => void }) {
 }
 
 function LyricExcerpt({ track }: { track?: Track }) {
+  const { sources } = useLyricSources();
   const [lines, setLines] = useState<string[]>([]);
   useEffect(() => {
     let disposed = false;
     setLines([]);
     if (!track || !isTauri()) return;
-    void nativeCall<Lyrics | null>("track_lyrics", { key: track.key, refresh: false, skipAmll: false, skipLocal: false }).then(async (value) => {
+    void nativeCall<Lyrics | null>("track_lyrics", { key: track.key, refresh: false, skipAmll: !sources.amll, skipQq: !sources.qq, skipLocal: false }).then(async (value) => {
       if (!value || disposed) return;
       const { parseLrc, parseTTML, parseYrc } = await import("@applemusic-like-lyrics/lyric");
       if (disposed) return;
@@ -70,7 +72,7 @@ function LyricExcerpt({ track }: { track?: Track }) {
       setLines(excerpt.slice(start, start + 3));
     }).catch(() => { /* Optional lyrics never block the collection or playback. */ });
     return () => { disposed = true; };
-  }, [track?.key]);
+  }, [track?.key, sources]);
   return lines.length ? <p className="library-lyric-excerpt">{lines.map((line, index) => <span key={index}>{line}<br /></span>)}</p> : <Heart className="size-10 opacity-30" aria-hidden="true" />;
 }
 
