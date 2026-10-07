@@ -10,9 +10,6 @@ import { FolderManager } from "../folder-manager";
 
 interface CacheOptions { enabled: boolean; maxMb: number; directory: string }
 interface CacheStatus { options: CacheOptions; usedBytes: number; entries: number }
-function Toggle({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: (value: boolean) => void }) {
-  return <button type="button" role="switch" aria-label={label} aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className={`relative h-7 w-12 cursor-pointer rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-default disabled:opacity-50 ${checked ? "bg-primary" : "bg-muted-foreground/30"}`}><span className={`absolute top-1 size-5 rounded-full bg-white shadow-sm transition-transform ${checked ? "left-1 translate-x-5" : "left-1"}`} /></button>;
-}
 export function LocalCachePage() {
   const [status, setStatus] = useState<CacheStatus>();
   const [limit, setLimit] = useState("64");
@@ -40,26 +37,20 @@ export function LocalCachePage() {
   const disabled = busy || !desktop || !options;
   return <div className="flex flex-col gap-8">
     <div><h2 className="text-xl font-bold">本地与缓存</h2><p className="mt-2 text-sm text-muted-foreground">管理本地音乐与歌词缓存。</p></div>
-    <section aria-labelledby="local-heading" className="flex flex-col gap-3">
-      <h3 id="local-heading" className="mb-1 border-l-4 border-primary pl-3 text-base font-semibold">本地歌曲</h3>
-      <SettingsCard title="显示本地歌曲封面" description="显示音频文件中的内嵌封面。关闭后减少列表图片加载。"><Toggle label="显示本地歌曲封面" checked={showCovers} disabled={busy || !desktop} onChange={(value) => void perform(() => setShowCovers(value))} /></SettingsCard>
-      <SettingsCard title="音乐文件夹" description="添加或移除本地音乐文件夹。已添加的文件夹会自动扫描。"><FolderManager /></SettingsCard>
-    </section>
-    <section aria-labelledby="cache-heading" className="flex flex-col gap-3">
-      <h3 id="cache-heading" className="mb-1 border-l-4 border-primary pl-3 text-base font-semibold">缓存配置</h3>
-      <SettingsCard title="启用本地缓存" description="保存 TTML 歌词，加快再次加载并支持离线读取。运行时缓存始终启用，10 分钟过期。"><Toggle label="启用本地缓存" checked={options?.enabled ?? true} disabled={disabled} onChange={(enabled) => void perform(() => nativeCall("set_local_cache_options", { options: { ...options, enabled } }))} /></SettingsCard>
-      <SettingsCard title="缓存大小上限" description="达到上限后清理最久未使用的歌词。仅缓存 TTML，范围 1–4096 MB。">
-        <form className="flex items-center gap-2" onSubmit={(event) => { event.preventDefault(); const maxMb = Number(limit); if (!Number.isInteger(maxMb) || maxMb < 1 || maxMb > 4096) { setError("请输入 1–4096 之间的整数容量。"); return; } void perform(() => nativeCall("set_local_cache_options", { options: { ...options, maxMb } }), "缓存上限已保存。"); }}>
-          <input type="number" min={1} max={4096} step={1} aria-label="缓存大小上限（MB）" className="music-input w-24" disabled={disabled} value={limit} onChange={(event) => setLimit(event.target.value)} /><span className="text-sm text-muted-foreground">MB</span><Button variant="outline" size="sm" disabled={disabled || Number(limit) === options?.maxMb}>保存</Button>
-        </form>
-      </SettingsCard>
-      <SettingsCard title="缓存目录" description={options ? `${options.directory}${options.directory.endsWith("/") || options.directory.endsWith("\\") ? "" : "/"}nons-cache-v1` : desktop ? "正在读取缓存目录…" : "默认应用缓存目录"}>
-        <Button variant="outline" disabled={disabled} onClick={() => void perform(async () => { const directory = await open({ directory: true, multiple: false, title: "选择缓存目录" }); if (typeof directory === "string") await nativeCall("set_local_cache_options", { options: { ...options, directory } }); }, "缓存目录已更新，已有 TTML 歌词已迁移。")}>更改</Button>
-      </SettingsCard>
-      <SettingsCard title="缓存占用与清理" description={status ? `TTML 歌词占用 ${(status.usedBytes / 1024 / 1024).toFixed(2)} MB · ${status.entries} 份歌词` : desktop ? "正在统计缓存占用…" : "TTML 歌词占用 0 MB"}>
-        <div className="flex gap-2"><Button variant="ghost" size="icon-sm" aria-label="刷新缓存占用" title="刷新缓存占用" disabled={busy || !desktop} onClick={() => void perform(async () => {})}><RefreshCw aria-hidden="true" /></Button><Button variant="outline" className="text-destructive" disabled={disabled || status?.entries === 0} onClick={() => void perform(() => nativeCall("clear_local_cache"), "TTML 缓存已清空。")}>清空缓存</Button></div>
-      </SettingsCard>
-    </section>
+    <SettingsCard title="显示本地歌曲封面" description="显示音频文件中的内嵌封面。关闭后减少列表图片加载。"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showCovers} disabled={busy || !desktop} onChange={(event) => void perform(() => setShowCovers(event.target.checked))} />显示内嵌封面</label></SettingsCard>
+    <SettingsCard title="音乐文件夹" description="添加或移除本地音乐文件夹。已添加的文件夹会自动扫描。"><FolderManager /></SettingsCard>
+    <SettingsCard title="启用本地缓存" description="保存 TTML 歌词，加快再次加载并支持离线读取。运行时缓存始终启用，10 分钟过期。"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={options?.enabled ?? true} disabled={disabled} onChange={(event) => { const enabled = event.target.checked; void perform(() => nativeCall("set_local_cache_options", { options: { ...options, enabled } })); }} />保存歌词缓存</label></SettingsCard>
+    <SettingsCard title="缓存大小上限" description="达到上限后清理最久未使用的歌词。仅缓存 TTML，范围 1–4096 MB。">
+      <form className="flex items-center gap-2" onSubmit={(event) => { event.preventDefault(); const maxMb = Number(limit); if (!Number.isInteger(maxMb) || maxMb < 1 || maxMb > 4096) { setError("请输入 1–4096 之间的整数容量。"); return; } void perform(() => nativeCall("set_local_cache_options", { options: { ...options, maxMb } }), "缓存上限已保存。"); }}>
+        <input type="number" min={1} max={4096} step={1} aria-label="缓存大小上限（MB）" className="music-input w-24" disabled={disabled} value={limit} onChange={(event) => setLimit(event.target.value)} /><span className="text-sm text-muted-foreground">MB</span><Button variant="outline" size="sm" disabled={disabled || Number(limit) === options?.maxMb}>保存</Button>
+      </form>
+    </SettingsCard>
+    <SettingsCard title="缓存目录" description={options ? `${options.directory}${options.directory.endsWith("/") || options.directory.endsWith("\\") ? "" : "/"}nons-cache-v1` : desktop ? "正在读取缓存目录…" : "默认应用缓存目录"}>
+      <Button variant="outline" disabled={disabled} onClick={() => void perform(async () => { const directory = await open({ directory: true, multiple: false, title: "选择缓存目录" }); if (typeof directory === "string") await nativeCall("set_local_cache_options", { options: { ...options, directory } }); }, "缓存目录已更新，已有 TTML 歌词已迁移。")}>更改</Button>
+    </SettingsCard>
+    <SettingsCard title="缓存占用与清理" description={status ? `TTML 歌词占用 ${(status.usedBytes / 1024 / 1024).toFixed(2)} MB · ${status.entries} 份歌词` : desktop ? "正在统计缓存占用…" : "TTML 歌词占用 0 MB"}>
+      <div className="flex gap-2"><Button variant="ghost" size="icon-sm" aria-label="刷新缓存占用" title="刷新缓存占用" disabled={busy || !desktop} onClick={() => void perform(async () => {})}><RefreshCw aria-hidden="true" /></Button><Button variant="outline" className="text-destructive" disabled={disabled || status?.entries === 0} onClick={() => void perform(() => nativeCall("clear_local_cache"), "TTML 缓存已清空。")}>清空缓存</Button></div>
+    </SettingsCard>
     {busy && <p role="status" className="text-sm text-muted-foreground">正在更新…</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
