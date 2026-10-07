@@ -100,3 +100,26 @@ test("lyrics refresh bypasses runtime cache and cover cache stays separate from 
   assert.equal(await player.nativeCall("runtime_cover", { url: "https://p1.music.126.net/a.jpg" }), "data:image/jpeg;base64,a");
   assert.equal(requests.length, 3);
 });
+
+
+test("song details coalesce, and playlist deletion invalidates collection and likes caches only on success", async () => {
+  const { player, requests } = harness();
+  const first = player.nativeCall("song_information", { key: "netease:1" });
+  const duplicate = player.nativeCall("song_information", { key: "netease:1" });
+  assert.equal(requests.length, 1);
+  requests[0].resolve({ albumId: 3 }); await Promise.all([first, duplicate]);
+  const reads = ["music_library", "library_tracks", "library_collections", "liked_song_ids"];
+  const data = [];
+  for (const command of reads) {
+    const read = player.nativeCall(command); data.push({ command }); requests.at(-1).resolve(data.at(-1)); await read;
+  }
+  const failed = player.nativeCall("remove_playlist_song", { playlistId: 1, songId: 1 });
+  const rejection = assert.rejects(failed, /denied/); requests.at(-1).reject(new Error("denied")); await rejection;
+  for (const [index, command] of reads.entries()) assert.equal(await player.nativeCall(command), data[index]);
+  const deletion = player.nativeCall("remove_playlist_song", { playlistId: 1, songId: 1 }); requests.at(-1).resolve(); await deletion;
+  for (const command of reads) {
+    const before = requests.length;
+    const refresh = player.nativeCall(command); assert.equal(requests.length, before + 1); requests.at(-1).resolve({ fresh: true }); await refresh;
+  }
+  assert.equal((await player.nativeCall("song_information", { key: "netease:1" })).albumId, 3);
+});

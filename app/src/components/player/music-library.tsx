@@ -1,4 +1,5 @@
 import { CollectionHeader } from "./collection-header";
+import { SongContextMenu } from "./song-actions";
 import { TrackTitle } from "./track-title";
 // Layout and interaction adapted from YesPlayMusic src/views/library.vue.
 // Copyright (c) 2020-2023 qier222, MIT. See notices/YesPlayMusic-LICENSE.txt.
@@ -87,7 +88,7 @@ function CollectionCards({ items, busy, onOpen, onPlay }: { items: MusicCollecti
 }
 
 export default function MusicLibrary({ onError, onNotice }: { onError: (cause: unknown) => void; onNotice: (message: string) => void }) {
-  const { profile, loading: accountLoading, error: accountError, likesRevision } = useAccount();
+  const { profile, loading: accountLoading, error: accountError, likesRevision, reloadLikes } = useAccount();
   const { page, navigate } = useMusicNavigation();
   const player = usePlayer();
   const currentKey = player.index !== null ? player.queue[player.index]?.key : undefined;
@@ -150,6 +151,11 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
   function append(track: Track) {
     void nativeCall("append_queue", { keys: [track.key] }).then(() => onNotice(`已将「${track.title}」设为下一首播放。`)).catch(onError);
   }
+  async function removeFromPlaylist(item: MusicCollection, track: Track) {
+    if (track.source.kind !== "netease") return;
+    await nativeCall("remove_playlist_song", { playlistId: item.id, songId: track.source.id });
+    reloadLikes(); setRefresh((value) => value + 1);
+  }
   const liked = summary?.likedPlaylist;
   const retry = <ActionButton size="sm" variant="ghost" onClick={() => { invalidateMusicLibrary(); setRefresh((value) => value + 1); }}><RefreshCw aria-hidden="true" />重试</ActionButton>;
 
@@ -158,7 +164,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
       <CollectionHeader key={`${collection.kind}:${collection.id}`} collection={collection} description={detail.description} total={detail.total || collection.trackCount} busy={playing} disabled={playing || !profile || detailBusy || !detail.tracks.length} onPlay={() => void playCollection(collection)} />
       {!profile ? <div className="library-empty"><p>登录网易云音乐后查看这个收藏。</p><LoginDialog /></div>
         : detailBusy && !detail.tracks.length ? <p role="status" className="library-empty">正在加载歌曲…</p>
-        : detail.tracks.length ? <TrackList tracks={detail.tracks} currentKey={currentKey} busy={playing} onPlay={(index) => playPage(detail.tracks, index)} onAppend={append} />
+        : detail.tracks.length ? <TrackList tracks={detail.tracks} currentKey={currentKey} busy={playing} onPlay={(index) => playPage(detail.tracks, index)} onAppend={append} removeLabel={collection.kind === "playlist" ? "从歌单删除" : "从列表删除"} onRemove={collection.kind === "playlist" && collection.creatorId === profile.userId ? (track) => removeFromPlaylist(collection, track) : undefined} />
         : <p className="library-empty">这里还没有歌曲。</p>}
       {profile && <InfiniteLoad more={detail.more} busy={detailBusy} error={detailList.error} onLoad={detailList.loadMore} />}
     </> : <>
@@ -179,7 +185,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
           {!profile && !accountLoading ? <div className="library-empty"><p>登录网易云音乐，找回你喜欢的旋律。</p><LoginDialog /></div>
             : summaryError || summary?.likedError ? <div role="alert" className="library-empty text-destructive"><p>{summaryError ?? summary?.likedError}</p>{retry}</div>
             : summaryBusy ? <div role="status" className="library-song-grid">{Array.from({ length: 12 }, (_, index) => <div key={index} className="library-song-skeleton"><span /><div><span /><span /></div></div>)}</div>
-            : summary?.likedTracks.length ? <div className="library-song-grid">{summary.likedTracks.map((track) => <button key={track.key} className="library-song" data-current={track.key === currentKey} disabled={playing} onClick={() => { if (liked) void playCollection(liked, track.key); }} aria-label={`播放 ${track.title}`} title={`${track.title} · ${track.artist}`}><Cover cover={track.cover} className="size-10" /><div className="min-w-0"><p className="truncate font-semibold"><TrackTitle track={track} /></p><p className="truncate text-xs opacity-75">{track.artist}</p></div></button>)}</div>
+            : summary?.likedTracks.length ? <div className="library-song-grid">{summary.likedTracks.map((track) => <SongContextMenu key={track.key} track={track} busy={playing} onPlay={() => { if (liked) void playCollection(liked, track.key); }} removeLabel="从歌单删除" onRemove={liked && liked.creatorId === profile?.userId ? () => removeFromPlaylist(liked, track) : undefined} render={<button className="library-song" data-current={track.key === currentKey} disabled={playing} onClick={() => { if (liked) void playCollection(liked, track.key); }} aria-label={`播放 ${track.title}`} title={`${track.title} · ${track.artist}`} />}><Cover cover={track.cover} className="size-10" /><div className="min-w-0"><p className="truncate font-semibold"><TrackTitle track={track} /></p><p className="truncate text-xs opacity-75">{track.artist}</p></div></SongContextMenu>)}</div>
             : <p className="library-empty text-muted-foreground">喜欢的歌曲会出现在这里。</p>}
         </div>
       </div>

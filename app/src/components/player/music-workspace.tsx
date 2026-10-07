@@ -12,6 +12,7 @@ import { PlaybackBar } from "./playback-bar";
 import type { PlaybackNoticeMessage } from "./playback-notice";
 import { useMusicNavigation } from "./music-navigation";
 import { QualitySelect } from "./music-options";
+import { SongActionsProvider } from "./song-actions";
 import { QueuePage } from "./queue-page";
 import { TrackList } from "./track-list";
 import { InfiniteLoad } from "./infinite-load";
@@ -105,7 +106,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
     void nativeCall("append_queue", { keys: [track.key] }).then(() => showNotice(`已将「${track.title}」设为下一首播放。`)).catch(onError);
   }, [onError, showNotice]);
 
-  return <div className="music-workspace flex min-h-0 flex-1 flex-col">
+  return <SongActionsProvider onError={onError} onNotice={showNotice}><div className="music-workspace flex min-h-0 flex-1 flex-col">
     <Suspense fallback={<div role="status" className="m-auto">正在加载播放器…</div>}>
       <AnimatePresence onExitComplete={onPlayerExitComplete}>
         {nowPlaying && <LyricsView key="now-playing" onQueue={openQueue} />}
@@ -128,5 +129,5 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
       </main>
     </div>
     {!playerVisible && <PlaybackBar notice={notice} qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={openQueue} onError={onError} />}
-  </div>;
+  </div></SongActionsProvider>;
 }

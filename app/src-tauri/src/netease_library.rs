@@ -49,6 +49,29 @@ impl Netease {
             .ok_or_else(|| "请先登录网易云音乐".into())
     }
 
+    pub async fn remove_playlist_song(&self, playlist_id: u64, song_id: u64) -> AppResult<()> {
+        if playlist_id == 0 || song_id == 0 {
+            return Err("歌单或歌曲 ID 无效".into());
+        }
+        let profile = self.library_account().await?;
+        let query = self.query()?.param("id", &playlist_id.to_string());
+        let body = checked(self.client.playlist_detail(&query)).await?;
+        let playlist = body.get("playlist").ok_or("歌单详情缺失")?;
+        if playlist.pointer("/creator/userId").and_then(Value::as_u64) != Some(profile.user_id) {
+            return Err("只能编辑自己创建的歌单".into());
+        }
+        if playlist.get("specialType").and_then(Value::as_u64) == Some(5) {
+            return self.set_song_liked(song_id, false).await;
+        }
+        let query = self
+            .query()?
+            .param("op", "del")
+            .param("pid", &playlist_id.to_string())
+            .param("tracks", &song_id.to_string());
+        checked(self.client.playlist_tracks(&query)).await?;
+        Ok(())
+    }
+
     pub async fn library_summary(&self) -> AppResult<LibrarySummary> {
         let profile = self.library_account().await?;
         let query = self

@@ -1,20 +1,21 @@
 import { Popover } from "@base-ui/react/popover";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowRight, ListMusic } from "lucide-react";
+import { ArrowRight, ListMusic, Play } from "lucide-react";
 import { memo, useLayoutEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatTime, nativeCall, usePlayer, type Track } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { Cover } from "./cover";
+import { SongContextMenu } from "./song-actions";
 import { QueueControls } from "./queue-controls";
 import { TrackTitle, trackDisplayTitle } from "./track-title";
 
-export const QueueTrackCard = memo(function QueueTrackCard({ track, current, onPlay }: { track: Track; current: boolean; onPlay: () => void }) {
-  return <button type="button" className="queue-track-card" data-current={current} aria-current={current ? "true" : undefined} aria-label={`${current ? "当前播放：" : "播放："}${trackDisplayTitle(track)}，${track.artist}`} disabled={!isTauri()} onClick={onPlay}>
-    <Cover cover={track.cover} className="size-11 shrink-0 rounded-lg" />
+export const QueueTrackCard = memo(function QueueTrackCard({ track, current, onPlay, onRemove }: { track: Track; current: boolean; onPlay: () => void; onRemove: () => Promise<unknown> }) {
+  return <SongContextMenu track={track} onPlay={onPlay} onRemove={onRemove} render={<button type="button" className="queue-track-card" data-current={current} aria-current={current ? "true" : undefined} aria-label={`${current ? "当前播放：" : "播放："}${trackDisplayTitle(track)}，${track.artist}`} disabled={!isTauri()} onClick={onPlay} />}>
+    <span className="queue-track-cover"><Cover cover={track.cover} className="size-11 shrink-0 rounded-lg" /><span className="queue-track-cover-play"><Play aria-hidden="true" /></span></span>
     <span className="min-w-0 flex-1 text-left"><span className="block truncate font-medium" title={trackDisplayTitle(track)}><TrackTitle track={track} /></span><span className="mt-1 block truncate text-sm text-muted-foreground" title={track.artist}>{track.artist}</span></span>
     <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{formatTime(track.durationMs)}</span>
-  </button>;
+  </SongContextMenu>;
 });
 
 function QueueCardList({ onError, onPage }: { onError: (error: unknown) => void; onPage: () => void }) {
@@ -32,7 +33,7 @@ function QueueCardList({ onError, onPage }: { onError: (error: unknown) => void;
     </header>
     <div ref={parent} className="queue-card-scroll">
       {state.queue.length ? <div role="list" style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-        {virtualizer.getVirtualItems().map((row) => <div key={row.index} role="listitem" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: row.size, transform: `translateY(${row.start}px)` }}><QueueTrackCard track={state.queue[row.index]} current={row.index === state.index} onPlay={() => void nativeCall("player_jump", { index: row.index }).catch(onError)} /></div>)}
+        {virtualizer.getVirtualItems().map((row) => <div key={row.index} role="listitem" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: row.size, transform: `translateY(${row.start}px)` }}><QueueTrackCard track={state.queue[row.index]} current={row.index === state.index} onRemove={() => nativeCall("remove_queue_track", { index: row.index, key: state.queue[row.index].key })} onPlay={() => void nativeCall("player_jump", { index: row.index }).catch(onError)} /></div>)}
       </div> : <p className="py-16 text-center text-sm text-muted-foreground">播放列表还是空的</p>}
     </div>
   </>;

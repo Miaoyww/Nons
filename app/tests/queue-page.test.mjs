@@ -73,3 +73,14 @@ test("locating the current track clears a filter that hides it and requests a ne
   assert.equal(result.list.currentIndex, 2);
   assert.equal(result.list.locateRequest, 1);
 });
+
+
+test("removing a search result targets its original queue occurrence", () => {
+  const { render, calls } = harness();
+  render().input.onChange({ target: { value: "First" } });
+  const { list } = render();
+  list.onRemove(list.tracks[1], 1);
+  assert.equal(calls[0].command, "remove_queue_track");
+  assert.equal(calls[0].args.index, 2);
+  assert.equal(calls[0].args.key, "a");
+});

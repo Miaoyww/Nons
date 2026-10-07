@@ -37,7 +37,7 @@ export class RuntimeCache {
 
 export const requestCache = new RuntimeCache();
 export const coverCache = new RuntimeCache(32 * 1024 * 1024);
-export const cachedCommands = new Set(["search_music", "music_library", "library_collections", "library_tracks", "library_history", "liked_song_ids", "local_music", "track_lyrics"]);
+export const cachedCommands = new Set(["search_music", "music_library", "library_collections", "library_tracks", "library_history", "liked_song_ids", "local_music", "track_lyrics", "song_information"]);
 export function requestKey(command: string, args?: Record<string, unknown>) {
   return `${command}:${JSON.stringify(Object.fromEntries(Object.entries(args ?? {}).filter(([key]) => key !== "refresh").sort(([a], [b]) => a.localeCompare(b))))}`;
 }

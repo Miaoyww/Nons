@@ -105,6 +105,24 @@ impl PlayerSnapshot {
         Ok(position)
     }
 
+    pub fn remove_track(&mut self, index: usize, key: &str) -> AppResult<bool> {
+        if self.queue.get(index).is_none_or(|track| track.key != key) {
+            return Err("播放列表已变化，请重新选择歌曲".into());
+        }
+        let removed_current = self.index == Some(index);
+        self.queue.remove(index);
+        self.index = self.index.and_then(|current| {
+            if self.queue.is_empty() {
+                None
+            } else if current > index {
+                Some(current - 1)
+            } else {
+                Some(current.min(self.queue.len() - 1))
+            }
+        });
+        Ok(removed_current)
+    }
+
     pub fn current(&self) -> Option<&Track> {
         self.index.and_then(|index| self.queue.get(index))
     }
@@ -216,6 +234,41 @@ mod tests {
         assert_eq!(state.queue[1].key, "2");
         assert!(state.insert_next(vec![track(3); 999]).is_err());
         assert_eq!(state.queue.len(), 2);
+    }
+    #[test]
+    fn removing_queue_entries_preserves_current_playback_and_checks_identity() {
+        let mut state = PlayerSnapshot {
+            queue: vec![track(1), track(2), track(1), track(3)],
+            index: Some(2),
+            position_ms: 500,
+            status: PlaybackStatus::Playing,
+            ..PlayerSnapshot::default()
+        };
+        assert!(state.remove_track(1, "wrong").is_err());
+        assert_eq!(state.queue.len(), 4);
+        assert!(!state.remove_track(0, "1").unwrap());
+        assert_eq!(state.index, Some(1));
+        assert_eq!(state.current().unwrap().key, "1");
+        assert_eq!(state.position_ms, 500);
+        assert_eq!(state.status, PlaybackStatus::Playing);
+        assert!(!state.remove_track(2, "3").unwrap());
+        assert_eq!(state.index, Some(1));
+    }
+    #[test]
+    fn removing_current_selects_next_then_previous_and_supports_empty_queue() {
+        let mut state = PlayerSnapshot {
+            queue: vec![track(1), track(2), track(3)],
+            index: Some(1),
+            ..PlayerSnapshot::default()
+        };
+        assert!(state.remove_track(1, "2").unwrap());
+        assert_eq!(state.current().unwrap().key, "3");
+        assert!(state.remove_track(1, "3").unwrap());
+        assert_eq!(state.current().unwrap().key, "1");
+        assert!(state.remove_track(0, "1").unwrap());
+        assert!(state.queue.is_empty());
+        assert_eq!(state.index, None);
+        assert!(state.remove_track(0, "1").is_err());
     }
     #[test]
     fn repeat_respects_queue_boundaries() {

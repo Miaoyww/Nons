@@ -528,3 +528,27 @@
 .queue-popover header > div { gap: 0; }
 .queue-popover header > div button { padding-inline: 6px; }
 @media (prefers-reduced-motion: reduce) { .queue-page-link { transition: none; } }
+
+.song-context-menu { min-width: 190px; max-width: calc(100vw - 24px); padding: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 28px rgb(0 0 0 / 16%); outline: none; }
+.song-context-menu [role="menuitem"] { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 8px 10px; border-radius: 7px; font-size: 13px; cursor: pointer; outline: none; }
+.song-context-menu [role="menuitem"][data-highlighted] { background: var(--muted); }
+.song-context-menu [role="menuitem"][data-disabled] { opacity: .4; cursor: default; }
+.song-context-menu svg { width: 16px; height: 16px; flex-shrink: 0; }
+.song-context-menu [role="separator"] { height: 1px; margin: 5px 6px; background: var(--border); }
+.song-menu-remove { color: var(--destructive); }
+.song-information-dialog { max-width: min(560px, calc(100vw - 32px)) !important; max-height: calc(100dvh - 48px); overflow-y: auto; gap: 14px; border-radius: 18px; }
+.song-information-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; }
+.song-information-field { min-width: 0; font-size: 13px; }
+.song-information-field label { display: block; margin-bottom: 6px; color: var(--muted-foreground); }
+.song-information-field > div { display: flex; align-items: center; gap: 4px; padding: 4px 6px 4px 12px; border-radius: 8px; background: var(--muted); }
+.song-information-field input { min-width: 0; width: 100%; background: transparent; outline: none; text-overflow: ellipsis; }
+.song-information-field input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.song-information-divider { display: flex; align-items: center; gap: 12px; margin-top: 4px; font-size: 13px; color: var(--muted-foreground); }
+.song-information-divider::before, .song-information-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.queue-track-cover { position: relative; flex-shrink: 0; overflow: hidden; border-radius: 8px; }
+.queue-track-cover-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgb(0 0 0 / 35%); color: white; opacity: 0; transition: opacity 160ms; }
+.queue-track-cover-play svg { width: 22px; height: 22px; fill: currentColor; }
+.queue-track-card:hover .queue-track-cover-play, .queue-track-card:focus-visible .queue-track-cover-play { opacity: 1; }
+.track-row:focus-visible, .library-song:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+@media (max-width: 420px) { .song-information-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .queue-track-cover-play { transition: none; } }

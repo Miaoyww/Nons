@@ -179,6 +179,43 @@ async fn set_song_liked(id: u64, liked: bool, backend: State<'_, Backend>) -> Ap
 }
 
 #[tauri::command]
+async fn song_information(
+    key: String,
+    backend: State<'_, Backend>,
+) -> AppResult<netease::SongInformation> {
+    let track = backend.store.track(&key)?;
+    if let TrackSource::Netease { id } = track.source {
+        backend.netease.song_information(id).await
+    } else {
+        Ok(netease::SongInformation {
+            artists: vec![netease::SongCredit {
+                name: track.artist,
+                id: None,
+            }],
+            album_id: None,
+            published_at: None,
+        })
+    }
+}
+
+#[tauri::command]
+async fn remove_playlist_song(
+    playlist_id: u64,
+    song_id: u64,
+    backend: State<'_, Backend>,
+) -> AppResult<()> {
+    backend
+        .netease
+        .remove_playlist_song(playlist_id, song_id)
+        .await
+}
+
+#[tauri::command]
+fn remove_queue_track(index: usize, key: String, backend: State<'_, Backend>) -> AppResult<()> {
+    backend.player.send(Command::Remove(index, key))
+}
+
+#[tauri::command]
 async fn music_library(backend: State<'_, Backend>) -> AppResult<LibrarySummary> {
     let mut summary = backend.netease.library_summary().await?;
     save_library_tracks(&mut summary.liked_tracks, &backend)?;
@@ -521,6 +558,9 @@ pub fn run() {
             player_snapshot,
             search_music,
             music_library,
+            song_information,
+            remove_playlist_song,
+            remove_queue_track,
             library_collections,
             library_tracks,
             library_history,

@@ -27,6 +27,7 @@ pub enum Command {
     Resume,
     Stop,
     Clear,
+    Remove(usize, String),
     Next,
     Previous,
     Repeat,
@@ -368,6 +369,33 @@ impl Actor {
                     self.load(position, self.desired_playing)?;
                 }
                 self.publish();
+            }
+            Command::Remove(index, key) => {
+                let removed_current = self.state.remove_track(index, &key)?;
+                let loading = self.state.status == PlaybackStatus::Loading;
+                // Use the same lock order as the streaming callback, so it cannot
+                // arm a removed next track between checking and invalidating it.
+                let transitioning = {
+                    let mut prepared = self.prepared.lock().map_err(|_| "预加载状态不可用")?;
+                    *prepared = None;
+                    self.armed
+                        .lock()
+                        .map_err(|_| "预加载状态不可用")?
+                        .take()
+                        .is_some()
+                };
+                self.cancel_jobs();
+                if self.state.queue.is_empty() {
+                    self.command(Command::Clear)?;
+                } else if let Some(current) = self.state.index {
+                    if removed_current || loading || transitioning {
+                        self.load(current, self.desired_playing)?;
+                    } else {
+                        self.publish();
+                    }
+                } else {
+                    self.publish();
+                }
             }
             Command::Jump(index) => self.load(index, true)?,
             Command::Repeat => {

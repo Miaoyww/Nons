@@ -40,6 +40,19 @@ pub struct AccountProfile {
     pub avatar_url: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SongInformation {
+    pub artists: Vec<SongCredit>,
+    pub album_id: Option<u64>,
+    pub published_at: Option<u64>,
+}
+#[derive(Serialize)]
+pub struct SongCredit {
+    pub name: String,
+    pub id: Option<u64>,
+}
+
 impl Netease {
     pub fn new() -> AppResult<Self> {
         let credential = keyring::Entry::new("NonsPlayer", "netease-session")
@@ -107,6 +120,25 @@ impl Netease {
             .param("like", if liked { "true" } else { "false" });
         checked(self.client.like(&query)).await?;
         Ok(())
+    }
+
+    pub async fn song_information(&self, id: u64) -> AppResult<SongInformation> {
+        let query = self.query()?.param("ids", &id.to_string());
+        let body = checked(self.client.song_detail(&query)).await?;
+        let song = body.pointer("/songs/0").ok_or("歌曲详情缺失")?;
+        let mut information = song_information_from_json(song);
+        if information.published_at.is_none() {
+            if let Some(album_id) = information.album_id {
+                let query = self.query()?.param("id", &album_id.to_string());
+                if let Ok(album) = checked(self.client.album(&query)).await {
+                    information.published_at = album
+                        .pointer("/album/publishTime")
+                        .and_then(Value::as_u64)
+                        .filter(|v| *v > 0);
+                }
+            }
+        }
+        Ok(information)
     }
 
     pub async fn resolve(
@@ -357,6 +389,36 @@ fn qr_key(body: &Value) -> AppResult<&str> {
         .ok_or_else(|| "网易云二维码响应缺少有效登录 key，请重新生成".into())
 }
 
+fn song_information_from_json(song: &Value) -> SongInformation {
+    SongInformation {
+        artists: song
+            .get("ar")
+            .or_else(|| song.get("artists"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .map(|artist| SongCredit {
+                name: artist
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .into(),
+                id: artist.get("id").and_then(Value::as_u64).filter(|v| *v > 0),
+            })
+            .collect(),
+        album_id: song
+            .get("al")
+            .or_else(|| song.get("album"))
+            .and_then(|album| album.get("id"))
+            .and_then(Value::as_u64)
+            .filter(|v| *v > 0),
+        published_at: song
+            .get("publishTime")
+            .and_then(Value::as_u64)
+            .filter(|v| *v > 0),
+    }
+}
+
 fn song_aliases(song: &Value) -> Vec<String> {
     let title = song.get("name").and_then(Value::as_str).unwrap_or_default();
     let mut names = Vec::new();
@@ -414,9 +476,25 @@ fn track_from_json(song: &Value) -> Option<Track> {
 
 #[cfg(test)]
 mod tests {
-    use super::{account_profile, qr_key, song_aliases, Track};
+    use super::{account_profile, qr_key, song_aliases, song_information_from_json, Track};
     use serde_json::json;
 
+    #[test]
+    fn song_information_keeps_multiple_artist_ids_and_missing_fields_distinct() {
+        let value = song_information_from_json(
+            &serde_json::json!({"ar":[{"name":"甲","id":11},{"name":"乙","id":12}],"al":{"id":21},"publishTime":1595520000000u64}),
+        );
+        assert_eq!(value.artists.len(), 2);
+        assert_eq!(value.artists[1].id, Some(12));
+        assert_eq!(value.album_id, Some(21));
+        assert_eq!(value.published_at, Some(1595520000000));
+        let absent = song_information_from_json(
+            &serde_json::json!({"artists":[{"name":"未知","id":0}],"album":{"id":0},"publishTime":0}),
+        );
+        assert_eq!(absent.artists[0].id, None);
+        assert_eq!(absent.album_id, None);
+        assert_eq!(absent.published_at, None);
+    }
     #[test]
     fn aliases_merge_translation_and_alias_shapes_without_duplicates() {
         let song = json!({"name":"Причал", "tns":["码头", " "], "transNames":["码头"], "alia":["别名", "Причал"], "alias":["别名", "其他"]});
