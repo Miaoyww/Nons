@@ -1,7 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FolderPlus, Music2, Plus, X } from "lucide-react";
+import { Music2, Plus, X } from "lucide-react";
+import { FolderManager } from "@/components/settings/folder-manager";
+import { invalidateNativeCache } from "@/lib/runtime-cache";
 import { AnimatePresence } from "motion/react";
 import { connectPlayer, errorText, nativeCall, usePlayer, type Track } from "@/lib/player";
 import { ActionButton } from "./action-button";
@@ -58,6 +61,17 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
     return () => { disposed = true; stop?.(); };
   }, [onError]);
 
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false; let stop: (() => void) | undefined;
+    void listen<{ scanning?: boolean; error?: string }>("local-library-updated", ({ payload }) => {
+      if (disposed) return;
+      if (payload?.error) onError(payload.error);
+      if (!payload?.scanning) { invalidateNativeCache(["local_music", "track_lyrics"]); setRefresh((value) => value + 1); }
+    }).then((fn) => { if (disposed) fn(); else stop = fn; }).catch(onError);
+    return () => { disposed = true; stop?.(); };
+  }, [onError]);
+
   const loader = useCallback(async (offset: number) => {
     const target = page.view === "local" ? "local" : "search";
     const values = await nativeCall<Track[]>(target === "local" ? "local_music" : "search_music", { keyword: page.query, offset });
@@ -101,7 +115,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
         {view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} onNotice={showNotice} /></Suspense> : <>
           <header className="flex shrink-0 items-center justify-between gap-6 px-8 pb-6 pt-8"><div><h1 className="text-2xl font-semibold tracking-tight">{view === "local" ? "本地音乐" : view === "search" ? "搜索音乐" : view === "discover" ? "发现" : "播放队列"}</h1><p className="mt-2 text-sm text-muted-foreground">{view === "local" ? "熟悉的收藏，随时聆听。" : view === "search" || view === "discover" ? "在网易云音乐中寻找下一首。" : `${state.queue.length} 首音乐，按顺序播放。`}</p></div>
           </header>
-          {view === "local" && <div className="flex gap-2 px-8 pb-4"><ActionButton variant="secondary" disabled={importing || !isTauri()} onClick={() => void importMusic(false)}><Plus aria-hidden="true" />打开文件</ActionButton><ActionButton variant="outline" disabled={importing || !isTauri()} onClick={() => void importMusic(true)}><FolderPlus aria-hidden="true" />{importing ? "正在导入…" : "导入目录"}</ActionButton></div>}
+          {view === "local" && <div className="flex items-center justify-between gap-4 px-8 pb-4"><div className="min-w-0"><h2 className="text-base font-semibold">音乐文件夹</h2><p className="mt-1 text-xs text-muted-foreground">添加或移除本地音乐文件夹。已添加的文件夹会自动扫描。</p></div><div className="flex shrink-0 gap-2"><ActionButton variant="ghost" disabled={importing || !isTauri()} onClick={() => void importMusic(false)}><Plus aria-hidden="true" />打开文件</ActionButton><FolderManager /></div></div>}
           <div className="relative isolate min-h-0 flex-1 overflow-auto px-8">
             {(view === "queue" ? state.queue.length : tracks.length) > 0 ? <TrackList tracks={view === "queue" ? state.queue : tracks} currentKey={current?.key} busy={false} onPlay={play} onAppend={view === "queue" ? undefined : append} /> : <div className="flex min-h-72 flex-col items-center justify-center gap-4 text-center"><Music2 className="size-10 text-muted-foreground/60" aria-hidden="true" /><p className="font-medium">{busy ? "正在查找音乐…" : view === "local" ? "把你的音乐带进来" : view === "search" || view === "discover" ? appliedKeyword ? "没有找到匹配的音乐" : "下一首喜欢的音乐，等你发现" : "队列还是空的"}</p><p className="max-w-sm text-sm leading-6 text-muted-foreground">{view === "local" ? "打开音频文件，或导入一个音乐目录。曲库会在下次启动时保留。" : view === "search" || view === "discover" ? "在顶部搜索框输入歌曲或艺术家名称开始搜索。" : "从搜索结果或本地曲库，将歌曲加入播放队列。"}</p></div>}
             {(view === "local" || view === "search") && <InfiniteLoad more={hasMore} busy={busy} error={loadError} onLoad={loadMore} />}

@@ -1,7 +1,7 @@
 import { BackgroundRender, MeshGradientRenderer } from "@applemusic-like-lyrics/core";
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
-import { coverSource } from "@/lib/player";
+import { useCoverSource } from "@/hooks/use-cover-source";
 import { useLyricsSettings } from "@/hooks/use-lyrics-settings";
 
 export function AlbumBackground({ cover, playing, hasLyrics }: { cover?: string; playing: boolean; hasLyrics: boolean }) {
@@ -10,7 +10,7 @@ export function AlbumBackground({ cover, playing, hasLyrics }: { cover?: string;
   const reduced = useReducedMotion();
   const { backgroundSpeed } = useLyricsSettings();
   const [visible, setVisible] = useState(document.visibilityState !== "hidden");
-  const album = cover ? coverSource(cover) : undefined;
+  const album = useCoverSource(cover, visible);
   useEffect(() => {
     const changed = () => setVisible(document.visibilityState !== "hidden");
     document.addEventListener("visibilitychange", changed);

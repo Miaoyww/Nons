@@ -28,7 +28,7 @@ function harness() {
     react,
     "react/jsx-runtime": { jsx: (type, props) => ({ type, props }) },
     "@tauri-apps/api/core": { isTauri: () => true },
-    "@/lib/music-library": { invalidateMusicLibrary() { libraryRefreshes.push("invalidate"); }, getMusicLibrary(userId) { libraryRefreshes.push(userId); return Promise.resolve(); } },
+    "@/lib/music-library": { resetAccountCache() {}, invalidateMusicLibrary() { libraryRefreshes.push("invalidate"); }, getMusicLibrary(userId) { libraryRefreshes.push(userId); return Promise.resolve(); } },
     "@/lib/player": {
       errorText: String,
       nativeCall(command, args) { return new Promise((resolve, reject) => requests.push({ command, args, resolve, reject })); },

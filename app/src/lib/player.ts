@@ -1,6 +1,7 @@
 import { invoke, isTauri, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useSyncExternalStore } from "react";
+import { cachedCommands, coverCache, invalidateNativeCache, requestCache, requestKey } from "./runtime-cache";
 
 export type TrackSource = { kind: "netease"; id: number } | { kind: "local"; path: string; neteaseId: number | null };
 export interface Track {
@@ -53,7 +54,31 @@ function updateState(value: PlayerSnapshot) {
 
 export async function nativeCall<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (!isTauri()) throw new Error("请在 NonsPlayer 桌面应用中使用此功能。");
-  return invoke<T>(command, args);
+  if (command === "runtime_cover") return coverCache.get(requestKey(command, args), () => invoke<T>(command, args));
+  if (cachedCommands.has(command)) {
+    const key = requestKey(command, args);
+    if (args?.refresh) requestCache.delete(key);
+    const value = await requestCache.get<T>(key, async () => {
+      const result = await invoke<T>(command, args);
+      // Partial previews and transient absent lyrics must remain retryable.
+      if (command === "music_library" && (result as { likedError?: string })?.likedError) {
+        throw new Error((result as { likedError: string }).likedError);
+      }
+      return result;
+    });
+    if (command === "track_lyrics" && value === null) requestCache.delete(key);
+    return value;
+  }
+  const result = await invoke<T>(command, args);
+  const affected: Record<string, string[]> = {
+    set_song_liked: ["liked_song_ids", "music_library", "library_tracks", "library_collections"],
+    create_library_playlist: ["library_collections", "music_library"],
+    import_music: ["local_music"], add_music_folder: ["local_music"], remove_music_folder: ["local_music"], rescan_music_folders: ["local_music"],
+    bind_local_lyrics: ["track_lyrics", "local_music"], set_lyric_endpoints: ["track_lyrics"],
+    clear_local_cache: ["track_lyrics"], set_local_cache_options: ["track_lyrics"], logout: [...cachedCommands],
+  };
+  if (affected[command]) invalidateNativeCache(affected[command]);
+  return result;
 }
 
 export async function connectPlayer(): Promise<UnlistenFn> {
@@ -62,6 +87,7 @@ export async function connectPlayer(): Promise<UnlistenFn> {
   try {
     listeners.push(await listen<PlayerSnapshot>("player-state", ({ payload }) => updateState(payload)));
     listeners.push(await listen<Omit<Progress, "receivedAt">>("player-progress", ({ payload }) => updateProgress(payload)));
+    listeners.push(await listen("lyrics-updated", () => invalidateNativeCache(["track_lyrics"])));
     const serial = updateSerial;
     const initial = await nativeCall<PlayerSnapshot>("player_snapshot");
     if (serial === updateSerial) updateState(initial);

@@ -24,6 +24,38 @@ pub fn now_seconds() -> i64 {
 }
 
 impl Store {
+    pub fn legacy_ttml(&self) -> AppResult<Vec<(String, Lyrics, i64)>> {
+        let db = self.0.lock().map_err(|_| "曲库锁不可用")?;
+        let mut statement = db
+            .prepare("SELECT key,value,expires FROM lyric_cache WHERE value IS NOT NULL")
+            .map_err(|e| e.to_string())?;
+        let rows = statement
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(rows
+            .filter_map(Result::ok)
+            .filter_map(|(key, value, expires)| {
+                serde_json::from_str::<Lyrics>(&value)
+                    .ok()
+                    .filter(|l| l.format == "ttml")
+                    .map(|l| (key, l, expires))
+            })
+            .collect())
+    }
+    pub fn clear_legacy_lyrics(&self) -> AppResult<()> {
+        self.0
+            .lock()
+            .map_err(|_| "曲库锁不可用")?
+            .execute("DELETE FROM lyric_cache", [])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
     pub fn open(path: &Path) -> AppResult<Self> {
         let connection = Connection::open(path).map_err(|e| e.to_string())?;
         Self::initialize(connection)
@@ -38,7 +70,12 @@ impl Store {
             PRAGMA synchronous=NORMAL;
             CREATE TABLE IF NOT EXISTS tracks (key TEXT PRIMARY KEY, source TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL, value TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS tracks_source ON tracks(source);
+            CREATE TABLE IF NOT EXISTS local_origins (key TEXT NOT NULL, origin TEXT NOT NULL, PRIMARY KEY(key,origin));
+            INSERT OR IGNORE INTO local_origins(key,origin) SELECT key,'' FROM tracks WHERE source='local' AND key NOT IN (SELECT key FROM local_origins);
+            CREATE TABLE IF NOT EXISTS local_file_stats (key TEXT PRIMARY KEY, modified TEXT NOT NULL, bytes INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS lyric_cache (key TEXT PRIMARY KEY, value TEXT, expires INTEGER NOT NULL, accessed INTEGER NOT NULL, bytes INTEGER NOT NULL);
+            PRAGMA temp_store=MEMORY;
+            CREATE TEMP TABLE runtime_lyrics (key TEXT PRIMARY KEY, value TEXT, expires INTEGER NOT NULL, accessed INTEGER NOT NULL, bytes INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             PRAGMA user_version=1;").map_err(|e| e.to_string())?;
         Ok(Self(Mutex::new(connection)))
@@ -67,6 +104,77 @@ impl Store {
                     .map_err(|e| e.to_string())?;
             }
         }
+        tx.commit().map_err(|e| e.to_string())
+    }
+
+    pub fn mark_origin(&self, tracks: &[Track], origin: &str) -> AppResult<()> {
+        let mut db = self.0.lock().map_err(|_| "曲库锁不可用")?;
+        let tx = db.transaction().map_err(|e| e.to_string())?;
+        for track in tracks {
+            tx.execute(
+                "INSERT OR IGNORE INTO local_origins(key,origin) VALUES(?1,?2)",
+                params![track.key, origin],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        tx.commit().map_err(|e| e.to_string())
+    }
+    pub fn origin_count(&self, origin: &str) -> AppResult<i64> {
+        self.0
+            .lock()
+            .map_err(|_| "曲库锁不可用")?
+            .query_row(
+                "SELECT COUNT(*) FROM local_origins WHERE origin=?1",
+                [origin],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())
+    }
+    pub fn file_unchanged(&self, key: &str, modified: &str, bytes: u64) -> AppResult<bool> {
+        self.0
+            .lock()
+            .map_err(|_| "曲库锁不可用")?
+            .query_row(
+                "SELECT COUNT(*) FROM local_file_stats WHERE key=?1 AND modified=?2 AND bytes=?3",
+                params![key, modified, bytes as i64],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|count| count > 0)
+            .map_err(|e| e.to_string())
+    }
+    pub fn save_file_stat(&self, key: &str, modified: &str, bytes: u64) -> AppResult<()> {
+        self.0.lock().map_err(|_| "曲库锁不可用")?.execute("INSERT INTO local_file_stats(key,modified,bytes) VALUES(?1,?2,?3) ON CONFLICT(key) DO UPDATE SET modified=excluded.modified,bytes=excluded.bytes", params![key, modified, bytes as i64]).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    pub fn reconcile_origin(
+        &self,
+        origin: &str,
+        seen: &std::collections::HashSet<String>,
+    ) -> AppResult<()> {
+        let mut db = self.0.lock().map_err(|_| "曲库锁不可用")?;
+        let tx = db.transaction().map_err(|e| e.to_string())?;
+        let keys = tx
+            .prepare("SELECT key FROM local_origins WHERE origin=?1")
+            .map_err(|e| e.to_string())?
+            .query_map([origin], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        for key in keys {
+            if !seen.contains(&key) {
+                tx.execute(
+                    "DELETE FROM local_origins WHERE key=?1 AND origin=?2",
+                    params![key, origin],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
+        tx.execute("DELETE FROM tracks WHERE source='local' AND key NOT IN (SELECT key FROM local_origins)", []).map_err(|e| e.to_string())?;
+        tx.execute(
+            "DELETE FROM local_file_stats WHERE key NOT IN (SELECT key FROM tracks)",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())
     }
 
@@ -119,7 +227,7 @@ impl Store {
         let db = self.0.lock().map_err(|_| "歌词缓存锁不可用")?;
         let row: Option<(Option<String>, i64)> = db
             .query_row(
-                "SELECT value,expires FROM lyric_cache WHERE key=?1",
+                "SELECT value,expires FROM runtime_lyrics WHERE key=?1",
                 [key],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
@@ -127,7 +235,7 @@ impl Store {
             .map_err(|e| e.to_string())?;
         if let Some((value, expires)) = row {
             db.execute(
-                "UPDATE lyric_cache SET accessed=?2 WHERE key=?1",
+                "UPDATE runtime_lyrics SET accessed=?2 WHERE key=?1",
                 params![key, now_seconds()],
             )
             .map_err(|e| e.to_string())?;
@@ -154,13 +262,13 @@ impl Store {
         }
         let mut db = self.0.lock().map_err(|_| "歌词缓存锁不可用")?;
         let tx = db.transaction().map_err(|e| e.to_string())?;
-        tx.execute("INSERT INTO lyric_cache(key,value,expires,accessed,bytes) VALUES(?1,?2,?3,?4,?5)
+        tx.execute("INSERT INTO runtime_lyrics(key,value,expires,accessed,bytes) VALUES(?1,?2,?3,?4,?5)
             ON CONFLICT(key) DO UPDATE SET value=excluded.value,expires=excluded.expires,accessed=excluded.accessed,bytes=excluded.bytes",
             params![key, value, now_seconds() + ttl, now_seconds(), size as i64]).map_err(|e| e.to_string())?;
         loop {
             let (bytes, count): (i64, i64) = tx
                 .query_row(
-                    "SELECT COALESCE(SUM(bytes),0),COUNT(*) FROM lyric_cache",
+                    "SELECT COALESCE(SUM(bytes),0),COUNT(*) FROM runtime_lyrics",
                     [],
                     |r| Ok((r.get(0)?, r.get(1)?)),
                 )
@@ -168,7 +276,7 @@ impl Store {
             if bytes <= LYRIC_CACHE_BYTES && count <= 2000 {
                 break;
             }
-            tx.execute("DELETE FROM lyric_cache WHERE key=(SELECT key FROM lyric_cache ORDER BY accessed,key LIMIT 1)", []).map_err(|e| e.to_string())?;
+            tx.execute("DELETE FROM runtime_lyrics WHERE key=(SELECT key FROM runtime_lyrics ORDER BY accessed,key LIMIT 1)", []).map_err(|e| e.to_string())?;
         }
         tx.commit().map_err(|e| e.to_string())?;
         db.execute_batch("PRAGMA incremental_vacuum(32)")
@@ -179,7 +287,16 @@ impl Store {
         self.0
             .lock()
             .map_err(|_| "歌词缓存锁不可用")?
-            .execute("DELETE FROM lyric_cache WHERE key=?1", [key])
+            .execute("DELETE FROM runtime_lyrics WHERE key=?1", [key])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn clear_runtime_lyrics(&self) -> AppResult<()> {
+        self.0
+            .lock()
+            .map_err(|_| "歌词缓存锁不可用")?
+            .execute("DELETE FROM runtime_lyrics", [])
             .map_err(|e| e.to_string())?;
         Ok(())
     }

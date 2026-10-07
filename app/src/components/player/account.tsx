@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { errorText, nativeCall } from "@/lib/player";
-import { getMusicLibrary, invalidateMusicLibrary } from "@/lib/music-library";
+import { getMusicLibrary, invalidateMusicLibrary, resetAccountCache } from "@/lib/music-library";
 
 export interface AccountProfile { userId: number; nickname: string; avatarUrl: string }
 const AccountContext = createContext<{
@@ -26,7 +26,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const pending = useRef(new Set<number>());
   const generation = useRef(0);
   const setProfile = useCallback((value: AccountProfile | null) => {
-    invalidateMusicLibrary();
+    resetAccountCache();
     likesGeneration.current++; setLikesReady(false); setLikedIds(new Set());
     generation.current++; updateProfile(value); setLoading(false); setError(undefined);
   }, []);

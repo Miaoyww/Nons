@@ -35,6 +35,7 @@ function harness() {
   const MusicWorkspace = load("../src/components/player/music-workspace.tsx", {
     react: { useState: (value) => [value, () => {}], useRef: (current) => ({ current }), useCallback: (fn) => fn, useEffect() {}, lazy: () => "LazyView", Suspense: "Suspense" },
     "@tauri-apps/api/core": { isTauri: () => false }, "@tauri-apps/plugin-dialog": {}, "lucide-react": {},
+    "@tauri-apps/api/event": {}, "@/components/settings/folder-manager": { FolderManager: "FolderManager" }, "@/lib/runtime-cache": {},
     "motion/react": { AnimatePresence: "AnimatePresence" },
     "@/lib/player": { usePlayer: () => ({ index: null, queue: [] }) },
     "./action-button": { ActionButton: "ActionButton" }, "./playback-bar": { PlaybackBar: "PlaybackBar" },

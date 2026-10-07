@@ -1,5 +1,6 @@
 mod audio;
 mod library;
+mod local_folders;
 mod lyrics;
 mod media;
 mod model;
@@ -7,6 +8,9 @@ mod netease;
 mod network;
 mod player;
 mod storage;
+#[cfg(test)]
+mod test_support;
+mod ttml_cache;
 
 use model::{AppResult, Lyrics, OutputDevice, PlayerSnapshot, Track, TrackSource};
 use netease::{
@@ -23,6 +27,124 @@ struct Backend {
     player: Arc<Player>,
     covers: PathBuf,
     fallback_cover: String,
+    cache: Arc<ttml_cache::TtmlCache>,
+    folders: Arc<local_folders::LocalFolders>,
+    cover_client: reqwest::Client,
+    cover_requests: tokio::sync::Semaphore,
+}
+
+#[tauri::command]
+async fn local_cache_status(backend: State<'_, Backend>) -> AppResult<ttml_cache::CacheStatus> {
+    let cache = backend.cache.clone();
+    tauri::async_runtime::spawn_blocking(move || cache.status())
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn set_local_cache_options(
+    options: ttml_cache::CacheOptions,
+    backend: State<'_, Backend>,
+) -> AppResult<()> {
+    let cache = backend.cache.clone();
+    tauri::async_runtime::spawn_blocking(move || cache.configure(options))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn clear_local_cache(backend: State<'_, Backend>) -> AppResult<()> {
+    let cache = backend.cache.clone();
+    tauri::async_runtime::spawn_blocking(move || cache.clear())
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+fn local_options(backend: State<'_, Backend>) -> AppResult<serde_json::Value> {
+    Ok(
+        serde_json::json!({"showCovers": backend.store.setting("showLocalCovers")?.as_deref() != Some("false")}),
+    )
+}
+#[tauri::command]
+fn set_local_options(show_covers: bool, backend: State<'_, Backend>) -> AppResult<()> {
+    backend.store.set_setting(
+        "showLocalCovers",
+        if show_covers { "true" } else { "false" },
+    )
+}
+#[tauri::command]
+async fn music_folders(backend: State<'_, Backend>) -> AppResult<Vec<local_folders::MusicFolder>> {
+    let folders = backend.folders.clone();
+    tauri::async_runtime::spawn_blocking(move || folders.list())
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn add_music_folder(path: String, backend: State<'_, Backend>) -> AppResult<()> {
+    let folders = backend.folders.clone();
+    tauri::async_runtime::spawn_blocking(move || folders.add(path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn remove_music_folder(path: String, backend: State<'_, Backend>) -> AppResult<()> {
+    let folders = backend.folders.clone();
+    tauri::async_runtime::spawn_blocking(move || folders.remove(path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+fn rescan_music_folders(backend: State<'_, Backend>) {
+    backend.folders.rescan();
+}
+#[tauri::command]
+async fn runtime_cover(url: String, backend: State<'_, Backend>) -> AppResult<String> {
+    use base64::Engine;
+    let parsed = url::Url::parse(&url).map_err(|_| "封面地址无效")?;
+    let host = parsed.host_str().unwrap_or_default();
+    if !matches!(parsed.scheme(), "https" | "http")
+        || !(host.ends_with(".music.126.net") || host.ends_with(".music.163.com"))
+    {
+        return Err("封面地址不受支持".into());
+    }
+    let _permit = backend
+        .cover_requests
+        .acquire()
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut response = backend
+        .cover_client
+        .get(parsed)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
+    let mime = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or_default()
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    if !["image/jpeg", "image/png", "image/webp", "image/gif"].contains(&mime.as_str()) {
+        return Err("封面格式不支持".into());
+    }
+    const LIMIT: usize = 4 * 1024 * 1024;
+    if response.content_length().is_some_and(|n| n > LIMIT as u64) {
+        return Err("封面文件过大".into());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        if bytes.len() + chunk.len() > LIMIT {
+            return Err("封面文件过大".into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(format!(
+        "data:{mime};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
 }
 
 #[tauri::command]
@@ -167,9 +289,11 @@ async fn import_music(
     let store = backend.store.clone();
     let covers = backend.covers.clone();
     let fallback = backend.fallback_cover.clone();
-    tauri::async_runtime::spawn_blocking(move || library::import(paths, store, covers, fallback))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        library::import(paths, store, covers, fallback, None)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -346,7 +470,21 @@ pub fn run() {
             }
             let store = Arc::new(storage::Store::open(&data.join("nons.sqlite3"))?);
             let netease = Arc::new(Netease::new()?);
-            let lyrics = Arc::new(lyrics::LyricService::new(store.clone(), netease.clone())?);
+            let cache = Arc::new(ttml_cache::TtmlCache::new(
+                store.clone(),
+                app.path().app_cache_dir()?,
+            )?);
+            let lyrics = Arc::new(lyrics::LyricService::new(
+                store.clone(),
+                netease.clone(),
+                cache.clone(),
+            )?);
+            let folders = local_folders::LocalFolders::new(
+                store.clone(),
+                covers.clone(),
+                fallback.to_string_lossy().to_string(),
+                app.handle().clone(),
+            )?;
             #[cfg(windows)]
             let hwnd = app
                 .get_webview_window("main")
@@ -368,6 +506,13 @@ pub fn run() {
                 player,
                 covers,
                 fallback_cover: fallback.to_string_lossy().to_string(),
+                cache,
+                folders,
+                cover_client: reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(8))
+                    .redirect(reqwest::redirect::Policy::none())
+                    .build()?,
+                cover_requests: tokio::sync::Semaphore::new(8),
             });
             Ok(())
         })
@@ -382,6 +527,16 @@ pub fn run() {
             create_library_playlist,
             local_music,
             import_music,
+            local_cache_status,
+            set_local_cache_options,
+            clear_local_cache,
+            local_options,
+            set_local_options,
+            music_folders,
+            add_music_folder,
+            remove_music_folder,
+            rescan_music_folders,
+            runtime_cover,
             play_queue,
             append_queue,
             player_action,

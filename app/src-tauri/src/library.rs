@@ -26,6 +26,7 @@ pub fn import(
     store: Arc<Store>,
     cover_dir: PathBuf,
     fallback: String,
+    origin: Option<String>,
 ) -> AppResult<ImportReport> {
     if paths.len() > 1000 {
         return Err("单次选择的路径过多".into());
@@ -36,6 +37,14 @@ pub fn import(
         errors: vec![],
     };
     let mut batch = Vec::with_capacity(64);
+    let mut seen = std::collections::HashSet::new();
+    let mut complete = true;
+    let mut cover_bytes: u64 = std::fs::read_dir(&cover_dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .filter_map(|e| e.metadata().ok())
+        .map(|m| m.len())
+        .sum();
     for root in paths {
         // walkdir does not follow symlinks; max_open bounds file handles.
         for entry in walkdir::WalkDir::new(root).follow_links(false).max_open(8) {
@@ -43,13 +52,27 @@ pub fn import(
                 Ok(e) => e,
                 Err(_) => {
                     report.skipped += 1;
+                    complete = false;
                     continue;
                 }
             };
             if !entry.file_type().is_file() || !is_audio(entry.path()) {
                 continue;
             }
-            match read_track(entry.path(), &cover_dir, &fallback, &store) {
+            if let Ok(path) = entry.path().canonicalize() {
+                let path = path
+                    .to_string_lossy()
+                    .trim_start_matches(r"\\?\")
+                    .to_string();
+                seen.insert(format!("local:{:x}", Sha256::digest(path.as_bytes())));
+            }
+            match read_track(
+                entry.path(),
+                &cover_dir,
+                &fallback,
+                &store,
+                &mut cover_bytes,
+            ) {
                 Ok(track) => {
                     batch.push(track);
                     report.imported += 1;
@@ -64,12 +87,17 @@ pub fn import(
                 }
             }
             if batch.len() == 64 {
-                store.save_tracks(&batch)?;
+                store.mark_origin(&batch, origin.as_deref().unwrap_or(""))?;
                 batch.clear();
             }
         }
     }
-    store.save_tracks(&batch)?;
+    store.mark_origin(&batch, origin.as_deref().unwrap_or(""))?;
+    if complete {
+        if let Some(origin) = origin {
+            store.reconcile_origin(&origin, &seen)?;
+        }
+    }
     Ok(report)
 }
 
@@ -79,13 +107,26 @@ fn is_audio(path: &Path) -> bool {
         .is_some_and(|s| AUDIO_EXTENSIONS.contains(&s.to_ascii_lowercase().as_str()))
 }
 
-fn read_track(path: &Path, cover_dir: &Path, fallback: &str, store: &Store) -> AppResult<Track> {
+fn read_track(
+    path: &Path,
+    cover_dir: &Path,
+    fallback: &str,
+    store: &Store,
+    cover_bytes: &mut u64,
+) -> AppResult<Track> {
     let path = path.canonicalize().map_err(|_| "文件路径不可用")?;
     let path = path
         .to_string_lossy()
         .trim_start_matches(r"\\?\")
         .to_string();
     let key = format!("local:{:x}", Sha256::digest(path.as_bytes()));
+    let metadata = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    let modified = format!("{:?}", metadata.modified().map_err(|e| e.to_string())?);
+    if store.file_unchanged(&key, &modified, metadata.len())? {
+        if let Ok(track) = store.track(&key) {
+            return Ok(track);
+        }
+    }
     let tagged = Probe::open(&path)
         .map_err(|_| "无法打开文件")?
         .read()
@@ -96,26 +137,21 @@ fn read_track(path: &Path, cover_dir: &Path, fallback: &str, store: &Store) -> A
         .and_then(|t| t.pictures().first())
         .filter(|p| p.data().len() <= MAX_LYRIC_BYTES)
     {
-        let total: u64 = std::fs::read_dir(cover_dir)
-            .map_err(|e| e.to_string())?
-            .filter_map(Result::ok)
-            .filter_map(|e| e.metadata().ok())
-            .map(|m| m.len())
-            .sum();
-        if total + picture.data().len() as u64 <= 32 * 1024 * 1024 {
-            let name = format!("{:x}.img", Sha256::digest(picture.data()));
-            let dest = cover_dir.join(name);
+        let name = format!("{:x}.img", Sha256::digest(picture.data()));
+        let dest = cover_dir.join(name);
+        if dest.exists() || *cover_bytes + picture.data().len() as u64 <= 32 * 1024 * 1024 {
             if !dest.exists() {
                 std::fs::write(&dest, picture.data()).map_err(|e| e.to_string())?;
+                *cover_bytes += picture.data().len() as u64;
             }
             cover = dest.to_string_lossy().to_string();
         }
     }
     // Re-importing a file must preserve a user's explicit lyric binding.
     let netease_id = store.track(&key).ok().and_then(|t| t.netease_id());
-    Ok(Track {
+    let track = Track {
         aliases: Vec::new(),
-        key,
+        key: key.clone(),
         title: tag
             .and_then(|t| t.title())
             .filter(|s| !s.is_empty())
@@ -140,5 +176,8 @@ fn read_track(path: &Path, cover_dir: &Path, fallback: &str, store: &Store) -> A
         duration_ms: tagged.properties().duration().as_millis() as u64,
         cover,
         source: TrackSource::Local { path, netease_id },
-    })
+    };
+    store.save_tracks(std::slice::from_ref(&track))?;
+    store.save_file_stat(&key, &modified, metadata.len())?;
+    Ok(track)
 }

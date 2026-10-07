@@ -2,6 +2,7 @@ use crate::{
     model::{AppResult, Lyrics, Track, TrackSource},
     netease::Netease,
     storage::{now_seconds, Store, MAX_LYRIC_BYTES},
+    ttml_cache::TtmlCache,
 };
 use quick_xml::{events::Event, Reader};
 use std::{
@@ -12,7 +13,7 @@ use std::{
 };
 use tauri::Emitter;
 
-const FOUND_TTL: i64 = 7 * 86400;
+const FOUND_TTL: i64 = 600;
 const MISS_TTL: i64 = 86400;
 
 pub struct LyricService {
@@ -21,6 +22,7 @@ pub struct LyricService {
     client: reqwest::Client,
     refreshing: Mutex<HashSet<String>>,
     retry_after: Mutex<HashMap<String, i64>>,
+    disk: Arc<TtmlCache>,
 }
 
 enum Lookup {
@@ -30,7 +32,7 @@ enum Lookup {
 }
 
 impl LyricService {
-    pub fn new(store: Arc<Store>, netease: Arc<Netease>) -> AppResult<Self> {
+    pub fn new(store: Arc<Store>, netease: Arc<Netease>, disk: Arc<TtmlCache>) -> AppResult<Self> {
         let client = reqwest::Client::builder()
             .user_agent("NonsPlayer/0.1")
             .connect_timeout(Duration::from_millis(500))
@@ -43,6 +45,7 @@ impl LyricService {
             client,
             refreshing: Mutex::new(HashSet::new()),
             retry_after: Mutex::new(HashMap::new()),
+            disk,
         })
     }
 
@@ -69,13 +72,19 @@ impl LyricService {
         if refresh {
             self.store.invalidate_lyrics(&amll_key)?;
             self.store.invalidate_lyrics(&ncm_key)?;
+            let _ = self.disk.invalidate(&amll_key);
             self.retry_after
                 .lock()
                 .map_err(|_| "歌词状态不可用")?
                 .remove(&amll_key);
         }
         if !skip_amll {
-            if let Some(cached) = self.store.cached_lyrics(&amll_key)? {
+            // Disk failure is a cache miss; it must never prevent online fallback.
+            if let Some(cached) = self
+                .store
+                .cached_lyrics(&amll_key)?
+                .or_else(|| self.disk.get(&amll_key).ok().flatten())
+            {
                 if let Some(value) = cached.value {
                     if !cached.fresh {
                         let mut refreshing =
@@ -115,16 +124,19 @@ impl LyricService {
                 }
             }
         }
+        let generation = self.disk.generation();
         let value = self.netease.lyrics(id).await?;
-        self.store.cache_lyrics(
+        let _ = self.disk.cache_result(
             &ncm_key,
             value.as_ref(),
             if value.is_some() { FOUND_TTL } else { MISS_TTL },
-        )?;
+            generation,
+        );
         Ok(value)
     }
 
     async fn update_amll(&self, id: u64) -> AppResult<Option<Lyrics>> {
+        let generation = self.disk.generation();
         let key = format!("amll:{id}");
         if self
             .retry_after
@@ -137,11 +149,13 @@ impl LyricService {
         }
         match self.lookup(id).await {
             Lookup::Found(lyrics) => {
-                self.store.cache_lyrics(&key, Some(&lyrics), FOUND_TTL)?;
+                let _ = self
+                    .disk
+                    .cache_result(&key, Some(&lyrics), FOUND_TTL, generation);
                 Ok(Some(lyrics))
             }
             Lookup::Missing => {
-                self.store.cache_lyrics(&key, None, MISS_TTL)?;
+                let _ = self.disk.cache_result(&key, None, MISS_TTL, generation);
                 Ok(None)
             }
             Lookup::Failed => {
