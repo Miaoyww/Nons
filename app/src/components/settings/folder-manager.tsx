@@ -5,7 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Folder, FolderCog, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { nativeCall, errorText } from "@/lib/player";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface MusicFolder { path: string; tracks: number; scanning: boolean; error?: string }
 export function FolderManager() {
@@ -36,9 +36,11 @@ export function FolderManager() {
   }
   return <Dialog open={opened} onOpenChange={setOpened}>
     <DialogTrigger render={<Button variant="outline" />}><FolderCog aria-hidden="true" />管理文件夹</DialogTrigger>
-    <DialogPopup className="max-w-xl rounded-2xl">
-      <DialogTitle className="text-xl">管理音乐文件夹</DialogTitle>
-      <DialogDescription>添加或移除本地音乐文件夹。已添加的文件夹会自动扫描，并同步文件变化。</DialogDescription>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>管理音乐文件夹</DialogTitle>
+        <DialogDescription>添加或移除本地音乐文件夹。已添加的文件夹会自动扫描，并同步文件变化。</DialogDescription>
+      </DialogHeader>
       <div className="my-5 max-h-[40dvh] overflow-auto">
         {loading ? <p role="status" className="py-16 text-center text-sm text-muted-foreground">正在读取音乐文件夹…</p> : folders.length ? <ul className="flex flex-col gap-3">{folders.map((folder) => <li key={folder.path} className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-4">
           <Folder className="mt-1 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -55,6 +57,6 @@ export function FolderManager() {
         {folders.length > 0 && <Button variant="ghost" disabled={busy || folders.some((f) => f.scanning)} onClick={() => void mutate(() => nativeCall("rescan_music_folders"))}><RefreshCw aria-hidden="true" />重新扫描</Button>}
       </div>
       <p className="mt-3 text-xs text-muted-foreground">移除文件夹只移除曲库索引，保留原始音乐文件。</p>
-    </DialogPopup>
+    </DialogContent>
   </Dialog>;
 }
