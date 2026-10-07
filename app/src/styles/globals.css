@@ -500,3 +500,31 @@
 @keyframes playback-notice-in { from { opacity: 0; transform: translateY(calc(100% + 8px)); } to { opacity: 1; transform: translateY(0); } }
 @keyframes playback-notice-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(calc(100% + 8px)); } }
 @media (prefers-reduced-motion: reduce) { .playback-notice { animation: none; } }
+
+/* Shared current-track treatment for the queue and library lists. */
+:root { --current-track-background: oklch(0.95 0.025 250); }
+.dark { --current-track-background: oklch(0.3 0.055 250); }
+.track-row[data-current="true"] td,
+.track-row[data-current="true"]:hover td,
+.track-row[data-current="true"]:focus-within td { background: var(--current-track-background); }
+.capsule-title[data-preview="true"] { color: var(--muted-foreground); }
+.queue-positioner { position: fixed !important; inset: 80px 16px auto auto !important; transform: none !important; z-index: 40; }
+.queue-popover { width: min(330px, calc(100vw - 32px)); height: calc(100dvh - 160px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 12px 40px rgb(0 0 0 / 18%); transition: transform 220ms ease-out, opacity 180ms ease-out; }
+.queue-popover[data-starting-style], .queue-popover[data-ending-style] { transform: translateX(calc(100% + 16px)); opacity: 0; }
+.queue-card-scroll { overflow-y: auto; min-height: 0; flex: 1; padding: 8px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.queue-track-card { display: flex; align-items: center; gap: 16px; width: 100%; height: 68px; padding: 12px 16px; border-radius: 10px; cursor: pointer; transition: background-color 160ms; }
+.queue-track-card:hover { background: var(--muted); }
+.queue-track-card[data-current="true"] { background: var(--current-track-background); box-shadow: inset 3px 0 oklch(0.6 0.2 250); }
+.queue-track-card:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.queue-page-scroll { padding-bottom: 120px; scroll-padding-bottom: 120px; }
+.queue-card-scroll::-webkit-scrollbar { width: 4px; }
+.queue-card-scroll::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--border); }
+.queue-card-scroll::-webkit-scrollbar-track { background: transparent; }
+@media (prefers-reduced-motion: reduce) { .queue-track-card, .queue-popover { transition: none; } }
+
+.queue-page-link { flex-shrink: 0; display: block; padding: 8px; border-radius: 10px; text-align: left; cursor: pointer; transition: background-color 160ms; }
+.queue-page-link:hover { background: var(--muted); }
+.queue-page-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.queue-popover header > div { gap: 0; }
+.queue-popover header > div button { padding-inline: 6px; }
+@media (prefers-reduced-motion: reduce) { .queue-page-link { transition: none; } }

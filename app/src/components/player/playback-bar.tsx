@@ -1,10 +1,11 @@
-import { ChevronLeft, ChevronRight, ListMusic, Pause, Play, Repeat, Repeat1 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pause, Play, Repeat, Repeat1 } from "lucide-react";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { trackDisplayTitle } from "./track-title";
 import { PlaybackNotice, type PlaybackNoticeMessage } from "./playback-notice";
+import { QueuePopover } from "./queue-popover";
 import { VolumeControl } from "./volume-control";
 
 export function Timeline({ onError }: { onError: (error: unknown) => void }) {
@@ -45,7 +46,7 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl, notice
         <div className="capsule-center">
           <div className="capsule-navigation">
             <ActionButton variant="ghost" size="icon-sm" aria-label={previous ? `上一首：${trackDisplayTitle(previous)}` : "上一首"} disabled={!track || !isTauri()} onMouseEnter={() => setPreview("previous")} onMouseLeave={() => setPreview(null)} onFocus={() => setPreview("previous")} onBlur={() => setPreview(null)} onClick={() => action("previous")}><ChevronLeft aria-hidden="true" /></ActionButton>
-            <button type="button" className="capsule-title" aria-label="打开正在播放" title={title} onClick={onLyrics}><span key={title}>{title}</span></button>
+            <button type="button" className="capsule-title" data-preview={!!previewTrack} aria-label="打开正在播放" title={title} onClick={onLyrics}><span key={title}>{title}</span></button>
             <ActionButton variant="ghost" size="icon-sm" aria-label={next ? `下一首：${trackDisplayTitle(next)}` : "下一首"} disabled={!next || !isTauri()} onMouseEnter={() => setPreview("next")} onMouseLeave={() => setPreview(null)} onFocus={() => setPreview("next")} onBlur={() => setPreview(null)} onClick={() => action("next")}><ChevronRight aria-hidden="true" /></ActionButton>
           </div>
           <Timeline onError={onError} />
@@ -54,7 +55,7 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl, notice
       <div className="capsule-options">
         {qualityControl}
         <ActionButton variant="ghost" size="icon-sm" aria-label={`播放模式：${repeatLabel}，点击切换`} title={repeatLabel} disabled={!isTauri()} data-active={looping} onClick={() => action("repeat")}>{state.repeatMode === "one" ? <Repeat1 aria-hidden="true" /> : <Repeat aria-hidden="true" />}</ActionButton>
-        <ActionButton variant="ghost" size="icon-sm" aria-label="显示播放队列" onClick={onQueue}><ListMusic aria-hidden="true" /></ActionButton>
+        <QueuePopover onPage={onQueue} onError={onError} />
       </div>
       <VolumeControl onError={onError} />
       <span className="sr-only">{statusLabels[state.status]}{state.actualQuality && ` · 实际音质 ${state.actualQuality}`}</span>

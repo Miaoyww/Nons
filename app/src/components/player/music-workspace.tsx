@@ -12,6 +12,7 @@ import { PlaybackBar } from "./playback-bar";
 import type { PlaybackNoticeMessage } from "./playback-notice";
 import { useMusicNavigation } from "./music-navigation";
 import { QualitySelect } from "./music-options";
+import { QueuePage } from "./queue-page";
 import { TrackList } from "./track-list";
 import { InfiniteLoad } from "./infinite-load";
 import { usePagedList } from "@/lib/use-paged-list";
@@ -24,6 +25,8 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
   const state = usePlayer();
   const { page, navigate } = useMusicNavigation();
   const view = page.view;
+  const [queueVisit, setQueueVisit] = useState(0);
+  const openQueue = () => { setQueueVisit((value) => value + 1); navigate("queue"); onNowPlayingChange(false); };
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<PlaybackNoticeMessage>();
@@ -96,7 +99,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
   }
 
   const play = useCallback((index: number) => {
-    void nativeCall(view === "queue" ? "player_jump" : "play_queue", view === "queue" ? { index } : { keys: tracks.map((t) => t.key), index }).catch(onError);
+    void nativeCall("play_queue", { keys: tracks.map((t) => t.key), index }).catch(onError);
   }, [view, tracks, onError]);
   const append = useCallback((track: Track) => {
     void nativeCall("append_queue", { keys: [track.key] }).then(() => showNotice(`已将「${track.title}」设为下一首播放。`)).catch(onError);
@@ -105,25 +108,25 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
   return <div className="music-workspace flex min-h-0 flex-1 flex-col">
     <Suspense fallback={<div role="status" className="m-auto">正在加载播放器…</div>}>
       <AnimatePresence onExitComplete={onPlayerExitComplete}>
-        {nowPlaying && <LyricsView key="now-playing" onQueue={() => { navigate("queue"); onNowPlayingChange(false); }} />}
+        {nowPlaying && <LyricsView key="now-playing" onQueue={openQueue} />}
       </AnimatePresence>
     </Suspense>
     <div className={nowPlaying ? "hidden" : "flex min-h-0 flex-1"}>
       <main id="music-content" className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="音乐工作区">
         {!isTauri() && <p role="status" className="border-b border-border bg-muted/50 px-8 py-3 text-sm text-muted-foreground">这是界面预览。播放、搜索和导入功能需要在桌面应用中使用。</p>}
         {(error || state.error || state.mediaError) && <div role="alert" className="flex items-start gap-3 border-b border-border bg-destructive/5 px-8 py-3 text-sm text-destructive"><p className="min-w-0 flex-1">{error ?? state.error ?? state.mediaError}</p>{error && <ActionButton variant="ghost" size="icon-sm" aria-label="关闭提示" onClick={() => setError(undefined)}><X aria-hidden="true" /></ActionButton>}</div>}
-        {view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} onNotice={showNotice} /></Suspense> : <>
+        {view === "queue" ? <QueuePage key={queueVisit} onError={onError} /> : view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} onNotice={showNotice} /></Suspense> : <>
           <header className="flex shrink-0 items-center justify-between gap-6 px-8 pb-6 pt-8"><div><h1 className="text-2xl font-semibold tracking-tight">{view === "local" ? "本地音乐" : view === "search" ? "搜索音乐" : view === "discover" ? "发现" : "播放队列"}</h1><p className="mt-2 text-sm text-muted-foreground">{view === "local" ? "熟悉的收藏，随时聆听。" : view === "search" || view === "discover" ? "在网易云音乐中寻找下一首。" : `${state.queue.length} 首音乐，按顺序播放。`}</p></div>
           </header>
           {view === "local" && <div className="flex items-center justify-between gap-4 px-8 pb-4"><div className="min-w-0"><h2 className="text-base font-semibold">音乐文件夹</h2><p className="mt-1 text-xs text-muted-foreground">添加或移除本地音乐文件夹。已添加的文件夹会自动扫描。</p></div><div className="flex shrink-0 gap-2"><ActionButton variant="ghost" disabled={importing || !isTauri()} onClick={() => void importMusic(false)}><Plus aria-hidden="true" />打开文件</ActionButton><FolderManager /></div></div>}
           <div className="relative isolate min-h-0 flex-1 overflow-auto px-8">
-            {(view === "queue" ? state.queue.length : tracks.length) > 0 ? <TrackList tracks={view === "queue" ? state.queue : tracks} currentKey={current?.key} busy={false} onPlay={play} onAppend={view === "queue" ? undefined : append} /> : <div className="flex min-h-72 flex-col items-center justify-center gap-4 text-center"><Music2 className="size-10 text-muted-foreground/60" aria-hidden="true" /><p className="font-medium">{busy ? "正在查找音乐…" : view === "local" ? "把你的音乐带进来" : view === "search" || view === "discover" ? appliedKeyword ? "没有找到匹配的音乐" : "下一首喜欢的音乐，等你发现" : "队列还是空的"}</p><p className="max-w-sm text-sm leading-6 text-muted-foreground">{view === "local" ? "打开音频文件，或导入一个音乐目录。曲库会在下次启动时保留。" : view === "search" || view === "discover" ? "在顶部搜索框输入歌曲或艺术家名称开始搜索。" : "从搜索结果或本地曲库，将歌曲加入播放队列。"}</p></div>}
+            {tracks.length > 0 ? <TrackList tracks={tracks} currentKey={current?.key} busy={false} onPlay={play} onAppend={append} /> : <div className="flex min-h-72 flex-col items-center justify-center gap-4 text-center"><Music2 className="size-10 text-muted-foreground/60" aria-hidden="true" /><p className="font-medium">{busy ? "正在查找音乐…" : view === "local" ? "把你的音乐带进来" : view === "search" || view === "discover" ? appliedKeyword ? "没有找到匹配的音乐" : "下一首喜欢的音乐，等你发现" : "队列还是空的"}</p><p className="max-w-sm text-sm leading-6 text-muted-foreground">{view === "local" ? "打开音频文件，或导入一个音乐目录。曲库会在下次启动时保留。" : view === "search" || view === "discover" ? "在顶部搜索框输入歌曲或艺术家名称开始搜索。" : "从搜索结果或本地曲库，将歌曲加入播放队列。"}</p></div>}
             {(view === "local" || view === "search") && <InfiniteLoad more={hasMore} busy={busy} error={loadError} onLoad={loadMore} />}
           </div>
 
         </>}
       </main>
     </div>
-    {!playerVisible && <PlaybackBar notice={notice} qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={() => navigate("queue")} onError={onError} />}
+    {!playerVisible && <PlaybackBar notice={notice} qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={openQueue} onError={onError} />}
   </div>;
 }

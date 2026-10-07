@@ -8,9 +8,9 @@ import { Cover } from "./cover";
 import { useAccount } from "./account";
 import { TrackTitle, trackDisplayTitle } from "./track-title";
 
-interface Props { tracks: Track[]; currentKey?: string; busy: boolean; onPlay: (index: number) => void; onAppend?: (track: Track) => void; offset?: number }
+interface Props { tracks: Track[]; currentKey?: string; busy: boolean; onPlay: (index: number) => void; onAppend?: (track: Track) => void; offset?: number; currentIndex?: number; locateRequest?: number }
 
-export const TrackList = memo(function TrackList({ tracks, currentKey, busy, onPlay, onAppend, offset = 0 }: Props) {
+export const TrackList = memo(function TrackList({ tracks, currentKey, busy, onPlay, onAppend, offset = 0, currentIndex, locateRequest }: Props) {
   const { profile, likedIds, likesReady, likesError, pendingLikes, reloadLikes, toggleLike } = useAccount();
   const [likeError, setLikeError] = useState<string>();
   const body = useRef<HTMLTableSectionElement>(null);
@@ -33,6 +33,10 @@ export const TrackList = memo(function TrackList({ tracks, currentKey, busy, onP
     observer.observe(parent); observer.observe(element.closest("section") ?? element.closest("table")!);
     return () => observer.disconnect();
   }, []);
+  useLayoutEffect(() => {
+    if (locateRequest === undefined || currentIndex === undefined || currentIndex < 0) return;
+    virtualizer.scrollToIndex(currentIndex, { align: "center" });
+  }, [locateRequest, scrollMargin, virtualizer]);
   const rows = virtualizer.getVirtualItems();
   const top = rows.length ? Math.max(0, rows[0].start - scrollMargin) : 0;
   const bottom = rows.length ? Math.max(0, virtualizer.getTotalSize() - (rows[rows.length - 1].end - scrollMargin)) : 0;
@@ -45,7 +49,7 @@ export const TrackList = memo(function TrackList({ tracks, currentKey, busy, onP
     </thead>
     <tbody ref={body}>
       {top > 0 && <tr aria-hidden="true"><td colSpan={onAppend ? 6 : 5} style={{ height: top, padding: 0 }} /></tr>}
-      {rows.map((row) => { const index = row.index; const track = tracks[index]; return <tr ref={virtualizer.measureElement} data-index={index} key={`${track.key}:${index}`} className="track-row group" data-current={track.key === currentKey}>
+      {rows.map((row) => { const index = row.index; const track = tracks[index]; return <tr ref={virtualizer.measureElement} data-index={index} key={`${track.key}:${index}`} className="track-row group" data-current={currentIndex === undefined ? track.key === currentKey : index === currentIndex} aria-current={(currentIndex === undefined ? track.key === currentKey : index === currentIndex) ? "true" : undefined}>
         <td className="text-center tabular-nums text-muted-foreground">{offset + index + 1}</td>
         <td className="py-3 pr-4"><div className="flex min-w-0 items-center gap-3"><button type="button" className="track-cover" disabled={busy} aria-label={`播放 ${track.title}`} onClick={() => onPlay(index)}><Cover cover={track.cover} className="size-11" /><span className="track-cover-play"><Play aria-hidden="true" /></span></button><div className="min-w-0"><p className="track-title truncate font-medium" title={trackDisplayTitle(track)}><TrackTitle track={track} /></p><p className="mt-1 truncate text-xs text-muted-foreground" title={track.artist}>{track.artist}{track.source.kind === "local" && <span className="ml-2">· 本地</span>}</p></div></div></td>
         <td className="truncate pr-4 text-muted-foreground" title={track.album}>{track.album}</td>

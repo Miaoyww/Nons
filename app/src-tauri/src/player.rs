@@ -26,6 +26,7 @@ pub enum Command {
     Pause,
     Resume,
     Stop,
+    Clear,
     Next,
     Previous,
     Repeat,
@@ -429,12 +430,21 @@ impl Actor {
                     }
                 }
             }
-            Command::Stop => {
+            Command::Stop | Command::Clear => {
+                let clear = matches!(command, Command::Clear);
                 self.cancel_jobs();
                 self.desired_playing = false;
                 self.playbin
                     .set_state(gst::State::Null)
                     .map_err(|e| e.to_string())?;
+                if clear {
+                    self.state.queue.clear();
+                    self.state.index = None;
+                    self.state.duration_ms = 0;
+                    self.state.actual_quality = None;
+                    self.state.media_error = None;
+                    self.state.revision += 1;
+                }
                 self.state.status = PlaybackStatus::Stopped;
                 self.state.position_ms = 0;
                 self.state.error = None;

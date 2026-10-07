@@ -326,6 +326,7 @@ fn player_action(action: &str, backend: State<'_, Backend>) -> AppResult<()> {
         "pause" => Command::Pause,
         "resume" => Command::Resume,
         "stop" => Command::Stop,
+        "clear" => Command::Clear,
         "next" => Command::Next,
         "previous" => Command::Previous,
         "repeat" => Command::Repeat,
