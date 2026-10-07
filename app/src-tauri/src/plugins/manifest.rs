@@ -1,0 +1,317 @@
+use crate::model::AppResult;
+use semver::{Version, VersionReq};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashSet,
+    path::{Component, Path, PathBuf},
+};
+
+pub const API_VERSION: &str = "1.0.0";
+pub const PERMISSIONS: &[&str] = &[
+    "clipboard:music-links",
+    "storage",
+    "music:metadata",
+    "player:read",
+    "player:control",
+    "ui",
+];
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Manifest {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub backend: Option<String>,
+    pub frontend: Option<String>,
+    pub permissions: Vec<String>,
+    pub engines: Engines,
+    #[serde(default)]
+    pub contributes: Contributions,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Engines {
+    pub app: String,
+    pub plugin_api: String,
+    pub ui_api: String,
+}
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Contributions {
+    #[serde(default)]
+    pub views: Vec<View>,
+    #[serde(default)]
+    pub pages: Vec<Page>,
+    #[serde(default)]
+    pub navigation: Vec<Navigation>,
+    #[serde(default)]
+    pub commands: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub menus: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub context_menus: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub settings: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub shortcuts: Vec<serde_json::Value>,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct View {
+    pub id: String,
+    pub slot: String,
+    pub export: String,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Page {
+    pub id: String,
+    pub path: String,
+    pub export: String,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Navigation {
+    pub id: String,
+    pub label: String,
+    pub page: String,
+}
+
+pub fn valid_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id.as_bytes()[0].is_ascii_lowercase()
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        && !matches!(
+            id,
+            "con"
+                | "prn"
+                | "aux"
+                | "nul"
+                | "com1"
+                | "com2"
+                | "com3"
+                | "com4"
+                | "com5"
+                | "com6"
+                | "com7"
+                | "com8"
+                | "com9"
+                | "lpt1"
+                | "lpt2"
+                | "lpt3"
+                | "lpt4"
+                | "lpt5"
+                | "lpt6"
+                | "lpt7"
+                | "lpt8"
+                | "lpt9"
+        )
+}
+pub fn safe_relative(path: &str) -> AppResult<PathBuf> {
+    if path.is_empty()
+        || path.len() > 512
+        || path.contains(['\\', ':', '\0', '%', '?', '#'])
+        || path
+            .split('/')
+            .any(|p| p.is_empty() || p == "." || p == ".." || p.ends_with(['.', ' ']))
+        || Path::new(path)
+            .components()
+            .any(|p| !matches!(p, Component::Normal(_)))
+    {
+        return Err("插件资源路径无效".into());
+    }
+    Ok(PathBuf::from(path))
+}
+pub fn checked_file(root: &Path, relative: &str) -> AppResult<PathBuf> {
+    if is_link(&std::fs::symlink_metadata(root).map_err(|e| e.to_string())?) {
+        return Err("插件根目录不允许链接".into());
+    }
+    let relative = safe_relative(relative)?;
+    let mut current = root.to_path_buf();
+    for part in relative.components() {
+        current.push(part);
+        let meta = std::fs::symlink_metadata(&current).map_err(|_| "插件文件不存在")?;
+        if is_link(&meta) {
+            return Err("插件目录不允许链接".into());
+        }
+    }
+    let root = root.canonicalize().map_err(|e| e.to_string())?;
+    let file = current.canonicalize().map_err(|e| e.to_string())?;
+    if !file.starts_with(root) || !file.is_file() {
+        return Err("插件资源越界".into());
+    }
+    Ok(file)
+}
+pub fn is_link(meta: &std::fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        meta.is_symlink() || meta.file_attributes() & 0x400 != 0
+    }
+    #[cfg(not(windows))]
+    {
+        meta.is_symlink()
+    }
+}
+impl Manifest {
+    pub fn read(root: &Path) -> AppResult<Self> {
+        let path = checked_file(root, "manifest.json")?;
+        if path.metadata().map_err(|e| e.to_string())?.len() > 64 * 1024 {
+            return Err("Manifest 过大".into());
+        }
+        let manifest: Self =
+            serde_json::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+        manifest.validate()?;
+        for entry in [manifest.backend.as_ref(), manifest.frontend.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            let file = checked_file(root, entry)?;
+            let limit = if entry.ends_with(".wasm") {
+                16 * 1024 * 1024
+            } else {
+                8 * 1024 * 1024
+            };
+            if file.metadata().map_err(|e| e.to_string())?.len() > limit {
+                return Err("插件入口过大".into());
+            }
+        }
+        Ok(manifest)
+    }
+    pub fn validate(&self) -> AppResult<()> {
+        if !valid_id(&self.id) || self.name.trim().is_empty() || self.name.len() > 128 {
+            return Err("插件标识或名称无效".into());
+        }
+        Version::parse(&self.version).map_err(|_| "插件版本必须是 SemVer")?;
+        for (range, version) in [
+            (&self.engines.app, env!("CARGO_PKG_VERSION")),
+            (&self.engines.plugin_api, API_VERSION),
+            (&self.engines.ui_api, API_VERSION),
+        ] {
+            if !VersionReq::parse(range)
+                .map_err(|_| "版本范围无效")?
+                .matches(&Version::parse(version).map_err(|e| e.to_string())?)
+            {
+                return Err("插件 API 或应用版本不兼容".into());
+            }
+        }
+        if self.backend.is_none() && self.frontend.is_none() {
+            return Err("插件缺少入口".into());
+        }
+        for (entry, extension) in [(&self.backend, ".wasm"), (&self.frontend, ".mjs")] {
+            if let Some(entry) = entry {
+                safe_relative(entry)?;
+                if !entry.ends_with(extension) {
+                    return Err("插件入口格式无效".into());
+                }
+            }
+        }
+        let mut permissions = HashSet::new();
+        if self
+            .permissions
+            .iter()
+            .any(|p| !PERMISSIONS.contains(&p.as_str()) || !permissions.insert(p))
+        {
+            return Err("未知或重复的插件权限".into());
+        }
+        let c = &self.contributes;
+        if (!c.views.is_empty() || !c.pages.is_empty() || !c.navigation.is_empty())
+            && (self.frontend.is_none() || !self.permissions.iter().any(|p| p == "ui"))
+        {
+            return Err("UI 扩展缺少 frontend 或 ui 权限".into());
+        }
+        let mut ids = HashSet::new();
+        for (id, export) in c
+            .views
+            .iter()
+            .map(|v| (&v.id, &v.export))
+            .chain(c.pages.iter().map(|p| (&p.id, &p.export)))
+        {
+            if !valid_id(id)
+                || !ids.insert(id)
+                || export.is_empty()
+                || export.len() > 128
+                || !export
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            {
+                return Err("扩展标识或导出名称无效".into());
+            }
+        }
+        if c.views.iter().any(|v| v.slot != "main.overlay") {
+            return Err("未知 UI Slot".into());
+        }
+        let mut paths = HashSet::new();
+        for page in &c.pages {
+            if !page.path.starts_with('/')
+                || page.path.contains(['?', '#', '\\', '%', ':'])
+                || page.path.split('/').any(|p| p == ".." || p == ".")
+                || !paths.insert(&page.path)
+            {
+                return Err("插件页面路径无效".into());
+            }
+        }
+        for nav in &c.navigation {
+            if !valid_id(&nav.id)
+                || !ids.insert(&nav.id)
+                || nav.label.trim().is_empty()
+                || nav.label.len() > 128
+                || !c.pages.iter().any(|p| p.id == nav.page)
+            {
+                return Err("导航扩展无效".into());
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn rejects_paths_and_reserved_ids() {
+        for path in ["../a", "/a", "a\\b", "C:/a", "a/%2e", "a//b", "a./b"] {
+            assert!(safe_relative(path).is_err(), "{path}");
+        }
+        assert!(safe_relative("assets/cover.png").is_ok());
+        for id in ["../bad", "con", "A", "com1", ""] {
+            assert!(!valid_id(id));
+        }
+        assert!(valid_id("netease-island"));
+    }
+    #[test]
+    fn manifest_checks_compatibility_permissions_and_contribution_references() {
+        let value: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../plugins/netease-island/manifest.json"
+        ))
+        .unwrap();
+        let valid: Manifest = serde_json::from_value(value.clone()).unwrap();
+        assert!(valid.validate().is_ok());
+        for (pointer, invalid) in [
+            ("/id", serde_json::json!("../bad")),
+            ("/version", serde_json::json!("latest")),
+            ("/engines/pluginApi", serde_json::json!("^2.0.0")),
+            ("/permissions", serde_json::json!(["http:any"])),
+            ("/contributes/views/0/slot", serde_json::json!("unknown")),
+            ("/frontend", serde_json::Value::Null),
+        ] {
+            let mut candidate = value.clone();
+            *candidate.pointer_mut(pointer).unwrap() = invalid;
+            assert!(
+                serde_json::from_value::<Manifest>(candidate)
+                    .unwrap()
+                    .validate()
+                    .is_err(),
+                "{pointer}"
+            );
+        }
+        let mut unknown = value;
+        unknown["network"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<Manifest>(unknown).is_err());
+    }
+}

@@ -1,0 +1,13 @@
+package nons:plugin@1.0.0;
+
+interface host {
+  /// Versioned, high-level operations. JSON is bounded and checked by the host.
+  call: func(operation: string, args: string) -> result<string, string>;
+}
+
+world plugin {
+  import host;
+  export initialize: func() -> result<_, string>;
+  export shutdown: func() -> result<_, string>;
+  export call: func(method: string, args: string) -> result<string, string>;
+}

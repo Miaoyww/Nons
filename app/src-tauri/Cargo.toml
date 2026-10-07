@@ -20,6 +20,10 @@ path = "src/main.rs"
 name = "nons_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+plugin-probe = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -44,8 +48,21 @@ tauri-plugin-dialog = "2"
 cookie = "0.18"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 base64 = "0.22"
+regex = "1"
+flate2 = "1"
+hex = "0.4"
+font-kit = "0.14"
+wasmtime = { version = "=46.0.1", default-features = false, features = ["std", "runtime", "cranelift", "component-model", "async"] }
+semver = "1"
+percent-encoding = "2"
+zip = { version = "8", default-features = false, features = ["deflate"] }
+clipboard-rs = { version = "=0.3.5", default-features = false }
+
+[dev-dependencies]
+tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
+clipboard-win = { version = "5.4", features = ["monitor"] }
 windows = { version = "0.62", features = ["Foundation", "Media", "Media_Control", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT", "Win32_System_Com"] }
 keyring = { version = "3.6", features = ["windows-native"] }
 sysproxy = "0.3"

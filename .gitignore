@@ -17,6 +17,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+app/src-tauri/bundled-plugins/*
+!app/src-tauri/bundled-plugins/.gitkeep
+plugins/*/backend/target/
+plugins/*/backend/src/bindings.rs
 *.local
 
 # Editor directories and files

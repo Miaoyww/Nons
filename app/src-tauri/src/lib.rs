@@ -1,4 +1,5 @@
 mod audio;
+mod fonts;
 mod library;
 mod local_folders;
 mod lyrics;
@@ -7,6 +8,9 @@ mod model;
 mod netease;
 mod network;
 mod player;
+mod plugins;
+mod qq_lyrics;
+mod qrc_decrypt;
 mod storage;
 #[cfg(test)]
 mod test_support;
@@ -397,10 +401,13 @@ async fn output_devices(backend: State<'_, Backend>) -> AppResult<Vec<OutputDevi
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Flat IPC arguments retain the existing source-skip contract.
 async fn track_lyrics(
     key: String,
     refresh: bool,
     skip_amll: bool,
+    skip_qq: bool,
+    skip_qrc: Option<bool>,
     skip_local: bool,
     app: tauri::AppHandle,
     backend: State<'_, Backend>,
@@ -408,7 +415,17 @@ async fn track_lyrics(
     let track = backend.store.track(&key)?;
     backend
         .lyrics
-        .get(track, refresh, skip_amll, skip_local, app)
+        .get(
+            track,
+            refresh,
+            lyrics::LyricSkips {
+                amll: skip_amll,
+                qq: skip_qq,
+                qrc: skip_qrc.unwrap_or(false),
+                local: skip_local,
+            },
+            app,
+        )
         .await
 }
 
@@ -427,6 +444,16 @@ fn bind_local_lyrics(
         _ => return Err("仅本地音乐需要手动绑定歌词".into()),
     }
     backend.store.save_tracks(&[track])
+}
+
+#[tauri::command]
+fn lyric_sources(backend: State<'_, Backend>) -> AppResult<lyrics::LyricSources> {
+    backend.lyrics.sources()
+}
+
+#[tauri::command]
+fn set_lyric_sources(sources: lyrics::LyricSources, backend: State<'_, Backend>) -> AppResult<()> {
+    backend.lyrics.set_sources(sources)
 }
 
 #[tauri::command]
@@ -476,29 +503,61 @@ async fn qr_login(backend: State<'_, Backend>) -> AppResult<QrLogin> {
     backend.netease.qr_login().await
 }
 #[tauri::command]
-async fn poll_login(key: String, backend: State<'_, Backend>) -> AppResult<LoginStatus> {
-    backend.netease.poll_login(&key).await
+async fn poll_login(
+    key: String,
+    backend: State<'_, Backend>,
+    plugins: State<'_, Arc<plugins::PluginManager>>,
+) -> AppResult<LoginStatus> {
+    let result = backend.netease.poll_login(&key).await?;
+    if result.code == 803 {
+        plugins.account_changed().await;
+    }
+    Ok(result)
 }
 #[tauri::command]
-async fn login_session(backend: State<'_, Backend>) -> AppResult<bool> {
-    backend.netease.session().await
+async fn login_session(
+    backend: State<'_, Backend>,
+    plugins: State<'_, Arc<plugins::PluginManager>>,
+) -> AppResult<bool> {
+    let result = backend.netease.session().await?;
+    if !result {
+        plugins.account_changed().await;
+    }
+    Ok(result)
 }
 #[tauri::command]
 async fn account_profile(backend: State<'_, Backend>) -> AppResult<Option<AccountProfile>> {
     backend.netease.profile().await
 }
 #[tauri::command]
-fn logout(backend: State<'_, Backend>) -> AppResult<()> {
-    backend.netease.logout()
+async fn logout(
+    backend: State<'_, Backend>,
+    plugins: State<'_, Arc<plugins::PluginManager>>,
+) -> AppResult<()> {
+    backend.netease.logout()?;
+    plugins.account_changed().await;
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(not(feature = "plugin-probe"))]
+    let context = tauri::generate_context!();
+    #[cfg(feature = "plugin-probe")]
+    let context = {
+        let mut context = tauri::generate_context!();
+        context.config_mut().app.windows[0].visible = false;
+        context
+    };
     let app = tauri::Builder::default()
+        .register_uri_scheme_protocol("plugin", plugins::protocol)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            #[cfg(not(feature = "plugin-probe"))]
             let data = app.path().app_data_dir()?;
+            #[cfg(feature = "plugin-probe")]
+            let data = plugins::probe::directory();
             std::fs::create_dir_all(&data)?;
             let covers = app.path().app_cache_dir()?.join("covers");
             std::fs::create_dir_all(&covers)?;
@@ -537,6 +596,18 @@ pub fn run() {
                 netease.clone(),
                 hwnd,
             )?);
+            let plugin_manager = plugins::PluginManager::new(
+                app.handle().clone(),
+                &data,
+                netease.clone(),
+                player.clone(),
+            )?;
+            app.manage(plugin_manager.clone());
+            #[cfg(feature = "plugin-probe")]
+            plugins::probe::start(plugin_manager.clone());
+            tauri::async_runtime::spawn(async move {
+                plugin_manager.startup().await;
+            });
             app.manage(Backend {
                 store,
                 netease,
@@ -555,6 +626,17 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            #[cfg(feature = "plugin-probe")]
+            plugins::probe::plugin_probe_report,
+            plugins::plugin_list,
+            plugins::plugin_discover,
+            plugins::plugin_install,
+            plugins::plugin_action,
+            plugins::plugin_call,
+            plugins::plugin_host_call,
+            plugins::plugin_ready,
+            plugins::plugin_fault,
+            fonts::system_fonts,
             player_snapshot,
             search_music,
             music_library,
@@ -587,6 +669,8 @@ pub fn run() {
             player_device,
             output_devices,
             track_lyrics,
+            lyric_sources,
+            set_lyric_sources,
             bind_local_lyrics,
             music_options,
             set_music_options,
@@ -599,10 +683,11 @@ pub fn run() {
             set_song_liked,
             logout
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("无法启动 NonsPlayer");
     app.run(|app, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            app.state::<Arc<plugins::PluginManager>>().stop();
             app.state::<Backend>().player.shutdown();
         }
     });

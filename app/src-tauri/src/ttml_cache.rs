@@ -211,6 +211,12 @@ impl TtmlCache {
     pub fn generation(&self) -> u64 {
         self.state.lock().map(|s| s.generation).unwrap_or_default()
     }
+    pub fn set_lyric_sources(&self, value: &str) -> AppResult<()> {
+        let mut state = self.state.lock().map_err(|_| "缓存锁不可用")?;
+        self.store.set_setting("lyricSources", value)?;
+        state.generation += 1;
+        self.store.clear_runtime_lyrics()
+    }
     pub fn cache_result(
         &self,
         key: &str,
@@ -230,10 +236,15 @@ impl TtmlCache {
         }
         Ok(())
     }
-    pub fn invalidate(&self, key: &str) -> AppResult<()> {
+    pub fn refresh_lyrics(&self, keys: &[&str]) -> AppResult<()> {
         let mut state = self.state.lock().map_err(|_| "缓存锁不可用")?;
         state.generation += 1;
-        remove(&state, key)
+        for key in keys {
+            self.store.invalidate_lyrics(key)?;
+            // A broken disk index must not prevent refreshing online sources.
+            let _ = remove(&state, key);
+        }
+        Ok(())
     }
     pub fn clear(&self) -> AppResult<()> {
         let mut state = self.state.lock().map_err(|_| "缓存锁不可用")?;
@@ -340,6 +351,61 @@ mod tests {
             root.join("cache"),
         )
         .unwrap()
+    }
+    #[test]
+    fn source_changes_persist_and_reject_inflight_lyrics_without_deleting_ttml() {
+        let root = TestDir::new();
+        let cache = cache(&root.0);
+        let generation = cache.generation();
+        cache
+            .cache_result("amll:1", Some(&lyric(10)), 600, generation)
+            .unwrap();
+        let mut lrc = lyric(10);
+        lrc.source = "qq".into();
+        lrc.format = "lrc".into();
+        cache
+            .cache_result("qq:2", Some(&lrc), 600, generation)
+            .unwrap();
+        cache
+            .set_lyric_sources(r#"{"amll":false,"qq":false}"#)
+            .unwrap();
+        assert!(cache.store.cached_lyrics("qq:2").unwrap().is_none());
+        cache
+            .cache_result("qq:2", Some(&lrc), 600, generation)
+            .unwrap();
+        assert!(cache.store.cached_lyrics("qq:2").unwrap().is_none());
+        assert!(cache.get("amll:1").unwrap().is_some());
+        let sources: crate::lyrics::LyricSources =
+            serde_json::from_str(&cache.store.setting("lyricSources").unwrap().unwrap()).unwrap();
+        assert!(!sources.amll && !sources.qq);
+        drop(cache);
+        let store = Store::open(&root.0.join("library.sqlite3")).unwrap();
+        assert_eq!(
+            store.setting("lyricSources").unwrap().as_deref(),
+            Some(r#"{"amll":false,"qq":false}"#)
+        );
+    }
+    #[test]
+    fn manual_refresh_invalidates_all_source_keys_and_rejects_old_requests() {
+        let root = TestDir::new();
+        let cache = cache(&root.0);
+        let generation = cache.generation();
+        for key in ["amll:1", "qq:1", "netease:1"] {
+            cache
+                .cache_result(key, Some(&lyric(10)), 600, generation)
+                .unwrap();
+        }
+        cache
+            .refresh_lyrics(&["amll:1", "qq:1", "netease:1"])
+            .unwrap();
+        for key in ["amll:1", "qq:1", "netease:1"] {
+            assert!(cache.store.cached_lyrics(key).unwrap().is_none());
+            assert!(cache.get(key).unwrap().is_none());
+            cache
+                .cache_result(key, Some(&lyric(10)), 600, generation)
+                .unwrap();
+            assert!(cache.store.cached_lyrics(key).unwrap().is_none());
+        }
     }
     #[test]
     fn ttml_survives_restart_but_netease_lrc_stays_in_memory() {

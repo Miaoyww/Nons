@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 
-export type MusicView = "library" | "discover" | "local" | "search" | "queue" | "collection";
+export type MusicView = "library" | "discover" | "local" | "search" | "queue" | "collection" | "plugin";
 export interface MusicCollection { id: number; kind: "playlist" | "album" | "artist"; name: string; cover: string; subtitle: string; trackCount: number; creatorId?: number; liked?: boolean }
 interface Page { view: MusicView; query: string; collection?: MusicCollection }
 const NavigationContext = createContext<{

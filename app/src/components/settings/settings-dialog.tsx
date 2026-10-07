@@ -9,10 +9,11 @@ import { AboutPage } from "./pages/about";
 import { PlaybackPage } from "./pages/playback";
 import { LyricsPage } from "./pages/lyrics";
 import { LocalCachePage } from "./pages/local-cache";
+import { PluginsPage } from "./pages/plugins";
 import { version } from "../../../package.json";
 
 export function SettingsDialog() {
-  const [section, setSection] = useState<"general" | "playback" | "lyrics" | "local-cache" | "about">("general");
+  const [section, setSection] = useState<"general" | "playback" | "lyrics" | "local-cache" | "plugins" | "about">("general");
   const [theme, setTheme] = useTheme();
   const reducedMotion = useReducedMotion();
 
@@ -54,6 +55,7 @@ export function SettingsDialog() {
                 aria-current={section === "local-cache" ? "page" : undefined} onClick={() => setSection("local-cache")}>
                 <FolderCog aria-hidden="true" /><span>本地与缓存</span>
               </Button>
+              <Button variant={section === "plugins" ? "secondary" : "ghost"} className="justify-start gap-2.5 rounded-lg px-3" aria-current={section === "plugins" ? "page" : undefined} onClick={() => setSection("plugins")}><FolderCog aria-hidden="true" /><span>插件</span></Button>
               <Button variant={section === "about" ? "secondary" : "ghost"} className="mt-auto justify-start gap-2.5 rounded-lg px-3"
                 aria-current={section === "about" ? "page" : undefined} onClick={() => setSection("about")}>
                 <Info aria-hidden="true" /><span>关于</span>
@@ -64,9 +66,9 @@ export function SettingsDialog() {
               <span className="text-xs text-muted-foreground">Version {version}</span>
             </div>
           </aside>
-          <section aria-label={section === "general" ? "常规设置" : section === "playback" ? "播放设置" : section === "lyrics" ? "歌词设置" : section === "local-cache" ? "本地与缓存" : "关于 Nons"} className="min-w-0 flex-1 overflow-auto bg-background p-5 pt-14 sm:p-10">
+          <section aria-label={section === "general" ? "常规设置" : section === "playback" ? "播放设置" : section === "lyrics" ? "歌词设置" : section === "local-cache" ? "本地与缓存" : section === "plugins" ? "插件设置" : "关于 Nons"} className="min-w-0 flex-1 overflow-auto bg-background p-5 pt-14 sm:p-10">
             <motion.div key={section} initial={{ opacity: reducedMotion ? 1 : 0, y: reducedMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-              {section === "general" ? <GeneralPage theme={theme} onThemeChange={setTheme} /> : section === "playback" ? <PlaybackPage /> : section === "lyrics" ? <LyricsPage /> : section === "local-cache" ? <LocalCachePage /> : <AboutPage version={version} />}
+              {section === "general" ? <GeneralPage theme={theme} onThemeChange={setTheme} /> : section === "playback" ? <PlaybackPage /> : section === "lyrics" ? <LyricsPage /> : section === "local-cache" ? <LocalCachePage /> : section === "plugins" ? <PluginsPage /> : <AboutPage version={version} />}
             </motion.div>
           </section>
         </div>

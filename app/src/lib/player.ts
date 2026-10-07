@@ -19,7 +19,7 @@ export interface Progress {
   revision: number; positionMs: number; durationMs: number; status: PlaybackStatus; receivedAt: number;
 }
 export interface Lyrics {
-  source: "amll" | "netease" | "local"; format: "ttml" | "yrc" | "lrc";
+  source: "amll" | "qq" | "netease" | "local"; format: "ttml" | "yrc" | "qrc" | "lrc";
   content: string; translation: string | null; romanization: string | null;
 }
 export interface OutputDevice { id: string; name: string }
@@ -76,6 +76,7 @@ export async function nativeCall<T>(command: string, args?: Record<string, unkno
     create_library_playlist: ["library_collections", "music_library"],
     import_music: ["local_music"], add_music_folder: ["local_music"], remove_music_folder: ["local_music"], rescan_music_folders: ["local_music"],
     bind_local_lyrics: ["track_lyrics", "local_music"], set_lyric_endpoints: ["track_lyrics"],
+    set_lyric_sources: ["track_lyrics"],
     clear_local_cache: ["track_lyrics"], set_local_cache_options: ["track_lyrics"], logout: [...cachedCommands],
   };
   if (affected[command]) invalidateNativeCache(affected[command]);

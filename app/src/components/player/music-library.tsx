@@ -6,7 +6,7 @@ import { TrackTitle } from "./track-title";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { Heart, Play, Plus, RefreshCw, UserRound } from "lucide-react";
-import { errorText, nativeCall, usePlayer, type Lyrics, type Track } from "@/lib/player";
+import { errorText, nativeCall, usePlayer, type Track } from "@/lib/player";
 import { getLibraryCollections, getLibraryHistory, getLibraryTracks, getMusicLibrary, peekMusicLibrary, invalidateMusicLibrary, playLibraryCollection,
   type CollectionTracks, type LibrarySummary, type LibraryTab, type PlaylistFilter } from "@/lib/music-library";
 import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
@@ -19,6 +19,8 @@ import { useMusicNavigation, type MusicCollection } from "./music-navigation";
 import { TrackList } from "./track-list";
 import { InfiniteLoad } from "./infinite-load";
 import { usePagedList } from "@/lib/use-paged-list";
+import { useLyricSources } from "@/hooks/use-lyric-sources";
+import { loadLyrics } from "@/lib/load-lyrics";
 
 const filters = [{ value: "all", label: "全部歌单" }, { value: "mine", label: "创建的歌单" }, { value: "liked", label: "收藏的歌单" }];
 const tabs = [{ value: "playlist", label: "歌单" }, { value: "album", label: "专辑" }, { value: "artist", label: "艺人" }, { value: "history", label: "听歌记录" }] as const;
@@ -54,23 +56,25 @@ function CreatePlaylist({ onCreated }: { onCreated: () => void }) {
 }
 
 function LyricExcerpt({ track }: { track?: Track }) {
+  const { sources } = useLyricSources();
   const [lines, setLines] = useState<string[]>([]);
   useEffect(() => {
     let disposed = false;
     setLines([]);
     if (!track || !isTauri()) return;
-    void nativeCall<Lyrics | null>("track_lyrics", { key: track.key, refresh: false, skipAmll: false, skipLocal: false }).then(async (value) => {
-      if (!value || disposed) return;
-      const { parseLrc, parseTTML, parseYrc } = await import("@applemusic-like-lyrics/lyric");
+    const load = async () => {
+      const { parseLyrics } = await import("@/lib/parse-lyrics");
       if (disposed) return;
-      const lyrics = value.format === "ttml" ? parseTTML(value.content).lines : value.format === "yrc" ? parseYrc(value.content) : parseLrc(value.content);
-      const excerpt = lyrics.map((line) => line.words.map((word) => word.word).join("").trim())
+      const result = await loadLyrics(track, false, sources, (value) => value ? parseLyrics(value, track.durationMs) : [], () => !disposed);
+      if (!result || disposed) return;
+      const excerpt = result.parsed.map((line) => line.words.map((word) => word.word).join("").trim())
         .filter((line) => line && !/作词|作曲|纯音乐|编曲/.test(line));
       const start = Math.floor(Math.random() * Math.max(1, excerpt.length - 2));
       setLines(excerpt.slice(start, start + 3));
-    }).catch(() => { /* Optional lyrics never block the collection or playback. */ });
+    };
+    void load().catch(() => { /* Optional lyrics never block the collection or playback. */ });
     return () => { disposed = true; };
-  }, [track?.key]);
+  }, [track?.key, sources]);
   return lines.length ? <p className="library-lyric-excerpt">{lines.map((line, index) => <span key={index}>{line}<br /></span>)}</p> : <Heart className="size-10 opacity-30" aria-hidden="true" />;
 }
 

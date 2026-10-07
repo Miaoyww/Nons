@@ -1,5 +1,4 @@
 import { LyricPlayer, type LyricPlayerRef } from "@applemusic-like-lyrics/react";
-import { parseLrc, parseTTML, parseYrc } from "@applemusic-like-lyrics/lyric";
 import type { LyricLine } from "@applemusic-like-lyrics/core";
 import "@applemusic-like-lyrics/core/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -13,25 +12,16 @@ import { Cover } from "./cover";
 import { AlbumBackground } from "./album-background";
 import { NowPlayingControls } from "./now-playing-controls";
 import { NowPlayingMenu } from "./now-playing-menu";
-
-class EmptyLyricsError extends Error {}
-
-function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
-  const result = value.format === "ttml" ? parseTTML(value.content).lines : value.format === "yrc" ? parseYrc(value.content) : parseLrc(value.content);
-  const translations = value.translation ? new Map(parseLrc(value.translation).map((line) => [line.startTime, line.words.map((word) => word.word).join("")])) : undefined;
-  const romans = value.romanization ? new Map(parseLrc(value.romanization).map((line) => [line.startTime, line.words.map((word) => word.word).join("")])) : undefined;
-  if (!result.length) throw new EmptyLyricsError();
-  return result.map((line, index) => {
-    const end = Number.isFinite(line.endTime) && line.endTime > line.startTime ? line.endTime : result[index + 1]?.startTime ?? Math.max(duration, line.startTime + 5000);
-    if (!Number.isFinite(line.startTime) || line.startTime < 0 || end < line.startTime) throw new Error("歌词时间轴无效。");
-    return { ...line, endTime: end, words: line.words.map((word) => ({ ...word, endTime: Number.isFinite(word.endTime) && word.endTime > word.startTime ? word.endTime : end })),
-      translatedLyric: translations?.get(line.startTime) ?? line.translatedLyric, romanLyric: romans?.get(line.startTime) ?? line.romanLyric };
-  });
-}
+import { useLyricSources } from "@/hooks/use-lyric-sources";
+import { loadLyrics } from "@/lib/load-lyrics";
+import { EmptyLyricsError, parseLyrics } from "@/lib/parse-lyrics";
+import { useFontSettings } from "@/hooks/use-font-settings";
 
 function LyricRenderer({ lines, showTranslation = true, showPronunciation = true, onError }: {
   lines: LyricLine[]; showTranslation?: boolean; showPronunciation?: boolean; onError: (cause: unknown) => void;
 }) {
+  const { fonts } = useFontSettings();
+  const lyricFont = fonts.lyrics || fonts.app;
   // AMLL consumes immutable lyric lines; retain the original auxiliary lyrics for restoring them.
   const displayedLines = useMemo(() => showTranslation && showPronunciation ? lines : lines.map((line) => ({
     ...line,
@@ -47,6 +37,21 @@ function LyricRenderer({ lines, showTranslation = true, showPronunciation = true
   const reduced = useReducedMotion();
   const playing = progress.status === "playing";
   const pausedPosition = playing ? 0 : progress.positionMs;
+  useEffect(() => {
+    const player = renderer?.lyricPlayer;
+    if (!visible || !player) return;
+    let disposed = false;
+    let frame = 0;
+    // Font metrics affect word masks as well as line positions, including while paused.
+    void document.fonts.ready.then(() => {
+      if (disposed) return;
+      frame = requestAnimationFrame(() => {
+        player.rebuildLyricView();
+        setLayoutVersion((version) => version + 1);
+      });
+    });
+    return () => { disposed = true; cancelAnimationFrame(frame); };
+  }, [lyricFont, renderer, visible]);
   useEffect(() => {
     const changed = () => setVisible(document.visibilityState !== "hidden");
     document.addEventListener("visibilitychange", changed);
@@ -91,6 +96,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const track = state.index !== null ? state.queue[state.index] : undefined;
   const [lines, setLines] = useState<LyricLine[]>([]);
   const [source, setSource] = useState<string>();
+  const { sources } = useLyricSources();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [binding, setBinding] = useState("");
@@ -103,7 +109,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const generation = useRef(0);
   const apply = useCallback((value: Lyrics | null, duration: number) => {
     setLines(value ? parseLyrics(value, duration) : []);
-    setSource(value ? ({ amll: "AMLL DB", netease: "网易云音乐", local: "本地歌词" })[value.source] : undefined);
+    setSource(value ? ({ amll: "AMLL DB", qq: "QQ 音乐", netease: "网易云音乐", local: "本地歌词" })[value.source] : undefined);
   }, []);
   useEffect(() => {
     const serial = ++generation.current;
@@ -111,34 +117,23 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
     if (!track || !isTauri()) return;
     setLoading(true);
     const load = async () => {
-      let value = await nativeCall<Lyrics | null>("track_lyrics", { key: track.key, refresh: refresh?.key === track.key, skipAmll: false, skipLocal: false });
-      if (generation.current !== serial) return;
-      try { apply(value, track.durationMs); }
-      catch (cause) {
-        if (value?.source === "local") {
-          value = await nativeCall<Lyrics | null>("track_lyrics", { key: track.key, refresh: false, skipAmll: false, skipLocal: true });
-          if (generation.current !== serial) return;
-          try { apply(value, track.durationMs); return; }
-          catch (fallbackError) { if (value?.source !== "amll") throw fallbackError; }
-        } else if (value?.source !== "amll") throw cause;
-        value = await nativeCall<Lyrics | null>("track_lyrics", { key: track.key, refresh: false, skipAmll: true, skipLocal: true });
-        if (generation.current === serial) apply(value, track.durationMs);
-      }
+      await loadLyrics(track, refresh?.key === track.key, sources,
+        (value) => apply(value, track.durationMs), () => generation.current === serial);
     };
     void load().catch((cause) => {
       if (generation.current === serial && !(cause instanceof EmptyLyricsError)) setError(errorText(cause));
     }).finally(() => { if (generation.current === serial) setLoading(false); });
     return () => { generation.current++; };
-  }, [track?.key, refresh, apply]);
+  }, [track?.key, refresh, apply, sources]);
   useEffect(() => {
     if (!isTauri() || !track) return;
     let disposed = false;
     let stop: (() => void) | undefined;
     void listen<{ key: string; lyrics: Lyrics }>("lyrics-updated", ({ payload }) => {
-      if (!disposed && payload.key === track.key) { try { apply(payload.lyrics, track.durationMs); } catch { /* Retain the last usable lyrics. */ } }
+      if (!disposed && payload.key === track.key && (payload.lyrics.source !== "amll" || sources.amll) && (payload.lyrics.source !== "qq" || sources.qq)) { try { apply(payload.lyrics, track.durationMs); } catch { /* Retain the last usable lyrics. */ } }
     }).then((unlisten) => { if (disposed) unlisten(); else stop = unlisten; }).catch((cause) => setError(errorText(cause)));
     return () => { disposed = true; stop?.(); };
-  }, [track?.key, apply]);
+  }, [track?.key, apply, sources]);
 
   const showLyrics = lines.length > 0 || loading;
   return <motion.section className="nons-lyrics now-playing absolute inset-0 z-[5] flex flex-col pt-12" aria-label="正在播放" aria-hidden={!isPresent} inert={!isPresent}

@@ -1,17 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark" | "system";
 const storageKey = "nons-theme";
+const listeners = new Set<() => void>();
+let theme: Theme = "system";
+try { const saved = localStorage.getItem(storageKey); if (saved === "light" || saved === "dark") theme = saved; } catch { /* Storage is optional. */ }
+const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
+function setTheme(value: Theme) {
+  theme = value;
+  try { localStorage.setItem(storageKey, value); } catch { /* Storage is optional. */ }
+  listeners.forEach((notify) => notify());
+}
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      return stored === "light" || stored === "dark" ? stored : "system";
-    } catch {
-      return "system";
-    }
-  });
+  const value = useSyncExternalStore(subscribe, () => theme);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -22,13 +24,8 @@ export function useTheme() {
     };
     apply();
     media.addEventListener("change", apply);
-    try {
-      localStorage.setItem(storageKey, theme);
-    } catch {
-      // Theme remains usable when storage is unavailable.
-    }
     return () => media.removeEventListener("change", apply);
-  }, [theme]);
+  }, [value]);
 
-  return [theme, setTheme] as const;
+  return [value, setTheme] as const;
 }

@@ -123,3 +123,24 @@ test("song details coalesce, and playlist deletion invalidates collection and li
   }
   assert.equal((await player.nativeCall("song_information", { key: "netease:1" })).albumId, 3);
 });
+
+test("source settings invalidate cached and in-flight lyrics only after a successful write", async () => {
+  const { player, requests } = harness();
+  const read = player.nativeCall("track_lyrics", { key: "netease:1" });
+  requests.at(-1).resolve({ source: "amll" }); await read;
+  const failed = player.nativeCall("set_lyric_sources", { sources: { amll: false, qq: false } });
+  const rejection = assert.rejects(failed, /denied/); requests.at(-1).reject(new Error("denied")); await rejection;
+  assert.equal((await player.nativeCall("track_lyrics", { key: "netease:1" })).source, "amll");
+  const pending = player.nativeCall("track_lyrics", { key: "netease:2" });
+  const discarded = assert.rejects(pending, /deleted/);
+  const pendingRequest = requests.at(-1);
+  const write = player.nativeCall("set_lyric_sources", { sources: { amll: false, qq: false } });
+  requests.at(-1).resolve(); await write;
+  pendingRequest.resolve({ source: "qq" }); await discarded;
+  for (const key of ["netease:1", "netease:2"]) {
+    const count = requests.length;
+    const updated = player.nativeCall("track_lyrics", { key });
+    assert.equal(requests.length, count + 1);
+    requests.at(-1).resolve({ source: "netease" }); await updated;
+  }
+});

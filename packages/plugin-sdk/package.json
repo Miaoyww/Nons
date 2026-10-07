@@ -1,0 +1,7 @@
+{
+  "name": "@app/plugin-sdk",
+  "version": "1.0.0",
+  "type": "module",
+  "types": "index.d.ts",
+  "peerDependencies": { "react": "^19.1.0" }
+}
