@@ -1,4 +1,4 @@
-//! Read only: checks only NonsPlayer sessions, never sends system media keys.
+//! Checks only NonsPlayer sessions. --next explicitly requests a track change.
 #[cfg(windows)]
 fn main() -> windows::core::Result<()> {
     use windows::{
@@ -20,6 +20,38 @@ fn main() -> windows::core::Result<()> {
             continue;
         }
         found = true;
+        if std::env::args().any(|arg| arg == "--next") {
+            let old_title = session.TryGetMediaPropertiesAsync()?.join()?.Title()?;
+            let started = std::time::Instant::now();
+            assert!(
+                session.TrySkipNextAsync()?.join()?,
+                "NonsPlayer must accept Next"
+            );
+            loop {
+                let new_title = session.TryGetMediaPropertiesAsync()?.join()?.Title()?;
+                if new_title != old_title {
+                    println!("NewTitleAfterMs={}", started.elapsed().as_millis());
+                    break;
+                }
+                assert!(
+                    started.elapsed() < std::time::Duration::from_secs(10),
+                    "SMTC title did not change within 10 seconds"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            while session.GetPlaybackInfo()?.PlaybackStatus()?
+                != windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing
+                && started.elapsed() < std::time::Duration::from_secs(10)
+            {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            println!("PlayingAfterMs={}", started.elapsed().as_millis());
+        }
+        let playback_status = session.GetPlaybackInfo()?.PlaybackStatus()?;
+        println!("PlaybackStatus={playback_status:?}");
+        if std::env::args().any(|arg| arg == "--expect-playing") {
+            assert_eq!(playback_status, windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing, "SMTC must report Playing while audio is playing after a track change");
+        }
         let props = session.TryGetMediaPropertiesAsync()?.join()?;
         let timeline = session.GetTimelineProperties()?;
         let cover = props.Thumbnail()?.OpenReadAsync()?.join()?.Size()?;

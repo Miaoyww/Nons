@@ -706,17 +706,10 @@ impl Actor {
                 }
             }
             MessageView::Buffering(value) if self.desired_playing => {
-                let buffering = value.percent() < 100;
-                let _ = self.playbin.set_state(if buffering {
-                    gst::State::Paused
-                } else {
-                    gst::State::Playing
-                });
-                self.state.status = if buffering {
-                    PlaybackStatus::Buffering
-                } else {
-                    PlaybackStatus::Loading
-                };
+                match crate::audio::update_buffering(&self.playbin, value.percent()) {
+                    Ok(status) => self.state.status = status,
+                    Err(error) => self.state.error = Some(error.to_string()),
+                }
                 self.publish();
             }
             MessageView::DurationChanged(_) => {

@@ -50,6 +50,7 @@ pnpm tauri dev
 - 实际联网探测通过：2026-10-06，Windows x64 开发模式、GStreamer 1.28.7，网易云搜索返回 50 首，解析 standard 全曲资源，歌词接口返回有效内容；`nonshttpsrc` 在线解码后跳到 30 秒，实际进度继续推进到 30.201 秒（fakesink，不发出真实音乐声音）。源响应为 206 且无 Accept-Ranges，修复前定位查询为 false、seek 失败，修复后为 true。此为单个匿名可用资源探测，不等于完整账号、格式或网络矩阵验收。
 - 两项离线 HTTP 集成回归：无 Accept-Ranges 的 Range 音源向前/向后及暂停定位后实际进度正确；忽略 Range 的服务器仍拒绝定位并继续原播放。临时恢复旧判断时第一项测试在 seek 处失败，确认测试覆盖本次根因。
 - 通过 Windows 官方 SMTC 读取 API 验证 NonsPlayer 会话：测试曲目标题、艺术家/专辑占位信息均非空，封面可读取（5584 bytes），Start/MinSeek=0、End/MaxSeek=15 秒。播放中 Position 实际推进至 6.93 秒。系统按钮与定位回调还需交互验收。
+- SMTC 状态回归（2026-10-07，Windows x64 开发模式、GStreamer 1.28.7）：真实管线已 Playing 时迟到/重复的缓冲 100% 消息，修复前状态回退 Loading，修复后保留实际 Playing；缓冲不足仍暂停管线并显示 Buffering。29 项 Rust 库测试通过。通过系统会话连续切换 5 首网易云歌曲，全部恢复 Playing；以发送 Next 前为起点、50 ms 轮询，歌名更新耗时范围 51–55 ms，Playing 更新范围 304–406 ms（含音源加载）。仅为本机这 5 次样本，不代表完整网络或格式矩阵。
 
 可重复的手动探测（不纳入离线单元测试，也不自动扫码）：
 
@@ -58,6 +59,9 @@ pnpm tauri dev
 ./scripts/native.ps1 -Task probe -Example qr_probe
 # 先在运行中的 NonsPlayer 选中一首歌
 ./scripts/native.ps1 -Task probe -Example media_probe
+# 编译探测器后保持应用播放，再直接运行，避免开发监听因编译重启应用。
+# --next 会切到下一首，需队列中相邻曲目歌名不同；默认不发送控制命令。
+./app/src-tauri/target/debug/examples/media_probe.exe --next --expect-playing
 python scripts/create-audio-fixtures.py
 ./scripts/measure-memory.ps1
 ```
