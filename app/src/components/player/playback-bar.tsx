@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Pause, Play, Repeat, Repeat1 } from "lucide-react";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
 import { ActionButton } from "./action-button";
@@ -7,21 +7,22 @@ import { trackDisplayTitle } from "./track-title";
 import { PlaybackNotice, type PlaybackNoticeMessage } from "./playback-notice";
 import { QueuePopover } from "./queue-popover";
 import { VolumeControl } from "./volume-control";
+import { PlayerSlider } from "./player-slider";
 
-export function Timeline({ onError }: { onError: (error: unknown) => void }) {
+export function Timeline({ onError, layout = "inline" }: { onError: (error: unknown) => void; layout?: "inline" | "below" }) {
   const progress = useProgress();
   const [drag, setDrag] = useState<number | null>(null);
-  return <div className="flex w-full items-center gap-3 text-xs tabular-nums text-muted-foreground">
-    <span className="w-10 text-right">{formatTime(drag ?? progress.positionMs)}</span>
-    <input type="range" aria-label="播放进度" min={0} max={Math.max(1, progress.durationMs)} step={1000} value={Math.min(drag ?? progress.positionMs, Math.max(1, progress.durationMs))}
+  const position = Math.min(drag ?? progress.positionMs, Math.max(1, progress.durationMs));
+  return <div className={`playback-timeline playback-timeline-${layout} text-xs tabular-nums text-muted-foreground`}>
+    <span className="timeline-elapsed">{formatTime(position)}</span>
+    <PlayerSlider aria-label="播放进度" min={0} max={Math.max(1, progress.durationMs)} step={1000} value={position}
       disabled={!isTauri() || !progress.durationMs || ["stopped", "error", "loading"].includes(progress.status)}
       onChange={(event) => setDrag(Number(event.target.value))}
       onPointerUp={(event) => { if (drag !== null) { void nativeCall("player_seek", { positionMs: Number(event.currentTarget.value) }).catch(onError); setDrag(null); } }}
       onPointerCancel={() => setDrag(null)} onBlur={() => setDrag(null)}
       onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key) && drag !== null) { void nativeCall("player_seek", { positionMs: Number(event.currentTarget.value) }).catch(onError); setDrag(null); } }}
-      style={{ "--seek-progress": `${100 * Math.min(drag ?? progress.positionMs, Math.max(1, progress.durationMs)) / Math.max(1, progress.durationMs)}%` } as CSSProperties}
-      className="music-range min-w-0 flex-1" />
-    <span className="w-10">{formatTime(progress.durationMs)}</span>
+      className="timeline-slider" />
+    <span className="timeline-duration">{layout === "below" ? `-${formatTime(Math.max(0, progress.durationMs - position))}` : formatTime(progress.durationMs)}</span>
   </div>;
 }
 

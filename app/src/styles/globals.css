@@ -44,7 +44,8 @@
   gap: clamp(12px, 1.8vh, 24px);
 }
 .now-playing-controls { gap: clamp(8px, 1.5vh, 20px); }
-.now-playing-controls .now-playing-transport { justify-content: center; gap: 28px; }
+.now-playing-controls .now-playing-transport { justify-content: center; gap: 16px; }
+.now-playing-transport > button { width: 44px; height: 44px; }
 .now-playing-cover-slot {
   container-type: size;
   display: grid;
@@ -54,7 +55,7 @@
   place-items: center;
 }
 .now-playing-cover { width: min(100cqw, 100cqh); min-height: 0; }
-.now-playing-toggle { width: 56px; height: 56px; }
+.now-playing-transport > .now-playing-toggle { width: 56px; height: 56px; }
 .now-playing-toggle svg { width: 36px; max-width: 100%; flex-shrink: 0; height: 36px; fill: currentColor; }
 .now-playing-back { width: 44px; height: 44px; margin-left: 12px; }
 .now-playing-back svg { width: 26px; height: 26px; }
@@ -251,6 +252,25 @@
 }
 
 .music-range:disabled { cursor: default; opacity: 0.45; }
+
+.player-slider { appearance: none; display: block; min-width: 0; height: 24px; margin: 0; padding: 0; background: transparent; cursor: pointer; --slider-fill: var(--music-accent); --slider-track: var(--muted); }
+.now-playing-controls .player-slider { --slider-fill: var(--foreground); --slider-track: rgb(160 160 160 / 45%); }
+.player-slider:disabled { cursor: default; opacity: 0.45; }
+.player-slider:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 4px; }
+.player-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--slider-fill) var(--slider-progress), var(--slider-track) var(--slider-progress)); }
+.player-slider::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; margin-top: -4px; border: 0; border-radius: 50%; background: var(--slider-fill); opacity: 0; }
+.player-slider:hover:not(:disabled)::-webkit-slider-thumb, .player-slider:active:not(:disabled)::-webkit-slider-thumb { opacity: 1; }
+.player-slider::-moz-range-track { height: 4px; border-radius: 999px; background: var(--slider-track); }
+.player-slider::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--slider-fill); }
+.player-slider::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--slider-fill); opacity: 0; }
+.player-slider:hover:not(:disabled)::-moz-range-thumb, .player-slider:active:not(:disabled)::-moz-range-thumb { opacity: 1; }
+.playback-timeline { display: grid; width: 100%; align-items: center; }
+.playback-timeline-inline { grid-template-columns: 40px minmax(0, 1fr) 40px; gap: 12px; }
+.playback-timeline-inline .timeline-elapsed { text-align: right; }
+.playback-timeline-below { grid-template-columns: 1fr 1fr; row-gap: 0; }
+.playback-timeline-below .timeline-slider { grid-column: 1 / -1; grid-row: 1; width: 100%; }
+.playback-timeline-below .timeline-elapsed { grid-column: 1; grid-row: 2; }
+.playback-timeline-below .timeline-duration { grid-column: 2; grid-row: 2; text-align: right; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -471,12 +491,6 @@
 .music-workspace { padding-top: 48px; }
 .music-library { padding-top: 88px; padding-bottom: 112px; margin-top: -48px; }
 #music-content > .relative.overflow-auto { padding-bottom: 112px; }
-.playback-capsule .capsule-center .music-range { appearance: none; background: transparent; }
-.playback-capsule .capsule-center .music-range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--music-accent) var(--seek-progress), var(--muted) var(--seek-progress)); }
-.playback-capsule .capsule-center .music-range::-webkit-slider-thumb { appearance: none; width: 5px; height: 5px; margin-top: -0.5px; border-radius: 50%; background: var(--music-accent); }
-.playback-capsule .capsule-center .music-range::-moz-range-track { height: 4px; border-radius: 999px; background: var(--muted); }
-.playback-capsule .capsule-center .music-range::-moz-range-progress { height: 4px; background: var(--music-accent); }
-.playback-capsule .capsule-center .music-range::-moz-range-thumb { width: 5px; height: 5px; border: 0; border-radius: 50%; background: var(--music-accent); }
 .playback-capsule .capsule-play { background: var(--music-accent); color: white; }
 .playback-capsule .capsule-play:hover:not(:disabled) { background: var(--music-accent); filter: brightness(1.08); }
 .volume-percentage { font-size: 10px; line-height: 16px; color: var(--muted-foreground); }
