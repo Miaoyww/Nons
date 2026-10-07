@@ -1,16 +1,18 @@
 import { LyricPlayer, type LyricPlayerRef } from "@applemusic-like-lyrics/react";
-import { parseLrc, parseTTML, parseYrc, type LyricLine } from "@applemusic-like-lyrics/lyric";
+import { parseLrc, parseTTML, parseYrc } from "@applemusic-like-lyrics/lyric";
+import type { LyricLine } from "@applemusic-like-lyrics/core";
 import "@applemusic-like-lyrics/core/style.css";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
 import { motion, useIsPresent, useReducedMotion } from "motion/react";
-import { RefreshCw } from "lucide-react";
+import { AudioLines, Languages } from "lucide-react";
 import { currentPosition, errorText, nativeCall, usePlayer, useProgress, type Lyrics } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { Cover } from "./cover";
 import { AlbumBackground } from "./album-background";
 import { NowPlayingControls } from "./now-playing-controls";
+import { NowPlayingMenu } from "./now-playing-menu";
 
 class EmptyLyricsError extends Error {}
 
@@ -27,7 +29,16 @@ function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
   });
 }
 
-function LyricRenderer({ lines, onError }: { lines: LyricLine[]; onError: (cause: unknown) => void }) {
+function LyricRenderer({ lines, showTranslation = true, showPronunciation = true, onError }: {
+  lines: LyricLine[]; showTranslation?: boolean; showPronunciation?: boolean; onError: (cause: unknown) => void;
+}) {
+  // AMLL consumes immutable lyric lines; retain the original auxiliary lyrics for restoring them.
+  const displayedLines = useMemo(() => showTranslation && showPronunciation ? lines : lines.map((line) => ({
+    ...line,
+    translatedLyric: showTranslation ? line.translatedLyric : "",
+    romanLyric: showPronunciation ? line.romanLyric : "",
+    words: showPronunciation ? line.words : line.words.map((word) => ({ ...word, romanWord: undefined, ruby: undefined })),
+  })), [lines, showTranslation, showPronunciation]);
   const [visible, setVisible] = useState(document.visibilityState !== "hidden");
   const progress = useProgress(visible);
   const [renderer, setRenderer] = useState<LyricPlayerRef | null>(null);
@@ -62,10 +73,10 @@ function LyricRenderer({ lines, onError }: { lines: LyricLine[]; onError: (cause
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [visible, playing, pausedPosition, renderer, lines, layoutVersion]);
+  }, [visible, playing, pausedPosition, renderer, displayedLines, layoutVersion]);
   // AMLL's automatic frame loop is disabled; only the visible lyric subtree
   // receives an interpolated clock. React does not render on every frame.
-  return visible ? <LyricPlayer ref={retainRenderer} className="h-full w-full" lyricLines={lines} disabled playing={playing} currentTime={progress.positionMs}
+  return visible ? <LyricPlayer ref={retainRenderer} className="h-full w-full" lyricLines={displayedLines} disabled playing={playing} currentTime={progress.positionMs}
     onLyricLineClick={(event) => {
       if (!isTauri()) return;
       void nativeCall("player_seek", { positionMs: event.line.getLine().startTime }).catch(onError);
@@ -83,6 +94,10 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [binding, setBinding] = useState("");
+  const [showTranslation, setShowTranslation] = useState(true);
+  const [showPronunciation, setShowPronunciation] = useState(true);
+  const hasTranslation = lines.some((line) => !!line.translatedLyric.trim());
+  const hasPronunciation = lines.some((line) => !!line.romanLyric.trim() || line.words.some((word) => !!word.romanWord?.trim() || !!word.ruby?.length));
   const [refresh, setRefresh] = useState<{ key: string; serial: number }>();
   const refreshTrack = () => { if (track) setRefresh((r) => ({ key: track.key, serial: (r?.serial ?? 0) + 1 })); };
   const generation = useRef(0);
@@ -132,10 +147,16 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
     transition={{ type: "tween", duration: reduced ? 0 : 0.42, ease: [0.22, 0, 0.18, 1] }}
     exit={{ y: reduced ? 0 : "100%", transition: { type: "tween", duration: reduced ? 0 : 0.3, ease: [0.4, 0, 1, 1] } }}>
     <AlbumBackground cover={track?.cover} playing={state.status === "playing"} hasLyrics={lines.length > 0} />
+    <div className="lyrics-display-controls" role="group" aria-label="歌词显示">
+      <ActionButton variant="ghost" size="icon" disabled={!hasTranslation} aria-label="显示歌词翻译" aria-pressed={hasTranslation && showTranslation}
+        title={hasTranslation ? (showTranslation ? "隐藏翻译" : "显示翻译") : "暂无翻译"} onClick={() => setShowTranslation((value) => !value)}><Languages aria-hidden="true" /></ActionButton>
+      <ActionButton variant="ghost" size="icon" disabled={!hasPronunciation} aria-label="显示歌词发音" aria-pressed={hasPronunciation && showPronunciation}
+        title={hasPronunciation ? (showPronunciation ? "隐藏发音" : "显示发音") : "暂无发音"} onClick={() => setShowPronunciation((value) => !value)}><AudioLines aria-hidden="true" /></ActionButton>
+    </div>
     <div className={`now-playing-layout relative min-h-0 flex-1 ${showLyrics ? "has-lyrics" : ""}`}>
     <div className="now-playing-details flex min-h-0 min-w-0 flex-col justify-center gap-5 overflow-y-auto">
       <div className="now-playing-cover-slot"><Cover cover={track?.cover} className="now-playing-cover aspect-square rounded-xl shadow-2xl" /></div>
-      <div className="flex shrink-0 items-start justify-between gap-4"><div className="min-w-0"><h1 className="truncate text-xl font-semibold tracking-tight">{track?.title ?? "让音乐开始"}</h1><p className="mt-1 truncate text-muted-foreground">{track?.artist ?? "选择一首喜欢的音乐"}</p></div><ActionButton variant="ghost" size="icon-sm" disabled={!track || loading} aria-label="刷新歌词" title={`刷新歌词 · ${source ?? "暂无歌词"}`} onClick={refreshTrack}><RefreshCw aria-hidden="true" /></ActionButton></div>
+      <div className="flex shrink-0 items-start justify-between gap-4"><div className="min-w-0"><h1 className="truncate text-xl font-semibold tracking-tight">{track?.title ?? "让音乐开始"}</h1><p className="mt-1 truncate text-muted-foreground">{track?.artist ?? "选择一首喜欢的音乐"}</p></div><NowPlayingMenu disabled={!track} source={source} /></div>
       <NowPlayingControls onQueue={onQueue} onError={(cause) => setError(errorText(cause))} />
       {track?.source.kind === "local" && <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">匹配在线歌词</summary><form className="mt-3 space-y-2" onSubmit={(event) => {
         event.preventDefault(); const id = Number(binding);
@@ -144,7 +165,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
       }}><label htmlFor="lyric-binding">对应版本的网易云歌曲 ID</label><div className="flex gap-2"><input id="lyric-binding" inputMode="numeric" value={binding} onChange={(e) => setBinding(e.target.value)} className="music-input min-w-0 flex-1" /><ActionButton type="submit" variant="secondary" disabled={loading}>绑定</ActionButton></div><p className="text-xs text-muted-foreground">请确认是同一录音版本，本地歌词文件始终优先。</p></form></details>}
       {(error || state.error || state.mediaError) && <p role="alert" className="text-sm">{error ?? state.error ?? state.mediaError}</p>}
     </div>
-    {showLyrics && <div className="now-playing-lyrics min-h-0 min-w-0 overflow-hidden">{lines.length ? <LyricRenderer key={track?.key} lines={lines} onError={(cause) => setError(errorText(cause))} /> : <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">正在查找歌词…</div>}</div>}
+    {showLyrics && <div className="now-playing-lyrics min-h-0 min-w-0 overflow-hidden">{lines.length ? <LyricRenderer key={track?.key} lines={lines} showTranslation={showTranslation} showPronunciation={showPronunciation} onError={(cause) => setError(errorText(cause))} /> : <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">正在查找歌词…</div>}</div>}
     </div>
   </motion.section>;
 }

@@ -60,6 +60,10 @@
 .now-playing-back { width: 44px; height: 44px; margin-left: 12px; }
 .now-playing-back svg { width: 26px; height: 26px; }
 .now-playing-lyrics { mask-image: linear-gradient(transparent, black 12%, black 85%, transparent); }
+.lyrics-display-controls { position: absolute; top: 64px; right: clamp(24px, 4vw, 64px); z-index: 10; display: flex; align-items: center; gap: 8px; }
+.lyrics-display-controls button { color: var(--muted-foreground); }
+.lyrics-display-controls button[aria-pressed="true"] { color: var(--foreground); background: var(--accent); }
+.lyrics-display-controls svg { width: 20px; height: 20px; }
 .now-playing .nons-lyrics .amll-lyric-player { --amll-lp-hover-bg-color: rgb(255 255 255 / 10%); }
 @media (max-width: 850px) {
   .now-playing-layout { padding: 24px; }

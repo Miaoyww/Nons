@@ -10,7 +10,7 @@ function lyricControl({ failure, desktop = true } = {}) {
   const jsx = (type, props) => ({ type, props });
   const modules = {
     "react/jsx-runtime": { jsx, jsxs: jsx },
-    react: { useState: (initial) => [initial, () => {}], useEffect() {}, useCallback: (fn) => fn },
+    react: { useState: (initial) => [initial, () => {}], useEffect() {}, useCallback: (fn) => fn, useMemo: (fn) => fn() },
     "@applemusic-like-lyrics/react": { LyricPlayer: "lyric-player" },
     "@applemusic-like-lyrics/lyric": {},
     "@applemusic-like-lyrics/core/style.css": {},
@@ -25,7 +25,7 @@ function lyricControl({ failure, desktop = true } = {}) {
         return failure ? Promise.reject(failure) : Promise.resolve();
       },
     },
-    "./action-button": {}, "./cover": {}, "./album-background": {}, "./now-playing-controls": {},
+    "./action-button": {}, "./cover": {}, "./album-background": {}, "./now-playing-controls": {}, "./now-playing-menu": {},
   };
   const source = readFileSync(new URL("../src/components/player/lyrics-view.tsx", import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, {
