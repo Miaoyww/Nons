@@ -38,14 +38,16 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl }: { qu
   return <footer className="floating-playback" aria-label="播放控制">
     <div className="playback-capsule">
       <div className="capsule-glass glass-surface" aria-hidden="true" />
-      <ActionButton size="icon-lg" className="capsule-play" aria-label={playing ? "暂停" : "播放"} disabled={!track || !isTauri()} onClick={() => action(playing ? "pause" : "resume")}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</ActionButton>
-      <div className="capsule-center">
-        <div className="capsule-navigation">
-          <ActionButton variant="ghost" size="icon-sm" aria-label={previous ? `上一首：${trackDisplayTitle(previous)}` : "上一首"} disabled={!track || !isTauri()} onMouseEnter={() => setPreview("previous")} onMouseLeave={() => setPreview(null)} onFocus={() => setPreview("previous")} onBlur={() => setPreview(null)} onClick={() => action("previous")}><ChevronLeft aria-hidden="true" /></ActionButton>
-          <button type="button" className="capsule-title" aria-label="打开正在播放" title={title} onClick={onLyrics}><span key={title}>{title}</span></button>
-          <ActionButton variant="ghost" size="icon-sm" aria-label={next ? `下一首：${trackDisplayTitle(next)}` : "下一首"} disabled={!next || !isTauri()} onMouseEnter={() => setPreview("next")} onMouseLeave={() => setPreview(null)} onFocus={() => setPreview("next")} onBlur={() => setPreview(null)} onClick={() => action("next")}><ChevronRight aria-hidden="true" /></ActionButton>
+      <div className="capsule-main">
+        <ActionButton size="icon-lg" className="capsule-play" aria-label={playing ? "暂停" : "播放"} disabled={!track || !isTauri()} onClick={() => action(playing ? "pause" : "resume")}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</ActionButton>
+        <div className="capsule-center">
+          <div className="capsule-navigation">
+            <ActionButton variant="ghost" size="icon-sm" aria-label={previous ? `上一首：${trackDisplayTitle(previous)}` : "上一首"} disabled={!track || !isTauri()} onMouseEnter={() => setPreview("previous")} onMouseLeave={() => setPreview(null)} onFocus={() => setPreview("previous")} onBlur={() => setPreview(null)} onClick={() => action("previous")}><ChevronLeft aria-hidden="true" /></ActionButton>
+            <button type="button" className="capsule-title" aria-label="打开正在播放" title={title} onClick={onLyrics}><span key={title}>{title}</span></button>
+            <ActionButton variant="ghost" size="icon-sm" aria-label={next ? `下一首：${trackDisplayTitle(next)}` : "下一首"} disabled={!next || !isTauri()} onMouseEnter={() => setPreview("next")} onMouseLeave={() => setPreview(null)} onFocus={() => setPreview("next")} onBlur={() => setPreview(null)} onClick={() => action("next")}><ChevronRight aria-hidden="true" /></ActionButton>
+          </div>
+          <Timeline onError={onError} />
         </div>
-        <Timeline onError={onError} />
       </div>
       <div className="capsule-options">
         {qualityControl}
