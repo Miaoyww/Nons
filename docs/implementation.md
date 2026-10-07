@@ -100,3 +100,12 @@ AMLL 当前依赖标注 AGPL-3.0-only，项目现有许可证为 GPL-3.0；发�
 - 已有 `configure_source` 设置 `retries=2`，但原始 reqwest 源没有该属性。现在有界恢复读取中断/超时，从最后已输出的字节重新发起 Range 请求；成功读取不重置预算。非 seekable 资源、错误范围、大小改变及持续失败不会被当作正常 EOS。
 - Windows x64、GStreamer 1.28.7：双曲回归约 8.2 秒（两个 4 秒 WAV、fakesink）；读取恢复测试覆盖一次尾段断开、超时、预算耗尽、关闭重试及服务器不支持 Range。此为可靠性验证，未测量延迟或内存收益。
 - 真实网易云探测：匿名/现有会话读取《Elements》整首及其到《Mystical Magical》的 gapless 切换成功（fakesink）；没有在该次联网探测中复现用户现场错误，离线测试验证的是下一首网络读取失败导致当前播放被终止这一错误路径。
+
+## 通用插件平台（2026-10-08）
+
+- 实现 Manifest discovery、目录／ZIP 安装、显式授权、PluginManager 生命周期、Wasmtime Component Model、版本化 WIT、高层 Host Capability、隔离存储与事件总线、动态 ESM、公开 React SDK、覆盖层和通用页面／导航贡献。灵动岛的业务与 UI 全部位于独立插件目录，复用原网易云 Client、封面缓存、主题和播放核心。接口、文件、Manifest、构建、安装及新插件开发见 [插件开发与使用](plugins.md)，取舍见 [ADR 0003](adr/0003-runtime-plugins.md)。
+- Windows x64、Rust 1.95、GStreamer 1.28.7：TypeScript／Vite 构建和普通 Tauri Debug `--no-bundle` 构建通过；40 项前端测试通过；完整串行 Rust 回归 63 项通过、3 项依赖字体／实时 QQ 服务／音频设备的测试跳过；Clippy `--all-targets --all-features -D warnings` 及 Rust 格式检查通过。测试实际执行 Component，覆盖 fuel 耗尽、内存上限、trap、无效响应、异步 Host 超时及其他实例继续工作。
+- `scripts/probe-plugins.ps1` 的实际隐藏 WebView 探测通过：合成剪贴板分享文本 → Host 过滤 → WASM → 既有网易云 Client → 插件事件 → 动态 `ui.mjs` → React singleton → PluginSlot DOM；同时验证无授权播放／存储操作被拒、停用后代次和资源失效、界面清理、目录安装、隔离存储、导航／页面、子路径保留组件状态及删除后移除存储与贡献。原播放队列保持为空，不改动用户播放或剪贴板。
+- 一次 Windows Debug 样本中，从合成候选 URL 交付到探测确认歌曲 DOM 为 101ms，包含真实歌曲元数据请求，50ms 轮询确认；不是操作系统剪贴板通知延迟、统计分位数或 Release 性能承诺。没有实测整个应用所属 WebView 的内存增量。WASM Store、并发、事件、安装大小和缓存容量设有明确上限，不能据此推导全进程占用。
+- 修复真实 ESM namespace 不能直接冻结导致的启动错误，公共桥接改为冻结普通对象副本；实际 ESM 回归覆盖重复初始化。独立测试还执行懒加载产物，验证 `assets/` 中的 chunk 正确引用公共 Host 模块。
+- macOS/Linux 编译及基本播放、OS 真实复制通知、官方短链在线跳转矩阵、真实账号异常网络矩阵与 Release 原生运行时打包仍需对应环境验收。前端共享主 WebView，必须信任代码；WASM Capability 限制不能作为前端恶意代码沙箱。
