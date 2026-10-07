@@ -193,7 +193,7 @@ fn append_queue(keys: Vec<String>, backend: State<'_, Backend>) -> AppResult<()>
         .iter()
         .map(|key| backend.store.track(key))
         .collect::<AppResult<Vec<_>>>()?;
-    backend.player.send(Command::Append(tracks))
+    backend.player.send(Command::PlayNext(tracks))
 }
 
 #[tauri::command]

@@ -21,7 +21,7 @@ use tauri::Emitter;
 
 pub enum Command {
     Queue(Vec<Track>, usize),
-    Append(Vec<Track>),
+    PlayNext(Vec<Track>),
     Jump(usize),
     Pause,
     Resume,
@@ -35,6 +35,7 @@ pub enum Command {
     Resolved {
         generation: u64,
         index: usize,
+        key: String,
         result: Box<AppResult<ResolvedTrack>>,
         next: bool,
     },
@@ -339,14 +340,31 @@ impl Actor {
                 self.state.queue = queue;
                 self.load(index, true)?;
             }
-            Command::Append(tracks) => {
-                if tracks.len() + self.state.queue.len() > 1000 {
-                    return Err("播放队列最多支持 1000 首歌曲".into());
+            Command::PlayNext(tracks) => {
+                if tracks.is_empty() {
+                    return Ok(());
                 }
-                self.state.queue.extend(tracks);
-                if self.state.index.is_none() && !self.state.queue.is_empty() {
-                    self.state.index = Some(0);
-                    self.state.duration_ms = self.state.queue[0].duration_ms;
+                let position = self.state.insert_next(tracks)?;
+                if let Some(job) = self.next_job.take() {
+                    job.abort();
+                }
+                // Hold the prepared lock while clearing armed state so the streaming
+                // callback cannot arm the old next track between these operations.
+                let transitioning = {
+                    let mut prepared = self.prepared.lock().map_err(|_| "预加载状态不可用")?;
+                    *prepared = None;
+                    self.armed
+                        .lock()
+                        .map_err(|_| "预加载状态不可用")?
+                        .take()
+                        .is_some()
+                };
+                self.next_attempt = None;
+                self.next_attempts = 0;
+                if transitioning {
+                    // The old URI was already handed to GStreamer at the boundary.
+                    // Start the newly requested next track through the normal loader.
+                    self.load(position, self.desired_playing)?;
                 }
                 self.publish();
             }
@@ -435,6 +453,7 @@ impl Actor {
             Command::Resolved {
                 generation,
                 index,
+                key,
                 result,
                 next,
             } => {
@@ -447,6 +466,11 @@ impl Actor {
                         self.state.queue.len(),
                         self.state.repeat_mode,
                     ) != Some(index)
+                        || self
+                            .state
+                            .queue
+                            .get(index)
+                            .is_none_or(|track| track.key != key)
                     {
                         return Ok(());
                     }
@@ -540,12 +564,14 @@ impl Actor {
             .as_deref()
             != Some("false");
         let task = tauri::async_runtime::spawn(async move {
+            let key = track.key.clone();
             let result = netease.resolve(track, &quality, downgrade).await;
             // Bounded channel delivery is performed off the audio thread.
             let _ = tauri::async_runtime::spawn_blocking(move || {
                 sender.send(Command::Resolved {
                     generation,
                     index,
+                    key,
                     result: Box::new(result),
                     next,
                 })

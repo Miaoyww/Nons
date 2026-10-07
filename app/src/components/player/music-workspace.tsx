@@ -85,7 +85,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
     void nativeCall(view === "queue" ? "player_jump" : "play_queue", view === "queue" ? { index } : { keys: tracks.map((t) => t.key), index }).catch(onError);
   }, [view, tracks, onError]);
   const append = useCallback((track: Track) => {
-    void nativeCall("append_queue", { keys: [track.key] }).then(() => showNotice(`已将「${track.title}」加入播放队列。`)).catch(onError);
+    void nativeCall("append_queue", { keys: [track.key] }).then(() => showNotice(`已将「${track.title}」设为下一首播放。`)).catch(onError);
   }, [onError, showNotice]);
 
   return <div className="music-workspace flex min-h-0 flex-1 flex-col">

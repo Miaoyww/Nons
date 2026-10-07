@@ -89,6 +89,22 @@ impl Default for PlayerSnapshot {
 }
 
 impl PlayerSnapshot {
+    pub fn insert_next(&mut self, tracks: Vec<Track>) -> AppResult<usize> {
+        if tracks.len() + self.queue.len() > 1000 {
+            return Err("播放队列最多支持 1000 首歌曲".into());
+        }
+        let position = self
+            .index
+            .map_or(0, |index| index + 1)
+            .min(self.queue.len());
+        self.queue.splice(position..position, tracks);
+        if self.index.is_none() && !self.queue.is_empty() {
+            self.index = Some(0);
+            self.duration_ms = self.queue[0].duration_ms;
+        }
+        Ok(position)
+    }
+
     pub fn current(&self) -> Option<&Track> {
         self.index.and_then(|index| self.queue.get(index))
     }
@@ -154,6 +170,53 @@ pub fn following_index(index: Option<usize>, count: usize, mode: RepeatMode) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn track(id: u64) -> Track {
+        Track {
+            key: id.to_string(),
+            title: id.to_string(),
+            aliases: vec![],
+            artist: String::new(),
+            album: String::new(),
+            duration_ms: 1000,
+            cover: String::new(),
+            source: TrackSource::Netease { id },
+        }
+    }
+    #[test]
+    fn next_insertion_preserves_current_playback_and_batch_order() {
+        let mut state = PlayerSnapshot {
+            queue: vec![track(1), track(2), track(3)],
+            index: Some(1),
+            position_ms: 500,
+            status: PlaybackStatus::Playing,
+            ..Default::default()
+        };
+        assert_eq!(state.insert_next(vec![track(4), track(5)]).unwrap(), 2);
+        assert_eq!(
+            state
+                .queue
+                .iter()
+                .map(|t| t.key.as_str())
+                .collect::<Vec<_>>(),
+            vec!["1", "2", "4", "5", "3"]
+        );
+        assert_eq!(state.current().unwrap().key, "2");
+        assert_eq!(state.position_ms, 500);
+        assert_eq!(state.status, PlaybackStatus::Playing);
+        state.insert_next(vec![track(6)]).unwrap();
+        assert_eq!(state.queue[2].key, "6");
+    }
+    #[test]
+    fn next_insertion_supports_empty_and_last_track_queues_and_enforces_limit() {
+        let mut state = PlayerSnapshot::default();
+        state.insert_next(vec![track(1)]).unwrap();
+        assert_eq!(state.index, Some(0));
+        assert_eq!(state.status, PlaybackStatus::Stopped);
+        state.insert_next(vec![track(2)]).unwrap();
+        assert_eq!(state.queue[1].key, "2");
+        assert!(state.insert_next(vec![track(3); 999]).is_err());
+        assert_eq!(state.queue.len(), 2);
+    }
     #[test]
     fn repeat_respects_queue_boundaries() {
         assert_eq!(following_index(Some(1), 2, RepeatMode::All), Some(0));

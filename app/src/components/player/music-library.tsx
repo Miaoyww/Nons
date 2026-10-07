@@ -148,7 +148,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
     void nativeCall("play_queue", { keys: tracks.map((track) => track.key), index }).catch(onError);
   }
   function append(track: Track) {
-    void nativeCall("append_queue", { keys: [track.key] }).catch(onError);
+    void nativeCall("append_queue", { keys: [track.key] }).then(() => onNotice(`已将「${track.title}」设为下一首播放。`)).catch(onError);
   }
   const liked = summary?.likedPlaylist;
   const retry = <ActionButton size="sm" variant="ghost" onClick={() => { invalidateMusicLibrary(); setRefresh((value) => value + 1); }}><RefreshCw aria-hidden="true" />重试</ActionButton>;

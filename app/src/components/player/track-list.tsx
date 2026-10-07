@@ -51,7 +51,7 @@ export const TrackList = memo(function TrackList({ tracks, currentKey, busy, onP
         <td className="truncate pr-4 text-muted-foreground" title={track.album}>{track.album}</td>
         <td>{track.source.kind === "netease" && <ActionButton variant="ghost" size="icon-sm" className="track-like" data-liked={likedIds.has(track.source.id)} aria-pressed={likedIds.has(track.source.id)} disabled={busy || !profile || !likesReady || pendingLikes.has(track.source.id)} aria-label={`${likedIds.has(track.source.id) ? "取消喜欢" : "喜欢"} ${track.title}`} title={!profile ? "登录后收藏歌曲" : "喜欢 / 取消喜欢"} onClick={() => { if (track.source.kind === "netease") { setLikeError(undefined); void toggleLike(track.source.id).catch((cause) => setLikeError(errorText(cause))); } }}><Heart aria-hidden="true" /></ActionButton>}</td>
         <td className="tabular-nums text-muted-foreground">{formatTime(track.durationMs)}</td>
-        {onAppend && <td><ActionButton variant="ghost" size="icon-sm" disabled={busy} aria-label={`将 ${track.title} 加入队列`} onClick={() => onAppend(track)}><ListPlus aria-hidden="true" /></ActionButton></td>}
+        {onAppend && <td><ActionButton variant="ghost" size="icon-sm" disabled={busy} aria-label={`下一首播放 ${track.title}`} title="下一首播放" onClick={() => onAppend(track)}><ListPlus aria-hidden="true" /></ActionButton></td>}
       </tr>; })}
       {bottom > 0 && <tr aria-hidden="true"><td colSpan={onAppend ? 6 : 5} style={{ height: bottom, padding: 0 }} /></tr>}
     </tbody>
