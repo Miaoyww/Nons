@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { errorText, nativeCall } from "@/lib/player";
+import { getMusicLibrary, invalidateMusicLibrary } from "@/lib/music-library";
 
 export interface AccountProfile { userId: number; nickname: string; avatarUrl: string }
 const AccountContext = createContext<{
@@ -25,6 +26,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const pending = useRef(new Set<number>());
   const generation = useRef(0);
   const setProfile = useCallback((value: AccountProfile | null) => {
+    invalidateMusicLibrary();
     likesGeneration.current++; setLikesReady(false); setLikedIds(new Set());
     generation.current++; updateProfile(value); setLoading(false); setError(undefined);
   }, []);
@@ -57,6 +59,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       await nativeCall("set_song_liked", { id, liked });
       if (serial !== likesGeneration.current) return;
       setLikedIds((values) => { const next = new Set(values); if (liked) next.add(id); else next.delete(id); return next; });
+      invalidateMusicLibrary();
+      void getMusicLibrary(profile.userId).catch(() => { /* The library page exposes refresh failures and allows retry. */ });
       setLikesRevision((value) => value + 1);
     } finally {
       if (serial === likesGeneration.current) { pending.current.delete(id); setPendingLikes(new Set(pending.current)); }

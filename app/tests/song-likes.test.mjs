@@ -6,7 +6,7 @@ import ts from "typescript";
 
 // Run the real account provider with controlled requests and hook lifecycles.
 function harness() {
-  const slots = [], requests = [], effects = [];
+  const slots = [], requests = [], effects = [], libraryRefreshes = [];
   let cursor = 0;
   const react = {
     createContext: () => ({ Provider: "provider" }), useContext() {},
@@ -28,6 +28,7 @@ function harness() {
     react,
     "react/jsx-runtime": { jsx: (type, props) => ({ type, props }) },
     "@tauri-apps/api/core": { isTauri: () => true },
+    "@/lib/music-library": { invalidateMusicLibrary() { libraryRefreshes.push("invalidate"); }, getMusicLibrary(userId) { libraryRefreshes.push(userId); return Promise.resolve(); } },
     "@/lib/player": {
       errorText: String,
       nativeCall(command, args) { return new Promise((resolve, reject) => requests.push({ command, args, resolve, reject })); },
@@ -37,7 +38,7 @@ function harness() {
   const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/player/account.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   runInNewContext(outputText, { exports, require: (name) => modules[name] });
   function render() { cursor = 0; const value = exports.AccountProvider({ children: null }).props.value; effects.splice(0).forEach((fn) => fn()); return value; }
-  return { requests, render };
+  return { requests, render, libraryRefreshes };
 }
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 async function loggedIn() {
@@ -59,6 +60,7 @@ test("likes update only after success and duplicate clicks issue one request", a
   assert.equal(app.render().likedIds.has(123), false);
   assert.equal(app.render().pendingLikes.size, 0);
   assert.equal(app.render().likesRevision, 1);
+  assert.deepEqual(app.libraryRefreshes, ["invalidate", 1]);
 });
 
 test("failed writes preserve the liked state and release the button", async () => {
@@ -67,6 +69,7 @@ test("failed writes preserve the liked state and release the button", async () =
   await assert.rejects(request, /network failure/);
   assert.equal(app.render().likedIds.has(123), true);
   assert.equal(app.render().pendingLikes.size, 0);
+  assert.deepEqual(app.libraryRefreshes, []);
 });
 
 test("switching account discards old write responses", async () => {

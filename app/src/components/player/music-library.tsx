@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { Heart, Play, Plus, RefreshCw, UserRound } from "lucide-react";
 import { errorText, nativeCall, usePlayer, type Lyrics, type Track } from "@/lib/player";
-import { getLibraryCollections, getLibraryHistory, getLibraryTracks, getMusicLibrary, playLibraryCollection,
+import { getLibraryCollections, getLibraryHistory, getLibraryTracks, getMusicLibrary, peekMusicLibrary, invalidateMusicLibrary, playLibraryCollection,
   type CollectionTracks, type LibrarySummary, type LibraryTab, type PlaylistFilter } from "@/lib/music-library";
 import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -106,8 +106,9 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
     let disposed = false;
     setSummary(undefined); setSummaryError(undefined); setSummaryBusy(false);
     if (!profile || !isTauri()) return;
-    setSummaryBusy(true);
-    void getMusicLibrary().then((value) => { if (!disposed) setSummary(value); })
+    const cached = peekMusicLibrary(profile.userId);
+    setSummary(cached); setSummaryBusy(!cached);
+    void getMusicLibrary(profile.userId).then((value) => { if (!disposed) setSummary(value); })
       .catch((cause) => { if (!disposed) setSummaryError(errorText(cause)); })
       .finally(() => { if (!disposed) setSummaryBusy(false); });
     return () => { disposed = true; };
@@ -126,7 +127,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
   const history = { tracks: list.items as Track[], more: list.more };
   const listBusy = list.busy;
   const detailLoader = useCallback(async (offset: number) => {
-    const value = await getLibraryTracks(collection!, offset);
+    const value = await getLibraryTracks(collection!, offset, profile!.userId);
     return { items: value.tracks, more: value.more, metadata: value };
   }, [collection, profile, refresh, showingDetail, likesRevision]);
   const detailList = usePagedList<Track, CollectionTracks>(detailLoader, 100, !!collection && !!profile && showingDetail && isTauri());
@@ -150,7 +151,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
     void nativeCall("append_queue", { keys: [track.key] }).catch(onError);
   }
   const liked = summary?.likedPlaylist;
-  const retry = <ActionButton size="sm" variant="ghost" onClick={() => setRefresh((value) => value + 1)}><RefreshCw aria-hidden="true" />重试</ActionButton>;
+  const retry = <ActionButton size="sm" variant="ghost" onClick={() => { invalidateMusicLibrary(); setRefresh((value) => value + 1); }}><RefreshCw aria-hidden="true" />重试</ActionButton>;
 
   return <section className="music-library" aria-label="网易云音乐库">
     {showingDetail ? <>
