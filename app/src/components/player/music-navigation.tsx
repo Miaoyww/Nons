@@ -9,7 +9,7 @@ const NavigationContext = createContext<{
 } | null>(null);
 
 export function MusicNavigationProvider({ children }: { children: ReactNode }) {
-  const [history, setHistory] = useState<{ entries: Page[]; index: number }>({ entries: [{ view: "local", query: "" }], index: 0 });
+  const [history, setHistory] = useState<{ entries: Page[]; index: number }>({ entries: [{ view: "library", query: "" }], index: 0 });
   function navigate(view: MusicView, query = "", collection?: MusicCollection) {
     setHistory((previous) => {
       const current = previous.entries[previous.index];
