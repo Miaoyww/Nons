@@ -20,6 +20,7 @@ function harness(state) {
     '@/lib/player': {
       usePlayer: () => state,
       adjacentIndex: () => null,
+      statusLabels: { stopped: '已停止' },
       nativeCall: async (command, args) => calls.push({ command, ...args })
     }
   }
@@ -32,14 +33,15 @@ function harness(state) {
           compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX }
         }
       ).outputText,
-      { exports, require: (name) => modules[name] }
+      { exports, require: (name) => modules[name] ?? {} }
     )
     return exports
   }
   return {
     calls,
     transport: load('playback-transport').PlaybackTransport,
-    controls: load('now-playing-controls').NowPlayingControls
+    controls: load('now-playing-controls').NowPlayingControls,
+    bar: load('playback-bar').PlaybackBar
   }
 }
 
@@ -106,4 +108,30 @@ test('frontend shuffle navigation wraps both ends even when the repeat button is
   state.index = 0
   assert.equal(exports.adjacentIndex(state, 'next'), 0)
   assert.equal(exports.adjacentIndex(state, 'previous'), 0)
+})
+
+test('collapsible player places shuffle beside repeat and routes both through playback commands', () => {
+  for (const shuffle of [false, true]) {
+    const app = harness({ queue: [], index: null, status: 'stopped', shuffle, repeatMode: 'all' })
+    const tree = app.bar({ onLyrics() {}, onQueue() {}, onError() {}, qualityControl: 'quality' })
+    function find(node) {
+      if (!node || typeof node !== 'object') return
+      if (node.props?.className === 'capsule-playback-options') return node.props.children
+      for (const child of [node.props?.children].flat()) {
+        const found = find(child)
+        if (found) return found
+      }
+    }
+    const options = find(tree)
+    assert.equal(options[0], 'quality')
+    assert.equal(options[1].props['aria-label'], '随机播放')
+    assert.equal(options[1].props['aria-pressed'], shuffle)
+    assert.equal(options[2].props['aria-pressed'], !shuffle)
+    options[1].props.onClick()
+    options[2].props.onClick()
+    assert.deepEqual(
+      app.calls.map((call) => call.action),
+      ['shuffle', 'repeat']
+    )
+  }
 })

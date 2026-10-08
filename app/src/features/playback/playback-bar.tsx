@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Pause, Play, Repeat, Repeat1 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Pause, Play, Repeat, Repeat1, Shuffle } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { adjacentIndex, nativeCall, statusLabels, usePlayer } from '@/lib/player'
@@ -27,7 +27,7 @@ export function PlaybackBar({
   const track = state.index !== null ? state.queue[state.index] : undefined
   const playing = ['playing', 'buffering', 'loading'].includes(state.status)
   const [preview, setPreview] = useState<'previous' | 'next' | null>(null)
-  const looping = state.repeatMode === 'all' || state.repeatMode === 'one'
+  const looping = !state.shuffle && (state.repeatMode === 'all' || state.repeatMode === 'one')
   const previousIndex = adjacentIndex(state, 'previous')
   const nextIndex = adjacentIndex(state, 'next')
   const previous = previousIndex === null ? undefined : state.queue[previousIndex]
@@ -102,10 +102,21 @@ export function PlaybackBar({
             <ActionButton
               variant="ghost"
               size="icon-sm"
+              aria-label="随机播放"
+              title={state.shuffle ? '关闭随机播放' : '开启随机播放'}
+              aria-pressed={state.shuffle}
+              disabled={!isTauri()}
+              onClick={() => action('shuffle')}
+            >
+              <Shuffle aria-hidden="true" />
+            </ActionButton>
+            <ActionButton
+              variant="ghost"
+              size="icon-sm"
               aria-label={`播放模式：${repeatLabel}，点击切换`}
               title={repeatLabel}
               disabled={!isTauri()}
-              data-active={looping}
+              aria-pressed={looping}
               onClick={() => action('repeat')}
             >
               {state.repeatMode === 'one' ? (

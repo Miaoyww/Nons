@@ -1107,7 +1107,10 @@
   flex-shrink: 0;
 }
 .playback-like[aria-pressed='true'] {
-  color: var(--music-accent);
+  color: #010101;
+}
+.dark .playback-like[aria-pressed='true'] {
+  color: var(--foreground);
 }
 .playback-like[aria-pressed='true'] svg {
   fill: currentColor;
@@ -1144,7 +1147,7 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-.capsule-playback-options [data-active='true'] {
+.capsule-playback-options [aria-pressed='true'] {
   color: var(--foreground);
   background: var(--accent);
 }
