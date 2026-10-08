@@ -70,3 +70,40 @@ test('transport exposes mode states and sends one playback command per click', (
     assert.ok(app.calls.every((call) => call.command === 'player_action'))
   }
 })
+
+test('shuffle leaves the repeat button unselected even with a legacy all-repeat snapshot', () => {
+  const app = harness({ status: 'paused', index: 0, shuffle: true, repeatMode: 'all' })
+  const children = app.transport({ withModes: true, onError() {} }).props.children.filter(Boolean)
+  assert.equal(children[0].props['aria-pressed'], true)
+  assert.equal(children.at(-1).props['aria-pressed'], false)
+})
+
+test('frontend shuffle navigation wraps both ends even when the repeat button is off', () => {
+  const exports = {}
+  runInNewContext(
+    ts.transpileModule(readFileSync(new URL('../src/lib/player.ts', import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS }
+    }).outputText,
+    { exports, require: () => ({}) }
+  )
+  const state = {
+    queue: [{}, {}, {}],
+    index: 1,
+    shuffle: true,
+    shuffleOrder: [1, 2, 0],
+    repeatMode: 'off'
+  }
+  assert.equal(exports.adjacentIndex(state, 'previous'), 0)
+  state.index = 0
+  assert.equal(exports.adjacentIndex(state, 'next'), 1)
+  state.shuffle = false
+  assert.equal(exports.adjacentIndex(state, 'previous'), null)
+  state.index = 2
+  assert.equal(exports.adjacentIndex(state, 'next'), null)
+  state.shuffle = true
+  state.queue = [{}]
+  state.shuffleOrder = [0]
+  state.index = 0
+  assert.equal(exports.adjacentIndex(state, 'next'), 0)
+  assert.equal(exports.adjacentIndex(state, 'previous'), 0)
+})

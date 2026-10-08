@@ -68,7 +68,7 @@ export function PlaybackTransport({
           size="icon-lg"
           aria-label={`播放模式：${repeatLabel}，点击切换`}
           title={repeatLabel}
-          aria-pressed={state.repeatMode !== 'off'}
+          aria-pressed={!state.shuffle && state.repeatMode !== 'off'}
           disabled={!isTauri()}
           onClick={() => action('repeat')}
         >

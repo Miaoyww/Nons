@@ -119,7 +119,7 @@ export function adjacentIndex(
   const count = order ? order.length : state.queue.length
   let target = slot + (direction === 'next' ? 1 : -1)
   if (target < 0 || target >= count) {
-    if (state.repeatMode === 'off') return null
+    if (!state.shuffle && state.repeatMode === 'off') return null
     target = (target + count) % count
   }
   return order ? order[target] : target

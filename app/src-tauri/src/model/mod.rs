@@ -157,10 +157,10 @@ impl PlayerSnapshot {
 
     pub fn following(&self, manual: bool) -> Option<usize> {
         let current = self.index.filter(|i| *i < self.queue.len())?;
-        if !manual && self.repeat_mode == RepeatMode::One {
+        if !self.shuffle && !manual && self.repeat_mode == RepeatMode::One {
             return Some(current);
         }
-        let mode = if manual && self.repeat_mode == RepeatMode::One {
+        let mode = if self.shuffle || (manual && self.repeat_mode == RepeatMode::One) {
             RepeatMode::All
         } else {
             self.repeat_mode
@@ -186,9 +186,9 @@ impl PlayerSnapshot {
         } else {
             self.queue.len()
         };
-        let previous = slot
-            .checked_sub(1)
-            .or_else(|| (self.repeat_mode != RepeatMode::Off).then_some(count - 1))?;
+        let previous = slot.checked_sub(1).or_else(|| {
+            (self.shuffle || self.repeat_mode != RepeatMode::Off).then_some(count - 1)
+        })?;
         Some(if self.shuffle {
             self.shuffle_order[previous]
         } else {
@@ -379,28 +379,40 @@ mod tests {
         };
         state.reset_shuffle_order(state.index);
         assert_eq!(state.shuffle_order[0], 2);
+        let last = *state.shuffle_order.last().unwrap();
+        assert_eq!(state.previous(), Some(last));
         let mut visited = vec![2];
-        while let Some(next) = state.following(false) {
+        for _ in 1..state.queue.len() {
+            let next = state.following(false).unwrap();
             assert_eq!(
-                state.following(false),
+                state.following(true),
                 Some(next),
-                "preload must select the same entry as EOS"
+                "manual next and preload agree"
             );
             let previous = state.index;
             state.index = Some(next);
             assert_eq!(state.previous(), previous);
             visited.push(next);
-            assert!(visited.len() <= 5);
         }
+        assert_eq!(
+            state.following(false),
+            Some(2),
+            "shuffle repeats the whole list by default"
+        );
+        assert_eq!(state.following(true), Some(2));
+        assert_eq!(
+            state.repeat_mode,
+            RepeatMode::Off,
+            "repeat button remains unselected"
+        );
         visited.sort_unstable();
         assert_eq!(visited, vec![0, 1, 2, 3, 4]);
-        state.repeat_mode = RepeatMode::All;
-        assert_eq!(state.following(false), Some(2));
-        state.repeat_mode = RepeatMode::One;
-        assert_eq!(state.following(false), state.index);
-        assert_eq!(state.following(true), Some(2));
-        state.shuffle = false;
+        state.cycle_repeat();
+        assert!(!state.shuffle);
         state.index = Some(2);
+        assert_eq!(state.following(true), Some(3));
+        state.cycle_repeat();
+        assert_eq!(state.following(false), Some(2));
         assert_eq!(state.following(true), Some(3));
     }
 
@@ -441,8 +453,7 @@ mod tests {
         assert_eq!(state.following(false), None);
         assert_eq!(state.previous(), None);
         state.insert_next(vec![track(1)]).unwrap();
-        assert_eq!(state.following(false), None);
-        state.repeat_mode = RepeatMode::All;
+        assert_eq!(state.repeat_mode, RepeatMode::Off);
         assert_eq!(state.following(false), Some(0));
         assert_eq!(state.previous(), Some(0));
     }
@@ -463,8 +474,8 @@ mod tests {
         state.remove_track(1, "2").unwrap();
         assert_eq!(
             state.current().unwrap().key,
-            "0",
-            "last shuffled entry falls back to previous"
+            "3",
+            "last shuffled entry wraps to the first remaining entry"
         );
     }
     fn track(id: u64) -> Track {
