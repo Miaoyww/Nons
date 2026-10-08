@@ -43,7 +43,7 @@ export function MusicSearch() {
         <Primitive.Input ref={input} aria-label={local ? "搜索本地曲库" : "搜索网易云音乐"} placeholder={local ? "搜索本地曲库" : "搜索网易云音乐"} maxLength={85}
           onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)} />
       </form>
-      <ComboboxContent anchor={anchor} className="min-w-64">
+      <ComboboxContent anchor={anchor} className="titlebar-search-suggestions">
         <p className="px-3 pb-1 pt-3 text-xs text-muted-foreground">搜索建议</p>
         <ComboboxList>{(value: string) => <ComboboxItem key={value} value={value}><Search aria-hidden="true" /><span className="truncate">{value}</span></ComboboxItem>}</ComboboxList>
       </ComboboxContent>

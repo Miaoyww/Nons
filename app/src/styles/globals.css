@@ -293,6 +293,11 @@
 .titlebar-search:hover, .titlebar-search:focus-within { width: 100%; background: var(--muted); }
 .titlebar-search:hover input, .titlebar-search:focus-within input { opacity: 1; }
 .titlebar-search:focus-within { outline: 2px solid var(--ring); outline-offset: 1px; }
+.titlebar-search-suggestions {
+  width: max-content;
+  min-width: min(360px, var(--available-width));
+  max-width: min(480px, var(--available-width));
+}
 @media (max-width: 950px) { .titlebar > div:first-child span { display: none; } }
 
 /* YesPlayMusic library layout, adapted to NonsPlayer theme and bounded pages.
