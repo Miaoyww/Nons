@@ -8,7 +8,7 @@ import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
 import { motion, useIsPresent, useReducedMotion } from "motion/react";
 import { AudioLines, Languages } from "lucide-react";
-import { currentPosition, errorText, nativeCall, usePlayer, useProgress, type Lyrics } from "@/lib/player";
+import { currentPosition, errorText, getPlayer, nativeCall, usePlayer, useProgress, type Lyrics } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { Cover } from "./cover";
 import { AlbumBackground } from "./album-background";
@@ -18,6 +18,11 @@ import { useLyricSources } from "@/hooks/use-lyric-sources";
 import { loadLyrics } from "@/lib/load-lyrics";
 import { EmptyLyricsError, parseLyrics } from "@/lib/parse-lyrics";
 import { useFontSettings } from "@/hooks/use-font-settings";
+
+function isCurrentPlayback(key: string, revision: number) {
+  const active = getPlayer();
+  return active.revision === revision && active.index !== null && active.queue[active.index]?.key === key;
+}
 
 function LyricRenderer({ lines, showTranslation = true, showPronunciation = true, onError }: {
   lines: LyricLine[]; showTranslation?: boolean; showPronunciation?: boolean; onError: (cause: unknown) => void;
@@ -96,8 +101,10 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const isPresent = useIsPresent();
   const state = usePlayer();
   const track = state.index !== null ? state.queue[state.index] : undefined;
-  const [lines, setLines] = useState<LyricLine[]>([]);
-  const [source, setSource] = useState<string>();
+  const [display, setDisplay] = useState<{ key: string; revision: number; lines: LyricLine[]; source?: string }>();
+  const currentDisplay = display?.key === track?.key && display?.revision === state.revision ? display : undefined;
+  const lines = currentDisplay?.lines ?? [];
+  const source = currentDisplay?.source;
   const { sources } = useLyricSources();
   const { options: localPreferences } = useLocalPreferences();
   const [loading, setLoading] = useState(false);
@@ -108,36 +115,42 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const hasPronunciation = lines.some((line) => !!line.romanLyric.trim() || line.words.some((word) => !!word.romanWord?.trim() || !!word.ruby?.length));
   const generation = useRef(0);
   const appliedSource = useRef<string | undefined>(undefined);
-  const apply = useCallback((value: Lyrics | null, duration: number) => {
+  const apply = useCallback((value: Lyrics | null, duration: number, key: string, revision: number) => {
     const parsed = value ? parseLyrics(value, duration) : [];
     appliedSource.current = value?.source;
-    setLines(parsed);
-    setSource(value ? ({ amll: "AMLL DB", qq: "QQ 音乐", netease: "网易云音乐", local: "本地歌词" })[value.source] : undefined);
+    setDisplay({ key, revision, lines: parsed, source: value ? ({ amll: "AMLL DB", qq: "QQ 音乐", netease: "网易云音乐", local: "本地歌词" })[value.source] : undefined });
   }, []);
   useEffect(() => {
     const serial = ++generation.current;
     appliedSource.current = undefined;
-    setLines([]); setSource(undefined); setError(undefined); setLoading(false);
+    setDisplay(undefined); setError(undefined); setLoading(false);
     if (!track || !isTauri()) return;
     setLoading(true);
+    // Native playback can switch before React's passive-effect cleanup runs.
+    const isCurrent = () => generation.current === serial && isCurrentPlayback(track.key, state.revision);
     const load = async () => {
       await loadLyrics(track, false, sources,
-        (value) => apply(value, track.durationMs), () => generation.current === serial);
+        (value) => apply(value, track.durationMs, track.key, state.revision), isCurrent);
     };
     void load().catch((cause) => {
-      if (generation.current === serial && !(cause instanceof EmptyLyricsError)) setError(errorText(cause));
-    }).finally(() => { if (generation.current === serial) setLoading(false); });
+      if (isCurrent() && !(cause instanceof EmptyLyricsError)) setError(errorText(cause));
+    }).finally(() => { if (isCurrent()) setLoading(false); });
     return () => { generation.current++; };
-  }, [track?.key, apply, sources, localPreferences]);
+  }, [track?.key, state.revision, apply, sources, localPreferences]);
   useEffect(() => {
     if (!isTauri() || !track) return;
     let disposed = false;
     let stop: (() => void) | undefined;
     void listen<{ key: string; lyrics: Lyrics }>("lyrics-updated", ({ payload }) => {
-      if (!disposed && appliedSource.current === payload.lyrics.source && payload.key === track.key && (payload.lyrics.source !== "amll" || sources.amll) && (payload.lyrics.source !== "qq" || sources.qq)) { try { apply(payload.lyrics, track.durationMs); } catch { /* Retain the last usable lyrics. */ } }
-    }).then((unlisten) => { if (disposed) unlisten(); else stop = unlisten; }).catch((cause) => setError(errorText(cause)));
+      if (!disposed && isCurrentPlayback(track.key, state.revision)
+        && appliedSource.current === payload.lyrics.source && payload.key === track.key && (payload.lyrics.source !== "amll" || sources.amll) && (payload.lyrics.source !== "qq" || sources.qq)) {
+        try { apply(payload.lyrics, track.durationMs, track.key, state.revision); } catch { /* Retain the last usable lyrics. */ }
+      }
+    }).then((unlisten) => { if (disposed) unlisten(); else stop = unlisten; }).catch((cause) => {
+      if (!disposed && isCurrentPlayback(track.key, state.revision)) setError(errorText(cause));
+    });
     return () => { disposed = true; stop?.(); };
-  }, [track?.key, apply, sources]);
+  }, [track?.key, state.revision, apply, sources, localPreferences]);
 
   const showLyrics = lines.length > 0 || loading;
   return <motion.section className="nons-lyrics now-playing absolute inset-0 z-[5] flex flex-col pt-12" aria-label="正在播放" aria-hidden={!isPresent} inert={!isPresent}

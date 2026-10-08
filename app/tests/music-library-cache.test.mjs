@@ -27,6 +27,21 @@ function harness() {
 }
 const summary = { likedPlaylist: { id: 1, kind: "playlist" }, likedTracks: [], likedError: null };
 
+test("same-song local and streaming lyrics remain independent through a local-to-stream-to-local switch", async () => {
+  const { player, requests } = harness();
+  const local = { source: "qq", format: "lrc", content: "line lyrics", translation: null };
+  const stream = { source: "amll", format: "ttml", content: "word lyrics", translation: "translation" };
+  const streamRead = player.nativeCall("track_lyrics", { key: "ncm:disney" });
+  requests.at(-1).resolve(stream);
+  assert.equal(await streamRead, stream);
+  const localRead = player.nativeCall("track_lyrics", { key: "local:disney" });
+  requests.at(-1).resolve(local);
+  assert.equal(await localRead, local);
+  assert.equal(await player.nativeCall("track_lyrics", { key: "ncm:disney" }), stream);
+  assert.equal(await player.nativeCall("track_lyrics", { key: "local:disney" }), local);
+  assert.equal(requests.length, 2);
+});
+
 test("Hitokoto requests coalesce and failures stay retryable", async () => {
   const { player, requests } = harness();
   const first = player.nativeCall("discovery_hitokoto");
