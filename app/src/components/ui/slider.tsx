@@ -14,7 +14,7 @@ function Slider({
   value,
   min = 0,
   max = 100,
-  rangeColor = 'var(--foreground)',
+  rangeColor = 'var(--slider-fill, var(--foreground))',
   thumbProps,
   'aria-label': ariaLabel,
   'aria-valuetext': ariaValueText,

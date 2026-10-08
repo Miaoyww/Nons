@@ -2384,7 +2384,16 @@
   gap: 4px;
 }
 .persistent-playback .now-playing-toggle {
+  color: #010101;
+}
+.dark .persistent-playback .now-playing-toggle {
   color: var(--foreground);
+}
+.persistent-playback .playback-timeline {
+  --slider-fill: #fff;
+}
+.dark .persistent-playback .playback-timeline {
+  --slider-fill: #bdbdbd;
 }
 .persistent-playback .now-playing-transport [aria-pressed='true'],
 .persistent-playback .now-playing-transport [data-active='true'] {
