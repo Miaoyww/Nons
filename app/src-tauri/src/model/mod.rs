@@ -108,6 +108,26 @@ impl Default for PlayerSnapshot {
 }
 
 impl PlayerSnapshot {
+    pub fn toggle_shuffle(&mut self, current: Option<usize>) {
+        self.shuffle = !self.shuffle;
+        if self.shuffle {
+            self.repeat_mode = RepeatMode::Off;
+        }
+        self.reset_shuffle_order(current);
+    }
+
+    pub fn cycle_repeat(&mut self) {
+        self.repeat_mode = match self.repeat_mode {
+            RepeatMode::Off => RepeatMode::All,
+            RepeatMode::All => RepeatMode::One,
+            RepeatMode::One => RepeatMode::Off,
+        };
+        if self.repeat_mode != RepeatMode::Off {
+            self.shuffle = false;
+            self.shuffle_order.clear();
+        }
+    }
+
     pub fn reset_shuffle_order(&mut self, current: Option<usize>) {
         self.shuffle_order.clear();
         if self.shuffle {
@@ -121,6 +141,10 @@ impl PlayerSnapshot {
     }
 
     pub fn restore_shuffle_order(&mut self) {
+        // Older saved snapshots allowed shuffle and repeat at the same time.
+        if self.shuffle {
+            self.repeat_mode = RepeatMode::Off;
+        }
         let mut sorted = self.shuffle_order.clone();
         sorted.sort_unstable();
         if sorted != (0..self.queue.len()).collect::<Vec<_>>() {
@@ -306,6 +330,45 @@ pub fn following_index(index: Option<usize>, count: usize, mode: RepeatMode) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn playback_modes_are_mutually_exclusive_and_restore_consistently() {
+        let mut state = PlayerSnapshot {
+            queue: (0..4).map(track).collect(),
+            index: Some(2),
+            ..Default::default()
+        };
+        for repeat in [RepeatMode::All, RepeatMode::One] {
+            state.repeat_mode = repeat;
+            state.toggle_shuffle(Some(2));
+            assert!(state.shuffle);
+            assert_eq!(state.repeat_mode, RepeatMode::Off);
+            assert_eq!(state.shuffle_order[0], 2);
+            state.cycle_repeat();
+            assert!(!state.shuffle);
+            assert!(state.shuffle_order.is_empty());
+            assert_eq!(state.repeat_mode, RepeatMode::All);
+            assert_eq!(state.following(false), Some(3));
+            state.cycle_repeat();
+            assert_eq!(state.repeat_mode, RepeatMode::One);
+            assert_eq!(state.following(false), Some(2));
+            state.cycle_repeat();
+            assert_eq!(state.repeat_mode, RepeatMode::Off);
+        }
+        state.toggle_shuffle(Some(2));
+        state.toggle_shuffle(Some(2));
+        assert!(!state.shuffle);
+        assert!(state.shuffle_order.is_empty());
+        assert_eq!(state.repeat_mode, RepeatMode::Off);
+        state.toggle_shuffle(Some(2));
+        state.repeat_mode = RepeatMode::One;
+        let mut restored: PlayerSnapshot =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        restored.restore_shuffle_order();
+        assert!(restored.shuffle);
+        assert_eq!(restored.repeat_mode, RepeatMode::Off);
+        assert_eq!(restored.shuffle_order, state.shuffle_order);
+    }
+
     #[test]
     fn shuffle_navigation_visits_each_entry_and_respects_repeat() {
         let mut state = PlayerSnapshot {

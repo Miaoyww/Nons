@@ -1,8 +1,9 @@
+#[cfg(test)]
+use crate::model::RepeatMode;
 use crate::{
     media::MediaControls,
     model::{
-        AppResult, OutputDevice, PlaybackStatus, PlayerSnapshot, Progress, RepeatMode,
-        ResolvedTrack, Track,
+        AppResult, OutputDevice, PlaybackStatus, PlayerSnapshot, Progress, ResolvedTrack, Track,
     },
     netease::Netease,
     storage::Store,
@@ -418,19 +419,14 @@ impl Actor {
                     self.armed.lock().map_err(|_| "预加载状态不可用")?.take()
                 };
                 if matches!(command, Command::Shuffle) {
-                    self.state.shuffle = !self.state.shuffle;
-                    self.state.reset_shuffle_order(
+                    self.state.toggle_shuffle(
                         transitioning
                             .as_ref()
                             .map(|next| next.index)
                             .or(self.state.index),
                     );
                 } else {
-                    self.state.repeat_mode = match self.state.repeat_mode {
-                        RepeatMode::Off => RepeatMode::All,
-                        RepeatMode::All => RepeatMode::One,
-                        RepeatMode::One => RepeatMode::Off,
-                    };
+                    self.state.cycle_repeat();
                 }
                 if let Some(job) = self.next_job.take() {
                     job.abort();

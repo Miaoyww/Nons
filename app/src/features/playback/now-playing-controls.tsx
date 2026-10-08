@@ -21,7 +21,7 @@ export function NowPlayingControls({
   return (
     <div className="now-playing-controls flex shrink-0 flex-col" aria-label="正在播放控制">
       <PlaybackTimeline layout="below" onError={onError} />
-      <PlaybackTransport onError={onError} />
+      <PlaybackTransport withModes onError={onError} />
       <div className="flex items-center gap-3">
         <Volume1 className="size-4 shrink-0" aria-hidden="true" />
         <PlayerSlider

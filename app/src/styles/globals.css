@@ -2397,9 +2397,8 @@
 .dark .persistent-playback .playback-timeline {
   --slider-fill: #bdbdbd;
 }
-.persistent-playback .now-playing-transport [aria-pressed='true'],
-.persistent-playback .now-playing-transport [data-active='true'] {
-  color: var(--music-accent);
+.now-playing-transport [aria-pressed='true'] {
+  color: var(--foreground);
   background: var(--accent);
 }
 .persistent-options {
