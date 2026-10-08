@@ -546,7 +546,6 @@
 .capsule-glass { position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; transition: background-color 160ms; }
 .playback-capsule:is(:has(.capsule-main:is(:hover, :focus-within)), :has(.capsule-main [data-slot="select-trigger"][aria-expanded="true"])) .capsule-glass { background: color-mix(in oklch, var(--background) 78%, transparent); }
 @media (hover: none), (max-width: 600px) { .playback-capsule .volume-control { margin-left: 0; } }
-.playback-capsule .quality-control [data-slot="select-trigger"] { border-color: transparent; }
 
 /* Clip the notice below the bar's top edge so it emerges from behind the controls. */
 .playback-notice-slot { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); z-index: 0; width: max-content; max-width: min(360px, calc(100vw - 48px)); padding: 0 8px 8px; overflow: hidden; pointer-events: none; }
@@ -715,7 +714,7 @@
 .music-workspace[data-playback-bar="off"] .music-page { --music-page-bottom: 32px; }
 .music-workspace[data-playback-bar="off"] #music-content > .relative.overflow-auto { padding-bottom: 32px; }
 /* Persistent player shares the existing glass and fullscreen transport. */
-.persistent-playback { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 20; width: min(1120px, calc(100% - 64px)); }
+.persistent-playback { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 20; width: min(1120px, calc(100% - 64px)); }
 .persistent-playback-surface { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 24px; padding: 16px 20px; border-radius: 20px; }
 .persistent-track { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .persistent-cover { flex-shrink: 0; border-radius: 8px; cursor: pointer; }
@@ -728,7 +727,6 @@
 .persistent-playback .now-playing-toggle { color: var(--music-accent); }
 .persistent-playback .now-playing-transport [aria-pressed="true"], .persistent-playback .now-playing-transport [data-active="true"] { color: var(--music-accent); background: var(--accent); }
 .persistent-options { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
-.persistent-options [data-slot="select-trigger"] { border-radius: 8px; }
 .playback-timeline-edge { position: absolute; top: -10px; left: 20px; right: 20px; z-index: 2; width: auto; height: 20px; }
 .playback-timeline-edge .timeline-slider { width: 100%; height: 20px; }
 .playback-timeline-edge .timeline-slider::-webkit-slider-thumb { opacity: 1; width: 8px; height: 8px; margin-top: -2px; }

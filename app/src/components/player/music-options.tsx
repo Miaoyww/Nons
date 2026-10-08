@@ -48,7 +48,7 @@ export function QualitySelect() {
   return <div className="quality-control flex flex-col gap-1" data-open={open}>
     <Select items={qualities} value={options.quality} disabled={busy || !isTauri()}
       onOpenChange={setOpen} onValueChange={(quality) => { if (quality) update({ quality }); }}>
-      <SelectTrigger size="sm" aria-label="音质" title={`偏好音质：${qualities.find((q) => q.value === options.quality)?.label ?? options.quality} · 实际音质：${actualQuality ?? "尚未播放"}`}><SelectValue /></SelectTrigger>
+      <SelectTrigger size="sm" className="border-transparent" aria-label="音质" title={`偏好音质：${qualities.find((q) => q.value === options.quality)?.label ?? options.quality} · 实际音质：${actualQuality ?? "尚未播放"}`}><SelectValue /></SelectTrigger>
       <SelectContent side="top" alignItemWithTrigger={false}><SelectGroup>{qualities.map(({ value, label }) =>
         <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent>
     </Select>
