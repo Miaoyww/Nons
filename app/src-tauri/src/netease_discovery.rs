@@ -13,6 +13,32 @@ pub struct PlaylistCategory {
     pub group: String,
 }
 
+// The recommendation endpoint has one batch; subsequent pages use the public catalogue.
+fn catalogue_offset(section: &str, offset: u32) -> u32 {
+    if section == "recommended" {
+        offset.saturating_sub(30)
+    } else {
+        offset
+    }
+}
+
+fn playlist_page(body: &Value, field: &str, recommendation: bool) -> CollectionPage {
+    let values = array(body, field);
+    CollectionPage {
+        items: values
+            .iter()
+            .take(30)
+            .filter_map(|v| collection(v, "playlist"))
+            .collect(),
+        more: recommendation
+            || (!values.is_empty()
+                && body
+                    .get("more")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(values.len() == 30)),
+    }
+}
+
 impl Netease {
     pub async fn discovery_playlists(
         &self,
@@ -27,7 +53,7 @@ impl Netease {
         let query = self
             .query()?
             .param("limit", "30")
-            .param("offset", &offset.to_string())
+            .param("offset", &catalogue_offset(section, offset).to_string())
             .param("cat", category)
             .param("order", order);
         let personalized = self
@@ -36,16 +62,17 @@ impl Netease {
             .map_err(|_| "登录状态锁不可用")?
             .is_some();
         let body = match section {
-            "recommended" if personalized => {
+            "recommended" if offset == 0 && personalized => {
                 checked(self.client.recommend_resource(&query)).await?
             }
-            "recommended" => checked(self.client.personalized(&query)).await?,
-            "square" => checked(self.client.top_playlist(&query)).await?,
+            "recommended" if offset == 0 => checked(self.client.personalized(&query)).await?,
+            "recommended" | "square" => checked(self.client.top_playlist(&query)).await?,
             _ => return Err("发现分类无效".into()),
         };
-        let values = array(
+        let recommendation = section == "recommended" && offset == 0;
+        Ok(playlist_page(
             &body,
-            if section == "recommended" {
+            if recommendation {
                 if personalized {
                     "recommend"
                 } else {
@@ -54,19 +81,8 @@ impl Netease {
             } else {
                 "playlists"
             },
-        );
-        Ok(CollectionPage {
-            items: values
-                .iter()
-                .take(30)
-                .filter_map(|v| collection(v, "playlist"))
-                .collect(),
-            more: section == "square"
-                && body
-                    .get("more")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(values.len() == 30),
-        })
+            recommendation,
+        ))
     }
     pub async fn discovery_radar(&self) -> AppResult<Collection> {
         let body = checked(
@@ -121,5 +137,47 @@ impl Netease {
         )
         .await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn recommended_continuation_starts_catalogue_at_zero() {
+        assert_eq!(catalogue_offset("recommended", 30), 0);
+        assert_eq!(catalogue_offset("recommended", 60), 30);
+        assert_eq!(catalogue_offset("square", 30), 30);
+    }
+
+    #[test]
+    fn short_recommendation_batch_still_has_catalogue_continuation() {
+        let page = playlist_page(&json!({"recommend":[{"id":1}]}), "recommend", true);
+        assert_eq!(page.items.len(), 1);
+        assert!(page.more);
+        assert!(playlist_page(&json!({"recommend":[]}), "recommend", true).more);
+    }
+
+    #[test]
+    fn catalogue_end_and_empty_pages_stop_continuation() {
+        assert!(
+            !playlist_page(
+                &json!({"playlists":[{"id":1}],"more":false}),
+                "playlists",
+                false
+            )
+            .more
+        );
+        assert!(
+            playlist_page(
+                &json!({"playlists":[{"id":1}],"more":true}),
+                "playlists",
+                false
+            )
+            .more
+        );
+        assert!(!playlist_page(&json!({"playlists":[],"more":true}), "playlists", false).more);
     }
 }

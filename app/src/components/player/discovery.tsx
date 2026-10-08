@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { CalendarDays, ChevronDown, ChevronRight, Disc3, LayoutGrid, ListFilter, Pause, Play, Radio, RefreshCw, SkipForward, Sparkles, Tags, ThumbsDown, UserRound } from "lucide-react";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { nativeCall, errorText, usePlayer, type Track } from "@/lib/player";
 import { usePagedList } from "@/lib/use-paged-list";
-import { playLibraryCollection, type CollectionPage } from "@/lib/music-library";
+import { playLibraryCollection } from "@/lib/music-library";
+import { createDiscoveryPlaylistLoader } from "@/lib/discovery";
 import { useAccount } from "./account";
 import { ActionButton } from "./action-button";
 import { Cover } from "./cover";
@@ -125,7 +126,7 @@ export default function Discovery({ onError, onNotice }: { onError: (cause: unkn
   const pending = useRef(false);
   const section = page.query === "square" ? "square" : "recommended";
   const daily = page.query === "daily";
-  const loader = useCallback((offset: number) => nativeCall<CollectionPage>("discovery_playlists", { section, category, order, offset, refresh: revision > 0 }), [section, category, order, revision, profile]);
+  const loader = useMemo(() => createDiscoveryPlaylistLoader({ section, category: section === "square" ? category : "全部", order: section === "square" ? order : "hot", refresh: revision > 0 }), [section, category, order, revision, profile]);
   const list = usePagedList(loader, 30, isTauri() && !daily);
   const dailyLoader = useCallback(async () => ({ items: await nativeCall<Track[]>("discovery_tracks", { kind: "daily", refresh: revision > 0 }), more: false }), [profile, revision]);
   const songs = usePagedList(dailyLoader, 100, isTauri() && daily && !!profile);
