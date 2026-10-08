@@ -1,4 +1,4 @@
-import { useCollectionActions } from "./collection-actions";
+import { CollectionContextMenu, useCollectionActions } from "./collection-actions";
 import { TrackArtists } from "./music-links";
 import { AlbumCard } from "./album-card";
 import { PlaylistCard } from "./playlist-card";
@@ -145,13 +145,13 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
       </header>
       {(accountLoading || accountError) && <p role={accountError ? "alert" : "status"} className="mt-4 text-sm text-muted-foreground">{accountError ?? "正在读取账号…"}</p>}
       <div className="library-featured">
-        <div className="library-liked-card">
+        <CollectionContextMenu item={liked ? { ...liked, name: "我喜欢的音乐", liked: true } : undefined} busy={playing} render={<div className="library-liked-card" />}>
           <button className="library-liked-open" aria-label="打开我喜欢的音乐" disabled={!liked} onClick={() => { if (liked) openCollection({ ...liked, name: "我喜欢的音乐" }); }}>
             <div className="library-liked-top"><LyricExcerpt track={summary?.likedTracks[0]} /></div>
             <div><h2>我喜欢的音乐</h2><p>{summaryBusy ? "正在加载…" : summaryError || summary?.likedError ? "暂时无法读取" : liked ? `${liked.trackCount} 首歌` : profile ? "还没有喜欢的音乐" : "登录后收藏你的音乐"}</p></div>
           </button>
           <ActionButton size="icon-lg" className="library-liked-play" aria-label="播放我喜欢的音乐" disabled={playing || !liked || !summary?.likedTracks.length} onClick={() => { if (liked) void playCollection(liked); }} title="播放收藏（最多 1000 首）"><Play aria-hidden="true" /></ActionButton>
-        </div>
+        </CollectionContextMenu>
         <div className="library-featured-songs">
           {!profile && !accountLoading ? <div className="library-empty"><p>登录网易云音乐，找回你喜欢的旋律。</p><LoginDialog /></div>
             : summaryError || summary?.likedError ? <div role="alert" className="library-empty text-destructive"><p>{summaryError ?? summary?.likedError}</p>{retry}</div>

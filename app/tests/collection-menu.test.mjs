@@ -11,7 +11,7 @@ function harness() {
   const menu = Object.fromEntries(["Root", "Trigger", "Portal", "Positioner", "Popup", "Item", "Separator"].map(key => [key, key]));
   const jsx = (type, props) => ({ type, props });
   const modules = {
-    react: { createContext: () => ({}), useContext: () => actions },
+    react: { createContext: () => ({}), useContext: () => actions, cloneElement: (element, props, children) => ({ ...element, props: { ...element.props, ...props, children } }) },
     "react/jsx-runtime": { jsx, jsxs: jsx },
     "@base-ui/react/context-menu": { ContextMenu: menu },
     "@tauri-apps/api/core": { isTauri: () => true },
@@ -22,7 +22,7 @@ function harness() {
   const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/player/collection-actions.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   runInNewContext(outputText, { exports, require: name => modules[name] });
   function flatten(node) { return Array.isArray(node) ? node.flatMap(flatten) : node && typeof node === "object" ? [node, ...flatten(node.props?.children)] : []; }
-  return { calls, logout: () => { profile = undefined; }, menu(item, busy = false) { return flatten(exports.CollectionContextMenu({ item, busy, render: jsx("article", {}), children: "card" })).filter(node => node.type === "Item"); } };
+  return { calls, logout: () => { profile = undefined; }, menu(item, busy = false, options = {}) { return flatten(exports.CollectionContextMenu({ item, busy, render: jsx("article", {}), children: "card", ...options })).filter(node => node.type === "Item"); } };
 }
 const playlist = { id: 12, kind: "playlist", creatorId: 7, liked: false, name: "Mine" };
 test("playlist menus replace the queue or insert the whole collection next and expose management", () => {
@@ -68,4 +68,25 @@ test("song favorite action precedes the divider and unavailable remove actions a
   assert.ok(favorite >= 0 && favorite < separator);
   assert.equal(nodes.some(node => node.props?.className === "song-menu-remove"), false);
   assert.equal(flatten(exports.SongContextMenu({ ...props, onRemove() {} })).some(node => node.props?.className === "song-menu-remove"), true);
+});
+
+test("daily recommendation menu uses its own ordered batch callbacks without a fake share link", () => {
+  const app = harness();
+  const calls = [];
+  const items = app.menu(undefined, false, { name: "每日推荐", onPlay: () => calls.push("replace"), onNext: () => calls.push("next") });
+  assert.equal(items.length, 2);
+  items[0].props.onClick(); items[1].props.onClick();
+  assert.deepEqual(calls, ["replace", "next"]);
+  assert.equal(app.calls.length, 0);
+  assert.equal(app.menu(undefined).length, 0);
+  assert.equal(app.menu(undefined, true, { onPlay() {}, onNext() {} }).length, 0);
+});
+test("liked music and private radar expose playback and real share links without management", () => {
+  const app = harness();
+  for (const item of [{ ...playlist, name: "我喜欢的音乐", liked: true }, { ...playlist, id: 3136952023, creatorId: 0, name: "私人雷达" }]) {
+    const items = app.menu(item);
+    assert.equal(items.length, 3);
+    items[2].props.onClick();
+    assert.equal(app.calls.at(-1)[1].id, item.id);
+  }
 });

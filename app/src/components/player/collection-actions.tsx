@@ -1,6 +1,6 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { Copy, ListPlus, Pencil, Play, Trash2 } from "lucide-react";
-import { createContext, useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { cloneElement, createContext, useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { nativeCall, errorText } from "@/lib/player";
 import { getLibraryTracks } from "@/lib/music-library";
@@ -82,19 +82,22 @@ export function CollectionActionsProvider({ children, onError, onNotice }: { chi
     </Dialog>
   </CollectionActions.Provider>;
 }
-export function CollectionContextMenu({ item, busy, render, children }: { item: MusicCollection; busy: boolean; render: ReactElement; children: ReactNode }) {
+export function CollectionContextMenu({ item, name, busy, render, children, onPlay, onNext }: {
+  item?: MusicCollection; name?: string; busy: boolean; render: ReactElement; children: ReactNode;
+  onPlay?: () => void; onNext?: () => void;
+}) {
   const actions = useCollectionActions();
   const { profile } = useAccount();
-  if (item.kind === "artist") return <article className="library-cover-card">{children}</article>;
   const unavailable = busy || actions.busy || !isTauri();
-  const editable = !!profile && item.creatorId === profile.userId && !item.liked;
+  if (item?.kind === "artist" || (!item && ((!onPlay && !onNext) || unavailable))) return cloneElement(render, undefined, children);
+  const editable = !!item && !!profile && item.creatorId === profile.userId && !item.liked;
   return <ContextMenu.Root><ContextMenu.Trigger render={render} tabIndex={0}>{children}</ContextMenu.Trigger>
-    <ContextMenu.Portal><ContextMenu.Positioner className="z-[70]" sideOffset={4}><ContextMenu.Popup className="song-context-menu" aria-label={`${item.name} 的菜单`}>
-      {!unavailable && <ContextMenu.Item onClick={() => actions.play(item)}><Play aria-hidden="true" />播放</ContextMenu.Item>}
-      {!unavailable && <ContextMenu.Item onClick={() => actions.play(item, true)}><ListPlus aria-hidden="true" />下一首播放</ContextMenu.Item>}
-      {!unavailable && <ContextMenu.Separator />}
-      <ContextMenu.Item onClick={() => actions.copy(item)}><Copy aria-hidden="true" />复制链接</ContextMenu.Item>
-      {item.kind === "playlist" && editable && !unavailable && <>
+    <ContextMenu.Portal><ContextMenu.Positioner className="z-[70]" sideOffset={4}><ContextMenu.Popup className="song-context-menu" aria-label={`${name ?? item?.name} 的菜单`}>
+      {!unavailable && (item || onPlay) && <ContextMenu.Item onClick={() => { if (onPlay) onPlay(); else if (item) actions.play(item); }}><Play aria-hidden="true" />播放</ContextMenu.Item>}
+      {!unavailable && (item || onNext) && <ContextMenu.Item onClick={() => { if (onNext) onNext(); else if (item) actions.play(item, true); }}><ListPlus aria-hidden="true" />下一首播放</ContextMenu.Item>}
+      {!unavailable && item && <ContextMenu.Separator />}
+      {item && <ContextMenu.Item onClick={() => actions.copy(item)}><Copy aria-hidden="true" />复制链接</ContextMenu.Item>}
+      {item?.kind === "playlist" && editable && !unavailable && <>
         <ContextMenu.Item onClick={() => actions.edit(item)}><Pencil aria-hidden="true" />编辑歌单信息</ContextMenu.Item>
         <ContextMenu.Item className="song-menu-remove" onClick={() => actions.remove(item)}><Trash2 aria-hidden="true" />删除歌单</ContextMenu.Item>
       </>}
