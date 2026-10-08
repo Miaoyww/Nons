@@ -19,6 +19,7 @@ import { InfiniteLoad } from "./infinite-load";
 import { usePagedList } from "@/lib/use-paged-list";
 import { PluginPageHost } from "@/plugins/host";
 
+const Discovery = lazy(() => import("./discovery"));
 const LyricsView = lazy(() => import("./lyrics-view"));
 const MusicLibrary = lazy(() => import("./music-library"));
 interface ImportReport { imported: number; skipped: number; errors: string[] }
@@ -117,7 +118,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
       <main id="music-content" className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="音乐工作区">
         {!isTauri() && <p role="status" className="border-b border-border bg-muted/50 px-8 py-3 text-sm text-muted-foreground">这是界面预览。播放、搜索和导入功能需要在桌面应用中使用。</p>}
         {(error || state.error || state.mediaError) && <div role="alert" className="flex items-start gap-3 border-b border-border bg-destructive/5 px-8 py-3 text-sm text-destructive"><p className="min-w-0 flex-1">{error ?? state.error ?? state.mediaError}</p>{error && <ActionButton variant="ghost" size="icon-sm" aria-label="关闭提示" onClick={() => setError(undefined)}><X aria-hidden="true" /></ActionButton>}</div>}
-        {view === "plugin" ? <PluginPageHost path={page.query} /> : view === "queue" ? <QueuePage key={queueVisit} onError={onError} /> : view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} onNotice={showNotice} /></Suspense> : <>
+        {view === "plugin" ? <PluginPageHost path={page.query} /> : view === "queue" ? <QueuePage key={queueVisit} onError={onError} /> : view === "discover" ? <Suspense fallback={<p role="status" className="m-auto">正在加载发现页…</p>}><Discovery onError={onError} onNotice={showNotice} /></Suspense> : view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} onNotice={showNotice} /></Suspense> : <>
           <header className="flex shrink-0 items-center justify-between gap-6 px-8 pb-6 pt-8"><div><h1 className="text-2xl font-semibold tracking-tight">{view === "local" ? "本地音乐" : view === "search" ? "搜索音乐" : view === "discover" ? "发现" : "播放队列"}</h1><p className="mt-2 text-sm text-muted-foreground">{view === "local" ? "熟悉的收藏，随时聆听。" : view === "search" || view === "discover" ? "在网易云音乐中寻找下一首。" : `${state.queue.length} 首音乐，按顺序播放。`}</p></div>
           </header>
           {view === "local" && <div className="flex items-center justify-between gap-4 px-8 pb-4"><div className="min-w-0"><h2 className="text-base font-semibold">音乐文件夹</h2><p className="mt-1 text-xs text-muted-foreground">添加或移除本地音乐文件夹。已添加的文件夹会自动扫描。</p></div><div className="flex shrink-0 gap-2"><ActionButton variant="ghost" disabled={importing || !isTauri()} onClick={() => void importMusic(false)}><Plus aria-hidden="true" />打开文件</ActionButton><FolderManager /></div></div>}

@@ -27,6 +27,40 @@ function harness() {
 }
 const summary = { likedPlaylist: { id: 1, kind: "playlist" }, likedTracks: [], likedError: null };
 
+test("discovery reads coalesce and keep category, order and page results separate", async () => {
+  const { player, requests } = harness();
+  const args = { section: "square", category: "日语", order: "hot", offset: 0 };
+  const first = player.nativeCall("discovery_playlists", args);
+  const duplicate = player.nativeCall("discovery_playlists", { offset: 0, order: "hot", category: "日语", section: "square" });
+  assert.equal(requests.length, 1);
+  requests.at(-1).resolve({ items: [{ id: 1, playCount: 25000 }], more: true });
+  assert.equal(await first, await duplicate);
+  for (const changed of [{ category: "华语" }, { order: "new" }, { offset: 30 }]) {
+    const before = requests.length;
+    const read = player.nativeCall("discovery_playlists", { ...args, ...changed });
+    assert.equal(requests.length, before + 1);
+    requests.at(-1).resolve({ items: [], more: false }); await read;
+  }
+});
+
+test("FM refresh bypasses cached batches and dislikes invalidate only after success", async () => {
+  const { player, requests } = harness();
+  const args = { kind: "fm" };
+  const initial = player.nativeCall("discovery_tracks", args);
+  requests.at(-1).resolve([{ key: "netease:1" }]); await initial;
+  const refresh = player.nativeCall("discovery_tracks", { ...args, refresh: true });
+  assert.equal(requests.length, 2);
+  requests.at(-1).resolve([{ key: "netease:2" }]); await refresh;
+  const failed = player.nativeCall("discovery_dislike", { id: 2 });
+  const rejection = assert.rejects(failed, /denied/); requests.at(-1).reject(new Error("denied")); await rejection;
+  assert.equal((await player.nativeCall("discovery_tracks", args))[0].key, "netease:2");
+  const write = player.nativeCall("discovery_dislike", { id: 2 }); requests.at(-1).resolve(); await write;
+  const before = requests.length;
+  const read = player.nativeCall("discovery_tracks", args);
+  assert.equal(requests.length, before + 1);
+  requests.at(-1).resolve([{ key: "netease:3" }]); await read;
+});
+
 test("native reads coalesce by canonical arguments and reuse the same summary and detail", async () => {
   const { library, requests } = harness();
   const first = library.getMusicLibrary(1), duplicate = library.getMusicLibrary(1);
@@ -55,6 +89,21 @@ test("runtime TTL is ten minutes, not extended by reads, and capacity evicts old
   await tiny.get("query:b", async () => "b".repeat(50));
   await tiny.get("query:c", async () => "c".repeat(50));
   assert.equal(tiny.peek("query:b"), undefined);
+});
+
+test("cover TTL expiry keeps the displayed data URI usable and a later read fetches again", async () => {
+  const { cache, player, requests } = harness();
+  cache.coverCache = new cache.RuntimeCache(32 * 1024 * 1024, 15);
+  const args = { url: "https://p1.music.126.net/album.jpg?param=512y512" };
+  const first = player.nativeCall("runtime_cover", args);
+  requests[0].resolve("data:image/jpeg;base64,displayed");
+  const displayed = await first;
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const renewed = player.nativeCall("runtime_cover", args);
+  assert.equal(requests.length, 2);
+  assert.equal(displayed, "data:image/jpeg;base64,displayed");
+  requests[1].resolve("data:image/jpeg;base64,renewed");
+  assert.equal(await renewed, "data:image/jpeg;base64,renewed");
 });
 
 test("failed requests and incomplete summaries stay retryable", async () => {

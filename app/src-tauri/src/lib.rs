@@ -227,6 +227,40 @@ async fn music_library(backend: State<'_, Backend>) -> AppResult<LibrarySummary>
 }
 
 #[tauri::command]
+async fn discovery_playlists(
+    section: String,
+    category: String,
+    order: String,
+    offset: u32,
+    backend: State<'_, Backend>,
+) -> AppResult<CollectionPage> {
+    backend
+        .netease
+        .discovery_playlists(&section, &category, &order, offset)
+        .await
+}
+#[tauri::command]
+async fn discovery_categories(
+    backend: State<'_, Backend>,
+) -> AppResult<Vec<netease::PlaylistCategory>> {
+    backend.netease.discovery_categories().await
+}
+#[tauri::command]
+async fn discovery_radar(backend: State<'_, Backend>) -> AppResult<netease::Collection> {
+    backend.netease.discovery_radar().await
+}
+#[tauri::command]
+async fn discovery_tracks(kind: String, backend: State<'_, Backend>) -> AppResult<Vec<Track>> {
+    let mut tracks = backend.netease.discovery_tracks(&kind).await?;
+    save_library_tracks(&mut tracks, &backend)?;
+    Ok(tracks)
+}
+#[tauri::command]
+async fn discovery_dislike(id: u64, backend: State<'_, Backend>) -> AppResult<()> {
+    backend.netease.discovery_dislike(id).await
+}
+
+#[tauri::command]
 async fn library_collections(
     kind: String,
     offset: u32,
@@ -644,6 +678,11 @@ pub fn run() {
             remove_playlist_song,
             remove_queue_track,
             library_collections,
+            discovery_playlists,
+            discovery_categories,
+            discovery_radar,
+            discovery_tracks,
+            discovery_dislike,
             library_tracks,
             library_history,
             play_library_collection,

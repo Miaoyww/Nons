@@ -1,7 +1,10 @@
 #[path = "netease_library.rs"]
 mod library;
 #[allow(unused_imports)] // Read-only examples include this module without Tauri command types.
-pub use library::{CollectionPage, LibrarySummary, TrackPage};
+pub use library::{Collection, CollectionPage, LibrarySummary, TrackPage};
+#[path = "netease_discovery.rs"]
+mod discovery;
+pub use discovery::PlaylistCategory;
 
 use crate::model::{AppResult, Lyrics, ResolvedTrack, Track, TrackSource};
 use base64::Engine;

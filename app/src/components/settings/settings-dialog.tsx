@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FolderCog, Info, Mic2, Settings, Volume2, X } from "lucide-react";
+import { FolderCog, Info, LayoutGrid, Mic2, Settings, Volume2, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
@@ -55,7 +55,7 @@ export function SettingsDialog() {
                 aria-current={section === "local-cache" ? "page" : undefined} onClick={() => setSection("local-cache")}>
                 <FolderCog aria-hidden="true" /><span>本地与缓存</span>
               </Button>
-              <Button variant={section === "plugins" ? "secondary" : "ghost"} className="justify-start gap-2.5 rounded-lg px-3" aria-current={section === "plugins" ? "page" : undefined} onClick={() => setSection("plugins")}><FolderCog aria-hidden="true" /><span>插件</span></Button>
+              <Button variant={section === "plugins" ? "secondary" : "ghost"} className="justify-start gap-2.5 rounded-lg px-3" aria-current={section === "plugins" ? "page" : undefined} onClick={() => setSection("plugins")}><LayoutGrid aria-hidden="true" /><span>插件</span></Button>
               <Button variant={section === "about" ? "secondary" : "ghost"} className="mt-auto justify-start gap-2.5 rounded-lg px-3"
                 aria-current={section === "about" ? "page" : undefined} onClick={() => setSection("about")}>
                 <Info aria-hidden="true" /><span>关于</span>

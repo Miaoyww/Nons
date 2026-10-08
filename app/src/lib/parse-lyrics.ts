@@ -13,9 +13,36 @@ export function parseLyricsContent(value: Lyrics): LyricLine[] {
   }
 }
 
+function cleanAuxiliary(text: string) {
+  return text.trim() === "//" ? "" : text;
+}
+
 function auxiliary(text: string) {
-  const lines = /^\[\d+,\d+\]/m.test(text) ? parseQrc(text) : parseLrc(text);
-  return new Map(lines.map((line) => [line.startTime, line.words.map((word) => word.word).join("")]));
+  // Only identify the format here; AMLL parses all timestamps and lyric text.
+  const lines = /^\[\d+,\d+\]\(/m.test(text)
+    ? parseYrc(text)
+    : /^\[\d+,\d+\]/m.test(text) ? parseQrc(text) : parseLrc(text);
+  return lines.map((line) => ({
+    start: line.startTime,
+    text: cleanAuxiliary(line.words.map((word) => word.word).join("").trim()),
+  })).filter((line) => Number.isFinite(line.start) && line.text)
+    .sort((left, right) => left.start - right.start);
+}
+
+// Like AF-Media-Bar, attach the nearest auxiliary line within 500 ms.
+// Binary search avoids scanning all translations for every lyric line.
+function nearbyText(lines: ReturnType<typeof auxiliary> | undefined, start: number) {
+  if (!lines?.length) return undefined;
+  let low = 0, high = lines.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (lines[middle].start < start) low = middle + 1;
+    else high = middle;
+  }
+  const before = lines[low - 1], after = lines[low];
+  const nearest = !before ? after : !after ? before
+    : start - before.start < after.start - start ? before : after;
+  return nearest && Math.abs(nearest.start - start) <= 500 ? nearest.text : undefined;
 }
 
 export function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
@@ -28,6 +55,6 @@ export function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
     if (!Number.isFinite(line.startTime) || line.startTime < 0 || end < line.startTime) throw new Error("歌词时间轴无效。");
     if (line.words.some((word) => !Number.isFinite(word.startTime) || word.startTime < 0 || !Number.isFinite(word.endTime) || word.endTime < word.startTime)) throw new Error("歌词逐词时间轴无效。");
     return { ...line, endTime: end, words: line.words.map((word) => ({ ...word, endTime: Number.isFinite(word.endTime) && word.endTime > word.startTime ? word.endTime : end })),
-      translatedLyric: translations?.get(line.startTime) ?? line.translatedLyric, romanLyric: romans?.get(line.startTime) ?? line.romanLyric };
+      translatedLyric: cleanAuxiliary(line.translatedLyric).trim() ? line.translatedLyric : nearbyText(translations, line.startTime) ?? "", romanLyric: cleanAuxiliary(line.romanLyric).trim() ? line.romanLyric : nearbyText(romans, line.startTime) ?? "" };
   });
 }
