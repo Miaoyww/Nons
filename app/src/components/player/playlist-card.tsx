@@ -9,11 +9,11 @@ export function formatPlayCount(value: number) {
   return Math.floor(value).toLocaleString("zh-CN");
 }
 
-export function PlaylistCard({ item, busy, onOpen, onPlay }: { item: MusicCollection; busy: boolean; onOpen: (item: MusicCollection) => void; onPlay: (item: MusicCollection) => void }) {
+export function PlaylistCard({ item, busy, showPlayCount = true, onOpen, onPlay }: { item: MusicCollection; busy: boolean; showPlayCount?: boolean; onOpen: (item: MusicCollection) => void; onPlay: (item: MusicCollection) => void }) {
   return <article className="library-cover-card">
     <div className="library-cover-art" data-round={item.kind === "artist"}>
       <button className="library-cover-open" onClick={() => onOpen(item)} aria-label={`打开 ${item.name}`}><Cover cover={item.cover} className="aspect-square w-full" /></button>
-      {item.playCount != null && <span className="playlist-play-count" aria-label={`${item.playCount} 次播放`}><Play aria-hidden="true" />{formatPlayCount(item.playCount)}</span>}
+      {showPlayCount && item.playCount != null && <span className="playlist-play-count" aria-label={`${item.playCount} 次播放`}><Play aria-hidden="true" />{formatPlayCount(item.playCount)}</span>}
       <ActionButton size="icon-lg" className="library-cover-play" disabled={busy} aria-label={`播放 ${item.name}`} title="播放歌单（最多 1000 首）" onClick={() => onPlay(item)}><Play aria-hidden="true" /></ActionButton>
     </div>
     <button className="library-cover-title" onClick={() => onOpen(item)} title={item.name}>{item.name}</button>
