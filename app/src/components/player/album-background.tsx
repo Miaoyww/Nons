@@ -1,7 +1,7 @@
 import { BackgroundRender, MeshGradientRenderer } from "@applemusic-like-lyrics/core";
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
-import { useCoverSource } from "@/hooks/use-cover-source";
+import { useCoverImageSource } from "@/hooks/use-cover-source";
 import { useLyricsSettings } from "@/hooks/use-lyrics-settings";
 
 export function AlbumBackground({ cover, playing, hasLyrics }: { cover?: string; playing: boolean; hasLyrics: boolean }) {
@@ -10,7 +10,7 @@ export function AlbumBackground({ cover, playing, hasLyrics }: { cover?: string;
   const reduced = useReducedMotion();
   const { backgroundSpeed } = useLyricsSettings();
   const [visible, setVisible] = useState(document.visibilityState !== "hidden");
-  const album = useCoverSource(cover, visible);
+  const { source: album, onError } = useCoverImageSource(cover, visible);
   useEffect(() => {
     const changed = () => setVisible(document.visibilityState !== "hidden");
     document.addEventListener("visibilitychange", changed);
@@ -44,7 +44,7 @@ export function AlbumBackground({ cover, playing, hasLyrics }: { cover?: string;
     if (visible && playing && !reduced) background.resume(); else background.pause();
   }, [album, visible, playing, reduced, hasLyrics, backgroundSpeed]);
   return <div className="album-background pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-    {album && <img src={album} alt="" className="absolute size-full scale-125 object-cover opacity-70 blur-3xl" />}
+    {album && <img src={album} alt="" onError={onError} className="absolute size-full scale-125 object-cover opacity-70 blur-3xl" />}
     <div ref={host} className="absolute inset-0" />
     <div className="album-background-scrim absolute inset-0" />
   </div>;

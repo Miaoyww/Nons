@@ -57,6 +57,21 @@ test("runtime TTL is ten minutes, not extended by reads, and capacity evicts old
   assert.equal(tiny.peek("query:b"), undefined);
 });
 
+test("cover TTL expiry keeps the displayed data URI usable and a later read fetches again", async () => {
+  const { cache, player, requests } = harness();
+  cache.coverCache = new cache.RuntimeCache(32 * 1024 * 1024, 15);
+  const args = { url: "https://p1.music.126.net/album.jpg?param=512y512" };
+  const first = player.nativeCall("runtime_cover", args);
+  requests[0].resolve("data:image/jpeg;base64,displayed");
+  const displayed = await first;
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const renewed = player.nativeCall("runtime_cover", args);
+  assert.equal(requests.length, 2);
+  assert.equal(displayed, "data:image/jpeg;base64,displayed");
+  requests[1].resolve("data:image/jpeg;base64,renewed");
+  assert.equal(await renewed, "data:image/jpeg;base64,renewed");
+});
+
 test("failed requests and incomplete summaries stay retryable", async () => {
   const { library, requests } = harness();
   const first = library.getMusicLibrary(1), failure = assert.rejects(first, /offline/);
