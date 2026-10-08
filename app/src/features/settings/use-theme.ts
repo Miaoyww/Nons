@@ -1,31 +1,45 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from 'react'
 
-export type Theme = "light" | "dark" | "system";
-const storageKey = "nons-theme";
-const listeners = new Set<() => void>();
-let theme: Theme = "system";
-try { const saved = localStorage.getItem(storageKey); if (saved === "light" || saved === "dark") theme = saved; } catch { /* Storage is optional. */ }
-const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
+export type Theme = 'light' | 'dark' | 'system'
+const storageKey = 'nons-theme'
+const listeners = new Set<() => void>()
+let theme: Theme = 'system'
+try {
+  const saved = localStorage.getItem(storageKey)
+  if (saved === 'light' || saved === 'dark') theme = saved
+} catch {
+  /* Storage is optional. */
+}
+const subscribe = (listener: () => void) => {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
 function setTheme(value: Theme) {
-  theme = value;
-  try { localStorage.setItem(storageKey, value); } catch { /* Storage is optional. */ }
-  listeners.forEach((notify) => notify());
+  theme = value
+  try {
+    localStorage.setItem(storageKey, value)
+  } catch {
+    /* Storage is optional. */
+  }
+  listeners.forEach((notify) => notify())
 }
 
 export function useTheme() {
-  const value = useSyncExternalStore(subscribe, () => theme);
+  const value = useSyncExternalStore(subscribe, () => theme)
 
   useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
     const apply = () => {
-      const dark = theme === "dark" || (theme === "system" && media.matches);
-      document.documentElement.classList.toggle("dark", dark);
-      document.documentElement.style.colorScheme = dark ? "dark" : "light";
-    };
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, [value]);
+      const dark = theme === 'dark' || (theme === 'system' && media.matches)
+      document.documentElement.classList.toggle('dark', dark)
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+    }
+    apply()
+    media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [value])
 
-  return [value, setTheme] as const;
+  return [value, setTheme] as const
 }

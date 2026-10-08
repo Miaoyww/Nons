@@ -13,10 +13,10 @@
 
 </div>
 
-
 ## 灵感来源
 
 NonsPlayer的诞生离不开以下优秀产品的启发：
+
 - [YesPlayMusic](https://github.com/qier222/YesPlayMusic)
 - [coriander_player](https://github.com/Ferry-200/coriander_player)
 - [SPlayer](https://github.com/SPlayer-Dev/SPlayer)
@@ -27,7 +27,6 @@ NonsPlayer的诞生离不开以下优秀产品的启发：
 - **[NeteaseCloudMusicApiEnhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/)**
 - **[Apple Music-like Lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics)**
 - **[amll-ttml-db](https://github.com/Steve-xmh/amll-ttml-db)**
-
 
 ## 📜 开源许可
 

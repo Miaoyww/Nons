@@ -15,7 +15,7 @@
 - 优先采用现有库，尤其 Rust 库。必要的重复实现须先告知用户。
 - 歌词显示指定使用 [AMLL](https://github.com/amll-dev/applemusic-like-lyrics)。
 - 在线歌词依次从 [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db)、QQ 音乐、网易云获取；未命中、超时、错误、损坏及解析失败继续下一来源。AMLL DB 和 QQ 音乐默认开启，可在设置 → 歌词 → 歌词来源独立关闭；都关闭时仅查询网易云。歌词不阻塞音频。初始 DB 查询总预算 1 秒；官方文件地址与可配置镜像按顺序尝试，最多 3 个，不并发放大请求。
-- QQ 音乐按歌名和歌手搜索，包含搜索结果的分组曲目；搜索协议来自 Lyricify-Lyrics-Helper。评分移植 AF-Media-Bar 的 LyricsMetadataScore：标题/歌手/专辑/时长权重 40%/40%/10%/10%，使用 F23 Jaro–Winkler 与偶数舍入，时差 ≤1 秒满分、≥10 秒零分，中间线性衰减。歌手在请求和候选两侧按用户配置的字面量分隔符拆分，最长分隔符优先、忽略大小写并去重；网易云结构化歌手沿用 ` / `。完整移植 AF-Media-Bar 的搜索与采纳策略：QQ 达到 80 分直接采纳，低分候选仍取词并参与比较；网易云搜索候选最低 60 分，按真实元数据得分比较，同分优先 QQ。已知网易云播放/绑定 ID 的取词结果在备用阶段优先；AMLL DB 仍保留现有优先顺序。在线查询总预算 12 秒，备用网易云阶段最多 6 秒。QQ 阶段总预算 6 秒、尝试完整去重搜索词列表、每页 20 首；达标曲目优先按数字 ID 下载 QRC，QRC 下载/解码子阶段预算 900 毫秒，失败时按 songmid 查询旧接口 LRC。QQ QRC 解密复用 lyrics-crypto 0.5.0 的算法并增加有界解压，解密在阻塞工作线程执行；响应、单字段解压与合并正文均限制为 2MiB。WebUI 使用已有 `@applemusic-like-lyrics/lyric` 的 `parseQrc` 保留逐词起止时间；前端解析失败也先重试 QQ LRC，再回退网易云。QRC 的独立 LRC/QRC 翻译与发音按行起始时间合并。
+- QQ 音乐按歌名和歌手搜索，包含搜索结果的分组曲目；搜索协议来自 Lyricify-Lyrics-Helper。评分移植 AF-Media-Bar 的 LyricsMetadataScore：标题/歌手/专辑/时长权重 40%/40%/10%/10%，使用 F23 Jaro–Winkler 与偶数舍入，时差 ≤1 秒满分、≥10 秒零分，中间线性衰减。歌手在请求和候选两侧按用户配置的字面量分隔符拆分，最长分隔符优先、忽略大小写并去重；网易云结构化歌手沿用 `/`。完整移植 AF-Media-Bar 的搜索与采纳策略：QQ 达到 80 分直接采纳，低分候选仍取词并参与比较；网易云搜索候选最低 60 分，按真实元数据得分比较，同分优先 QQ。已知网易云播放/绑定 ID 的取词结果在备用阶段优先；AMLL DB 仍保留现有优先顺序。在线查询总预算 12 秒，备用网易云阶段最多 6 秒。QQ 阶段总预算 6 秒、尝试完整去重搜索词列表、每页 20 首；达标曲目优先按数字 ID 下载 QRC，QRC 下载/解码子阶段预算 900 毫秒，失败时按 songmid 查询旧接口 LRC。QQ QRC 解密复用 lyrics-crypto 0.5.0 的算法并增加有界解压，解密在阻塞工作线程执行；响应、单字段解压与合并正文均限制为 2MiB。WebUI 使用已有 `@applemusic-like-lyrics/lyric` 的 `parseQrc` 保留逐词起止时间；前端解析失败也先重试 QQ LRC，再回退网易云。QRC 的独立 LRC/QRC 翻译与发音按行起始时间合并。
 - 本地歌曲在“本地与缓存”中选择优先本地或在线歌词，默认优先同名歌词文件；缺失、读取错误或解析失败时尝试另一侧。在线沿用 AMLL DB → QQ 音乐 → 网易云：AMLL 需可靠关联或已有绑定 ID；QQ 和网易云都可按元数据搜索并评分，无关联 ID 也可查询。
 - 歌词格式解析统一复用 AMLL 的 `@applemusic-like-lyrics/lyric`，`core` 负责渲染。独立译文和音译使用对应的 LRC/QRC/YRC 解析器，优先保留内嵌辅助文本，否则匹配起始时间相差不超过 500 毫秒的最近非空辅助行；超出容差留空，不沿用上一句。此匹配规则参考 AF-Media-Bar 的 `LyricsTextParser`。
 - 新鲜缓存立即显示，过期命中立即显示并后台更新。确认缺失约 24 小时后复查，网络错误不能记为永久缺失；缓存有容量上限并支持手动刷新。
@@ -65,4 +65,3 @@
 - [GStreamer 无缝设计](https://github.com/GStreamer/gstreamer/blob/main/subprojects/gst-docs/markdown/additional/design/playback-gapless.md)：过晚准备会缓冲不足，过早可能遇到资源过期与队列变化。
 - [GStreamer Windows 部署](https://gstreamer.freedesktop.org/documentation/deploying/windows.html) 与 [macOS 部署](https://gstreamer.freedesktop.org/documentation/deploying/mac-osx.html)：Rust 绑定仍依赖原生运行时和插件；最终分发体积需实测，部署细节需按采用版本验证。
 - [SMTC 时间线](https://learn.microsoft.com/en-us/uwp/api/windows.media.systemmediatransportcontrolstimelineproperties)：Position、StartTime、EndTime 描述媒体内部时间线，还包含 MinSeekTime、MaxSeekTime。
-

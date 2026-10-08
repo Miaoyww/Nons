@@ -5,25 +5,88 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "name", "version", "permissions", "engines"],
-  "anyOf": [{ "required": ["backend"], "properties": { "backend": { "type": "string" } } }, { "required": ["frontend"], "properties": { "frontend": { "type": "string" } } }],
+  "anyOf": [
+    { "required": ["backend"], "properties": { "backend": { "type": "string" } } },
+    { "required": ["frontend"], "properties": { "frontend": { "type": "string" } } }
+  ],
   "properties": {
     "id": { "$ref": "#/$defs/id" },
     "name": { "type": "string", "minLength": 1, "maxLength": 128 },
     "version": { "type": "string", "description": "SemVer; checked by Rust semver." },
     "backend": { "type": ["string", "null"], "pattern": "\\.wasm$" },
     "frontend": { "type": ["string", "null"], "pattern": "\\.mjs$" },
-    "permissions": { "type": "array", "uniqueItems": true, "items": { "enum": ["clipboard:music-links", "storage", "music:metadata", "player:read", "player:control", "ui"] } },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "clipboard:music-links",
+          "storage",
+          "music:metadata",
+          "player:read",
+          "player:control",
+          "ui"
+        ]
+      }
+    },
     "engines": {
-      "type": "object", "additionalProperties": false, "required": ["app", "pluginApi", "uiApi"],
-      "properties": { "app": { "type": "string" }, "pluginApi": { "type": "string" }, "uiApi": { "type": "string" } }
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app", "pluginApi", "uiApi"],
+      "properties": {
+        "app": { "type": "string" },
+        "pluginApi": { "type": "string" },
+        "uiApi": { "type": "string" }
+      }
     },
     "contributes": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "views": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "slot", "export"], "properties": { "id": { "$ref": "#/$defs/id" }, "slot": { "const": "main.overlay" }, "export": { "$ref": "#/$defs/export" } } } },
-        "pages": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "path", "export"], "properties": { "id": { "$ref": "#/$defs/id" }, "path": { "type": "string", "pattern": "^/" }, "export": { "$ref": "#/$defs/export" } } } },
-        "navigation": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "label", "page"], "properties": { "id": { "$ref": "#/$defs/id" }, "label": { "type": "string", "minLength": 1, "maxLength": 128 }, "page": { "$ref": "#/$defs/id" } } } },
-        "commands": { "type": "array" }, "menus": { "type": "array" }, "contextMenus": { "type": "array" }, "settings": { "type": "array" }, "shortcuts": { "type": "array" }
+        "views": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "slot", "export"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "slot": { "const": "main.overlay" },
+              "export": { "$ref": "#/$defs/export" }
+            }
+          }
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "path", "export"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "path": { "type": "string", "pattern": "^/" },
+              "export": { "$ref": "#/$defs/export" }
+            }
+          }
+        },
+        "navigation": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "page"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "page": { "$ref": "#/$defs/id" }
+            }
+          }
+        },
+        "commands": { "type": "array" },
+        "menus": { "type": "array" },
+        "contextMenus": { "type": "array" },
+        "settings": { "type": "array" },
+        "shortcuts": { "type": "array" }
       }
     }
   },

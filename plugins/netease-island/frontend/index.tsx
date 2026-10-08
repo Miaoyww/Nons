@@ -1,1 +1,1 @@
-export { DynamicIsland } from "./DynamicIsland";
+export { DynamicIsland } from './DynamicIsland'

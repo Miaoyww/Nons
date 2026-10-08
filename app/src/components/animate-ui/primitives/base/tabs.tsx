@@ -1,65 +1,60 @@
 // Animate UI registry source; license: notices/AnimateUI-LICENSE.txt.
-'use client';
+'use client'
 
-import * as React from 'react';
-import { Tabs as TabsPrimitive } from '@base-ui/react/tabs';
+import * as React from 'react'
+import { Tabs as TabsPrimitive } from '@base-ui/react/tabs'
 import {
   motion,
   AnimatePresence,
   useReducedMotion,
   type HTMLMotionProps,
-  type Transition,
-} from 'motion/react';
+  type Transition
+} from 'motion/react'
 
 import {
   Highlight,
   HighlightItem,
   type HighlightProps,
-  type HighlightItemProps,
-} from '@/components/animate-ui/primitives/effects/highlight';
-import { getStrictContext } from '@/lib/get-strict-context';
-import { useControlledState } from '@/hooks/use-controlled-state';
+  type HighlightItemProps
+} from '@/components/animate-ui/primitives/effects/highlight'
+import { getStrictContext } from '@/lib/get-strict-context'
+import { useControlledState } from '@/hooks/use-controlled-state'
 import {
   AutoHeight,
-  type AutoHeightProps,
-} from '@/components/animate-ui/primitives/effects/auto-height';
+  type AutoHeightProps
+} from '@/components/animate-ui/primitives/effects/auto-height'
 
 type TabsContextType = {
-  value: string | undefined;
-  setValue: TabsProps['onValueChange'];
-};
+  value: string | undefined
+  setValue: TabsProps['onValueChange']
+}
 
-const [TabsProvider, useTabs] =
-  getStrictContext<TabsContextType>('TabsContext');
+const [TabsProvider, useTabs] = getStrictContext<TabsContextType>('TabsContext')
 
-type TabsProps = React.ComponentProps<typeof TabsPrimitive.Root>;
+type TabsProps = React.ComponentProps<typeof TabsPrimitive.Root>
 
 function Tabs(props: TabsProps) {
   const [value, setValue] = useControlledState({
     value: props.value,
     defaultValue: props.defaultValue,
-    onChange: props.onValueChange,
-  });
+    onChange: props.onValueChange
+  })
 
   return (
     <TabsProvider value={{ value, setValue }}>
-      <TabsPrimitive.Root
-        data-slot="tabs"
-        {...props}
-        onValueChange={setValue}
-      />
+      <TabsPrimitive.Root data-slot="tabs" {...props} onValueChange={setValue} />
     </TabsProvider>
-  );
+  )
 }
 
-type TabsHighlightProps = Omit<HighlightProps, 'controlledItems' | 'value'>;
+type TabsHighlightProps = Omit<HighlightProps, 'controlledItems' | 'value'>
 
 function TabsHighlight({
   transition = { type: 'spring', stiffness: 200, damping: 25 },
   ...props
 }: TabsHighlightProps) {
-  const { value } = useTabs();
-  const reducedMotion = useReducedMotion();
+  const { value } = useTabs()
+  const reducedMotion = useReducedMotion()
 
   return (
     <Highlight
@@ -70,31 +65,30 @@ function TabsHighlight({
       click={false}
       {...props}
     />
-  );
+  )
 }
 
-type TabsListProps = React.ComponentProps<typeof TabsPrimitive.List>;
+type TabsListProps = React.ComponentProps<typeof TabsPrimitive.List>
 
 function TabsList(props: TabsListProps) {
-  return <TabsPrimitive.List data-slot="tabs-list" {...props} />;
+  return <TabsPrimitive.List data-slot="tabs-list" {...props} />
 }
 
 type TabsHighlightItemProps = HighlightItemProps & {
-  value: string;
-};
+  value: string
+}
 
 function TabsHighlightItem(props: TabsHighlightItemProps) {
-  return <HighlightItem data-slot="tabs-highlight-item" {...props} />;
+  return <HighlightItem data-slot="tabs-highlight-item" {...props} />
 }
 
-type TabsTabProps = React.ComponentProps<typeof TabsPrimitive.Tab>;
+type TabsTabProps = React.ComponentProps<typeof TabsPrimitive.Tab>
 
 function TabsTab(props: TabsTabProps) {
-  return <TabsPrimitive.Tab data-slot="tabs-tab" {...props} />;
+  return <TabsPrimitive.Tab data-slot="tabs-tab" {...props} />
 }
 
-type TabsPanelProps = React.ComponentProps<typeof TabsPrimitive.Panel> &
-  HTMLMotionProps<'div'>;
+type TabsPanelProps = React.ComponentProps<typeof TabsPrimitive.Panel> & HTMLMotionProps<'div'>
 
 function TabsPanel({
   value,
@@ -102,7 +96,7 @@ function TabsPanel({
   transition = { duration: 0.5, ease: 'easeInOut' },
   ...props
 }: TabsPanelProps) {
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = useReducedMotion()
   return (
     <AnimatePresence mode="wait">
       <TabsPrimitive.Panel
@@ -111,7 +105,10 @@ function TabsPanel({
             data-slot="tabs-panel"
             layout
             layoutDependency={value}
-            initial={{ opacity: reducedMotion ? 1 : 0, filter: reducedMotion ? 'blur(0px)' : 'blur(4px)' }}
+            initial={{
+              opacity: reducedMotion ? 1 : 0,
+              filter: reducedMotion ? 'blur(0px)' : 'blur(4px)'
+            }}
             animate={{ opacity: 1, filter: 'blur(0px)' }}
             exit={{ opacity: 0, filter: 'blur(4px)' }}
             transition={reducedMotion ? { duration: 0 } : transition}
@@ -122,57 +119,47 @@ function TabsPanel({
         value={value}
       />
     </AnimatePresence>
-  );
+  )
 }
 
 type TabsPanelsAutoProps = Omit<AutoHeightProps, 'children'> & {
-  mode?: 'auto-height';
-  children: React.ReactNode;
-  transition?: Transition;
-};
+  mode?: 'auto-height'
+  children: React.ReactNode
+  transition?: Transition
+}
 
 type TabsPanelsLayoutProps = Omit<HTMLMotionProps<'div'>, 'children'> & {
-  mode: 'layout';
-  children: React.ReactNode;
-  transition?: Transition;
-};
+  mode: 'layout'
+  children: React.ReactNode
+  transition?: Transition
+}
 
-type TabsPanelsProps = TabsPanelsAutoProps | TabsPanelsLayoutProps;
+type TabsPanelsProps = TabsPanelsAutoProps | TabsPanelsLayoutProps
 
 const defaultTransition: Transition = {
   type: 'spring',
   stiffness: 200,
-  damping: 30,
-};
+  damping: 30
+}
 
 function isAutoMode(props: TabsPanelsProps): props is TabsPanelsAutoProps {
-  return !props.mode || props.mode === 'auto-height';
+  return !props.mode || props.mode === 'auto-height'
 }
 
 function TabsPanels(props: TabsPanelsProps) {
-  const { value } = useTabs();
+  const { value } = useTabs()
 
   if (isAutoMode(props)) {
-    const { children, transition = defaultTransition, ...autoProps } = props;
+    const { children, transition = defaultTransition, ...autoProps } = props
 
     return (
-      <AutoHeight
-        data-slot="tabs-panels"
-        deps={[value]}
-        transition={transition}
-        {...autoProps}
-      >
+      <AutoHeight data-slot="tabs-panels" deps={[value]} transition={transition} {...autoProps}>
         <React.Fragment key={value}>{children}</React.Fragment>
       </AutoHeight>
-    );
+    )
   }
 
-  const {
-    children,
-    style,
-    transition = defaultTransition,
-    ...layoutProps
-  } = props;
+  const { children, style, transition = defaultTransition, ...layoutProps } = props
 
   return (
     <motion.div
@@ -185,7 +172,7 @@ function TabsPanels(props: TabsPanelsProps) {
     >
       <React.Fragment key={value}>{children}</React.Fragment>
     </motion.div>
-  );
+  )
 }
 
 export {
@@ -202,5 +189,5 @@ export {
   type TabsListProps,
   type TabsTabProps,
   type TabsPanelProps,
-  type TabsPanelsProps,
-};
+  type TabsPanelsProps
+}

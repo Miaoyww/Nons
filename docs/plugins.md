@@ -4,15 +4,15 @@ Nons 在现有播放器上增量提供 `Manifest + WASM Backend + React Frontend
 
 ## 架构与文件
 
-| 部分 | 位置与职责 |
-| --- | --- |
-| Rust Host | `app/src-tauri/src/plugins/`：Manifest、安装、管理、Wasmtime、权限、事件、存储、剪贴板与资源协议 |
-| 公共 ABI | `plugins/wit/plugin.wit`：`nons:plugin@1.0.0`；Guest 初始化、关闭、方法调用；Host 高层 Capability |
-| React Host | `app/src/plugins/`：动态模块、贡献 registry、PluginSlot、PluginPageHost、生命周期与 SDK |
-| 公共类型 | `packages/plugin-sdk/`：独立 `@app/plugin-sdk` 类型包，不引用宿主源码 |
-| 真实插件 | `plugins/netease-island/`：独立 Rust Component 与 React UI |
-| 构建 | `scripts/build-plugin.mjs`、`plugin-build-ui.mjs`、`package-plugin.py`：两端构建、React 外部化与 ZIP |
-| 测试 fixture | `plugins/runtime-fixture/`：资源耗尽／错误验证，不随包安装 |
+| 部分         | 位置与职责                                                                                           |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| Rust Host    | `app/src-tauri/src/plugins/`：Manifest、安装、管理、Wasmtime、权限、事件、存储、剪贴板与资源协议     |
+| 公共 ABI     | `plugins/wit/plugin.wit`：`nons:plugin@1.0.0`；Guest 初始化、关闭、方法调用；Host 高层 Capability    |
+| React Host   | `app/src/plugins/`：动态模块、贡献 registry、PluginSlot、PluginPageHost、生命周期与 SDK              |
+| 公共类型     | `packages/plugin-sdk/`：独立 `@app/plugin-sdk` 类型包，不引用宿主源码                                |
+| 真实插件     | `plugins/netease-island/`：独立 Rust Component 与 React UI                                           |
+| 构建         | `scripts/build-plugin.mjs`、`plugin-build-ui.mjs`、`package-plugin.py`：两端构建、React 外部化与 ZIP |
+| 测试 fixture | `plugins/runtime-fixture/`：资源耗尽／错误验证，不随包安装                                           |
 
 宿主启动、IPC 和协议注册接入原 `lib.rs`；歌曲读取继续使用 `netease.rs` 的现有 Client 和曲目解析。App 增加通用 Provider／Slot，已有工作区和导航增加插件页面分支，设置增加插件管理。Theme 共享原偏好与 CSS tokens，播放 facade 订阅原状态及进度，不创建另一套播放器。
 
@@ -80,27 +80,27 @@ backend／frontend 可独立省略，但至少有一个入口。UI 贡献必须�
 
 WIT Host 的 `call(operation, args-json)` 返回 JSON 或业务错误，身份来自 Store，Guest 不能指定另一个 pluginId。当前操作：
 
-| 操作 | 权限 | 行为 |
-| --- | --- | --- |
-| `music.get-song` | `music:metadata` | `{id}` 查询宿主网易云歌曲信息，返回 PluginSong |
-| `events.emit` | 活跃加载实例 | `{event,payload}` 发布自己的事件 |
-| `storage.get/set/delete` | `storage` | 操作自身的 JSON 键值空间 |
-| `player.read` | `player:read` | 读取经过裁剪的播放状态，不提供本地文件路径 |
-| `player.control` | `player:control` | pause、resume、next、previous、stop，进入既有播放命令队列 |
+| 操作                     | 权限             | 行为                                                      |
+| ------------------------ | ---------------- | --------------------------------------------------------- |
+| `music.get-song`         | `music:metadata` | `{id}` 查询宿主网易云歌曲信息，返回 PluginSong            |
+| `events.emit`            | 活跃加载实例     | `{event,payload}` 发布自己的事件                          |
+| `storage.get/set/delete` | `storage`        | 操作自身的 JSON 键值空间                                  |
+| `player.read`            | `player:read`    | 读取经过裁剪的播放状态，不提供本地文件路径                |
+| `player.control`         | `player:control` | pause、resume、next、previous、stop，进入既有播放命令队列 |
 
 公开 React API：
 
-| API | 返回／用途 |
-| --- | --- |
-| `usePluginBackend()` | `call<T>(method, args?)`；自动绑定身份与加载代次 |
-| `usePluginEvent<T>(event)` | 当前事件最新 payload；订阅随组件卸载清理 |
-| `usePluginStorage()` | 异步 get／set／delete；缺失值为 null |
-| `usePluginNavigate()` | 在当前插件命名空间内导航，参数为 `/child` 等相对插件根路径 |
-| `usePluginRoute()` | 当前插件的 pathname 和 search |
-| `usePlayer()` | 原播放状态和进度；读取需 player:read，control 还需 player:control |
-| `useTheme()` | 原主题偏好 light／dark／system；实际颜色使用宿主 CSS tokens |
-| `useCoverSource()` | 复用宿主封面缓存和失败回退 |
-| `Button` | 宿主已有 Button；不打包另一份 UI 实现 |
+| API                        | 返回／用途                                                        |
+| -------------------------- | ----------------------------------------------------------------- |
+| `usePluginBackend()`       | `call<T>(method, args?)`；自动绑定身份与加载代次                  |
+| `usePluginEvent<T>(event)` | 当前事件最新 payload；订阅随组件卸载清理                          |
+| `usePluginStorage()`       | 异步 get／set／delete；缺失值为 null                              |
+| `usePluginNavigate()`      | 在当前插件命名空间内导航，参数为 `/child` 等相对插件根路径        |
+| `usePluginRoute()`         | 当前插件的 pathname 和 search                                     |
+| `usePlayer()`              | 原播放状态和进度；读取需 player:read，control 还需 player:control |
+| `useTheme()`               | 原主题偏好 light／dark／system；实际颜色使用宿主 CSS tokens       |
+| `useCoverSource()`         | 复用宿主封面缓存和失败回退                                        |
+| `Button`                   | 宿主已有 Button；不打包另一份 UI 实现                             |
 
 SDK 不要求手写 pluginId。所有 SDK 请求经过 `nativeCall` 和 scoped IPC；禁用／reload 后即使 Promise 晚返回，SDK 也拒绝旧结果。事件内部命名为 `plugin:<id>:<event>`，共用 Tauri transport，但 SDK 只读取自身 Scope。订阅在实例卸载时删除；每实例只保留有界的最新事件，不承诺持久历史或初始化之前的事件重放。
 
