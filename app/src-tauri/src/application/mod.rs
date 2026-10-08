@@ -788,6 +788,7 @@ pub fn run() {
             #[cfg(feature = "plugin-probe")]
             plugins::probe::plugin_probe_report,
             plugins::plugin_list,
+            plugins::plugin_open_folder,
             plugins::plugin_discover,
             plugins::plugin_install,
             plugins::plugin_action,

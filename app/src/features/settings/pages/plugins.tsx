@@ -1,8 +1,11 @@
 import { Switch } from '@/components/ui/switch'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { open } from '@tauri-apps/plugin-dialog'
+import { FolderOpen, RefreshCw, RotateCw, Search, Settings, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { errorText, nativeCall } from '@/lib/player'
 import { usePlugins } from '@/plugins/host'
 import type { PluginDescriptor } from '@/plugins/types'
@@ -22,7 +25,13 @@ export function PluginsPage() {
   const [review, setReview] = useState<PluginDescriptor>()
   const [trusted, setTrusted] = useState(false)
   const [removing, setRemoving] = useState<string>()
-  async function run(work: () => Promise<unknown>) {
+  const [query, setQuery] = useState('')
+  const [dragging, setDragging] = useState(false)
+  const pageRef = useRef<HTMLDivElement>(null)
+  const running = useRef(false)
+  const run = useCallback(async (work: () => Promise<unknown>) => {
+    if (running.current) return
+    running.current = true
     setBusy(true)
     setError(undefined)
     try {
@@ -30,9 +39,60 @@ export function PluginsPage() {
     } catch (error) {
       setError(errorText(error))
     } finally {
+      running.current = false
       setBusy(false)
     }
-  }
+  }, [])
+  useEffect(() => {
+    if (!isTauri()) return
+    let disposed = false
+    let unlisten: (() => void) | undefined
+    void getCurrentWebview()
+      .onDragDropEvent(({ payload }) => {
+        if (disposed) return
+        if (payload.type === 'leave') {
+          setDragging(false)
+          return
+        }
+        const surface =
+          pageRef.current?.closest('section[aria-label="插件设置"]') ?? pageRef.current
+        const bounds = surface?.getBoundingClientRect()
+        const x = payload.position.x / window.devicePixelRatio
+        const y = payload.position.y / window.devicePixelRatio
+        const inside =
+          !!bounds && x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom
+        setDragging(inside && payload.type !== 'drop' && !running.current)
+        if (payload.type !== 'drop' || !inside || running.current) return
+        void run(async () => {
+          if (!payload.paths.length || payload.paths.some((path) => !/\.zip$/i.test(path)))
+            throw new Error('请拖入 .zip 格式的插件安装包。')
+          const failures: string[] = []
+          for (const path of new Set(payload.paths)) {
+            try {
+              await nativeCall('plugin_install', { path })
+            } catch (error) {
+              failures.push(`${path.split(/[\\/]/).pop()}：${errorText(error)}`)
+            }
+          }
+          if (failures.length) throw new Error(failures.join('\n'))
+        })
+      })
+      .then((cleanup) => {
+        if (disposed) cleanup()
+        else unlisten = cleanup
+      })
+      .catch((error) => {
+        if (!disposed) setError(errorText(error))
+      })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [run])
+  const search = query.trim().toLocaleLowerCase()
+  const filteredPlugins = plugins.filter((plugin) =>
+    `${plugin.manifest.name} ${plugin.manifest.id}`.toLocaleLowerCase().includes(search)
+  )
   const action = (id: string, action: string, confirmed = false) =>
     run(() => nativeCall('plugin_action', { id, action, confirmed }))
   function install(directory: boolean) {
@@ -47,59 +107,110 @@ export function PluginsPage() {
     })
   }
   return (
-    <div className="flex flex-col gap-6">
+    <div ref={pageRef} className="flex flex-col gap-6" aria-busy={busy}>
       <div>
         <h2 className="text-xl font-bold">插件设置</h2>
         <p className="mt-2 text-sm text-muted-foreground">管理播放器扩展。</p>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Button disabled={busy || !isTauri()} onClick={() => install(false)}>
-          安装 ZIP
-        </Button>
-        <Button variant="outline" disabled={busy || !isTauri()} onClick={() => install(true)}>
-          安装目录
-        </Button>
-        <Button
-          variant="ghost"
-          disabled={busy || !isTauri()}
-          onClick={() => void run(() => nativeCall('plugin_discover'))}
-        >
-          重新发现
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            disabled={busy || !isTauri()}
+            onClick={() => void run(() => nativeCall('plugin_open_folder'))}
+          >
+            <FolderOpen aria-hidden="true" />
+            打开文件夹
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="刷新插件"
+            title="刷新插件"
+            disabled={busy || !isTauri()}
+            onClick={() => void run(() => nativeCall('plugin_discover'))}
+          >
+            <RefreshCw aria-hidden="true" />
+          </Button>
+        </div>
+        <div className="relative w-full sm:ml-auto sm:w-56">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            type="search"
+            aria-label="搜索已安装的插件"
+            placeholder="搜索已安装的插件"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
+      <div
+        className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed p-4 transition-colors ${dragging ? 'border-primary bg-primary/5' : 'border-border bg-muted/20'}`}
+      >
+        <div className="flex items-center gap-3">
+          <Upload aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
+          <div role="status">
+            <p className="text-sm font-medium">
+              {busy ? '正在处理插件…' : dragging ? '松开即可安装插件' : '拖拽 ZIP 文件到此页面安装'}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">安装后查看权限，再启用插件。</p>
+          </div>
+        </div>
+        <Button variant="outline" disabled={busy || !isTauri()} onClick={() => install(false)}>
+          选择 ZIP
         </Button>
       </div>
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="whitespace-pre-line break-words text-sm text-destructive">
           {error}
         </p>
       )}
       {plugins.length === 0 && (
         <p className="text-sm text-muted-foreground">暂无插件。安装后，查看权限并明确启用。</p>
       )}
-      {plugins.map((plugin) => (
+      {plugins.length > 0 && filteredPlugins.length === 0 && (
+        <p role="status" className="text-sm text-muted-foreground">
+          未找到匹配的已安装插件。
+        </p>
+      )}
+      {filteredPlugins.map((plugin) => (
         <section key={plugin.manifest.id} className="rounded-xl border border-border p-5">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className="font-semibold">{plugin.manifest.name}</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
+            <div className="min-w-0">
+              <h3 className="break-words font-semibold">{plugin.manifest.name}</h3>
+              <p className="mt-1 break-words text-xs text-muted-foreground">
                 {plugin.manifest.id} · {plugin.manifest.version}
               </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {plugin.error
+                  ? '发生错误'
+                  : plugin.loaded
+                    ? '已加载'
+                    : plugin.enabled
+                      ? '已启用，未加载'
+                      : '已关闭'}
+              </p>
             </div>
-            <span className="text-sm text-muted-foreground">
-              {plugin.error
-                ? '发生错误'
-                : plugin.loaded
-                  ? '已加载'
-                  : plugin.enabled
-                    ? '已启用，未加载'
-                    : '已关闭'}
-            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled
+              aria-label={`设置 ${plugin.manifest.name}（暂未开放）`}
+              title="插件设置（暂未开放）"
+            >
+              <Settings aria-hidden="true" />
+            </Button>
           </div>
           {plugin.error && (
             <p role="alert" className="mt-3 break-words text-sm text-destructive">
               {plugin.error}
             </p>
           )}
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <Button
               disabled={busy}
               variant={plugin.enabled ? 'outline' : 'default'}
@@ -122,18 +233,31 @@ export function PluginsPage() {
                 >
                   {plugin.loaded ? '卸载运行实例' : '加载'}
                 </Button>
-                <Button
-                  disabled={busy}
-                  variant="ghost"
-                  onClick={() => void action(plugin.manifest.id, 'reload')}
-                >
-                  重新加载
-                </Button>
               </>
             )}
-            <Button disabled={busy} variant="ghost" onClick={() => setRemoving(plugin.manifest.id)}>
-              删除插件
-            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                disabled={busy || !plugin.enabled}
+                variant="ghost"
+                size="icon"
+                aria-label={`重新加载 ${plugin.manifest.name}`}
+                title="重新加载"
+                onClick={() => void action(plugin.manifest.id, 'reload')}
+              >
+                <RotateCw aria-hidden="true" />
+              </Button>
+              <Button
+                disabled={busy}
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                aria-label={`卸载 ${plugin.manifest.name}`}
+                title="卸载插件"
+                onClick={() => setRemoving(plugin.manifest.id)}
+              >
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </div>
           </div>
           {review?.manifest.id === plugin.manifest.id && (
             <div className="mt-4 rounded-lg bg-muted/50 p-4 text-sm">
@@ -169,7 +293,7 @@ export function PluginsPage() {
           )}
           {removing === plugin.manifest.id && (
             <div className="mt-4 rounded-lg bg-muted/50 p-4 text-sm">
-              <p>删除插件会同时删除其独立存储数据。</p>
+              <p>卸载插件会同时删除其独立存储数据。</p>
               <div className="mt-3 flex gap-2">
                 <Button
                   variant="destructive"
@@ -179,7 +303,7 @@ export function PluginsPage() {
                     setRemoving(undefined)
                   }}
                 >
-                  确认删除
+                  确认卸载
                 </Button>
                 <Button variant="ghost" onClick={() => setRemoving(undefined)}>
                   取消

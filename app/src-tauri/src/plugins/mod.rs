@@ -22,6 +22,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{Emitter, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -637,6 +638,14 @@ fn host_module(module: &str) -> AppResult<(Vec<u8>, &'static str)> {
 #[tauri::command]
 pub fn plugin_list(manager: State<'_, Arc<PluginManager>>) -> AppResult<Vec<Descriptor>> {
     manager.list()
+}
+#[tauri::command]
+pub fn plugin_open_folder(manager: State<'_, Arc<PluginManager>>) -> AppResult<()> {
+    manager
+        .app
+        .opener()
+        .open_path(manager.root.to_string_lossy(), None::<&str>)
+        .map_err(|error| error.to_string())
 }
 #[tauri::command]
 pub fn plugin_discover(manager: State<'_, Arc<PluginManager>>) -> AppResult<Vec<Descriptor>> {
