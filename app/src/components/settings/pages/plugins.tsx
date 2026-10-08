@@ -23,7 +23,7 @@ export function PluginsPage() {
     });
   }
   return <div className="flex flex-col gap-6">
-    <div><h2 className="text-xl font-bold">插件</h2><p className="mt-2 text-sm text-muted-foreground">安装扩展，为播放器添加新的界面和能力。</p></div>
+    <div><h2 className="text-xl font-bold">插件设置</h2><p className="mt-2 text-sm text-muted-foreground">管理播放器扩展。</p></div>
     <div className="flex flex-wrap gap-2"><Button disabled={busy || !isTauri()} onClick={() => install(false)}>安装 ZIP</Button><Button variant="outline" disabled={busy || !isTauri()} onClick={() => install(true)}>安装目录</Button><Button variant="ghost" disabled={busy || !isTauri()} onClick={() => void run(() => nativeCall("plugin_discover"))}>重新发现</Button></div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {plugins.length === 0 && <p className="text-sm text-muted-foreground">暂无插件。安装后，查看权限并明确启用。</p>}

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
@@ -11,7 +11,6 @@ const previewFonts = ["Arial", "Georgia", "Microsoft YaHei", "Segoe UI", "Times 
 export function FontPicker({ value, onChange, label, defaultLabel }: {
   value: string; onChange: (family: string) => void; label: string; defaultLabel: string;
 }) {
-  const id = useId();
   const [families, setFamilies] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -33,7 +32,7 @@ export function FontPicker({ value, onChange, label, defaultLabel }: {
   return <div className="flex w-64 max-w-full flex-col gap-2">
     <Combobox items={items} value={items.find((item) => item.value === value) ?? items[0]}
       isItemEqualToValue={(a, b) => a.value === b.value} onValueChange={(item) => { if (item) onChange(item.value); }}>
-      <ComboboxInput aria-label={label} aria-describedby={id} placeholder="搜索字体…" className="w-full" />
+      <ComboboxInput aria-label={label} placeholder="搜索字体…" className="w-full" />
       <ComboboxContent>
         <ComboboxEmpty>{loading ? "正在读取字体…" : "没有匹配的字体"}</ComboboxEmpty>
         <ComboboxList>{(item: FontOption) => <ComboboxItem key={item.value} value={item}>
@@ -41,7 +40,6 @@ export function FontPicker({ value, onChange, label, defaultLabel }: {
         </ComboboxItem>}</ComboboxList>
       </ComboboxContent>
     </Combobox>
-    <p id={id} className="break-words text-sm" style={{ fontFamily: value ? fontStack(value) : undefined }}>字形预览 Aa 123</p>
     {loading && <p role="status" className="text-xs text-muted-foreground">正在读取系统字体…</p>}
     {error && <div className="text-xs"><p role="alert" className="text-destructive">{error}</p><Button size="sm" variant="ghost" onClick={() => setRefresh((n) => n + 1)}>重新读取</Button></div>}
     {!isTauri() && <p className="text-xs text-muted-foreground">浏览器预览使用常见字体；桌面应用显示已安装字体。</p>}

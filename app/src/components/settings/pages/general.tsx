@@ -18,7 +18,7 @@ export function GeneralPage({ theme, onThemeChange }: { theme: Theme; onThemeCha
         <h2 className="text-xl font-bold">界面</h2>
         <p className="mt-2 text-sm text-muted-foreground">调整 Nons 的外观。</p>
       </div>
-      <SettingsCard title="界面主题" description="选择浅色、深色，或跟随系统的外观设置。">
+      <SettingsCard title="界面主题" description="选择浅色、深色或跟随系统。">
         <div role="radiogroup" aria-label="界面主题" className="flex flex-wrap gap-1.5">
           {themes.map(({ value, label, icon: Icon }) => (
             <label key={value} className="relative cursor-pointer">
@@ -31,7 +31,7 @@ export function GeneralPage({ theme, onThemeChange }: { theme: Theme; onThemeCha
           ))}
         </div>
       </SettingsCard>
-      <SettingsCard title="应用字体" description="搜索并选择已安装字体，即时生效并自动保存。缺失字符由系统字体补全。">
+      <SettingsCard title="应用字体" description="选择已安装字体，缺失字符使用系统后备字体。">
         <FontPicker label="应用字体" value={fonts.app} onChange={(family) => setFont("app", family)} defaultLabel="应用默认字体" />
       </SettingsCard>
     </div>
