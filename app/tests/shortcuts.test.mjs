@@ -8,13 +8,14 @@ import ts from "typescript";
 function session(saved) {
   const dom = new JSDOM('<main><input><button>Play</button><div contenteditable="true"><span></span></div></main>');
   const registered = new Map(), values = new Map(saved ? [["nons-shortcut-settings", saved]] : []);
+  const keys = loadKeys();
   const exports = {};
   const source = readFileSync(new URL("../src/lib/shortcuts.ts", import.meta.url), "utf8");
   runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
     exports, Element: dom.window.Element,
     localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) },
-    require: (name) => name === "@tauri-apps/api/core" ? { isTauri: () => true } : name === "./player" ? { errorText: String } : {
-      async register(key, fn) { if (key === "taken") throw Error("occupied"); if (registered.has(key)) throw Error("duplicate"); registered.set(key, fn); },
+    require: (name) => name === "./shortcut-keys" ? keys : name === "@tauri-apps/api/core" ? { isTauri: () => true } : name === "./player" ? { errorText: String } : {
+      async register(key, fn) { if (key === "Ctrl+Alt+N") throw Error("occupied"); if (registered.has(key)) throw Error("duplicate"); registered.set(key, fn); },
       async unregister(keys) { for (const key of keys) registered.delete(key); },
     },
   });
@@ -40,7 +41,7 @@ test("global shortcuts default to disabled and blank, restore on startup and unr
 test("registration failure removes partial bindings and restores previous shortcuts without saving", async () => {
   const app = session(); await app.saveShortcuts(config(app, { toggle: "Ctrl+Alt+P" }));
   const saved = app.values.get("nons-shortcut-settings");
-  assert.equal(await app.saveShortcuts(config(app, { toggle: "Ctrl+Alt+Q", next: "taken" })), false);
+  assert.equal(await app.saveShortcuts(config(app, { toggle: "Ctrl+Alt+Q", next: "Ctrl+Alt+N" })), false);
   assert.deepEqual([...app.registered.keys()], ["Ctrl+Alt+P"]);
   assert.equal(app.values.get("nons-shortcut-settings"), saved);
   assert.match(app.getShortcutStatus().error, /occupied/);
@@ -117,4 +118,36 @@ test("Space after clicking a button controls playback and prevents button handle
   assert.equal(activations, 0);
   assert.equal(app.calls.length, 1);
   assert.equal(app.calls[0].args.action, "pause");
+});
+
+function loadKeys() {
+  const exports = {};
+  const source = readFileSync(new URL("../src/lib/shortcut-keys.ts", import.meta.url), "utf8");
+  runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports });
+  return exports;
+}
+
+test("recording accepts physical two/three-key chords, rejects single and four-key chords and normalizes aliases", () => {
+  const keys = loadKeys();
+  const event = { code: "KeyP", ctrlKey: true };
+  assert.equal(keys.captureShortcut(event).binding, "Ctrl+P");
+  assert.equal(keys.captureShortcut({ ...event, shiftKey: true }).binding, "Ctrl+Shift+P");
+  assert.equal(keys.captureShortcut({ code: "Digit1", metaKey: true }).binding, "Super+1");
+  assert.equal(keys.captureShortcut({ code: "KeyP" }).binding, undefined);
+  assert.match(keys.captureShortcut({ ...event, shiftKey: true, altKey: true }).error, /最多三个键/);
+  assert.equal(keys.captureShortcut({ ...event, code: "ControlLeft" }).binding, undefined);
+  assert.equal(keys.normalizeShortcut(" Shift + control + p "), "Ctrl+Shift+P");
+  for (const value of ["P", "Space", "Ctrl+Alt+Shift+P", "Ctrl+Ctrl+P", "Ctrl+Alt", "Ctrl+bogus"]) assert.equal(keys.normalizeShortcut(value), undefined);
+});
+
+test("invalid legacy bindings are cleared, invalid save is rejected, and recording suspends global bindings then restores", async () => {
+  const app = session('{"enabled":true,"bindings":{"toggle":"Space","next":"Ctrl+Alt+N"}}');
+  assert.equal(app.getShortcutStatus().settings.bindings.toggle, "");
+  await app.initializeShortcuts(); // The mock reserves Ctrl+Alt+N, so startup exposes the conflict.
+  await app.saveShortcuts(config(app, { next: "", toggle: "Ctrl+P" }));
+  const saved = app.values.get("nons-shortcut-settings");
+  assert.equal(await app.saveShortcuts(config(app, { previous: "Ctrl+Alt+Shift+P" })), false);
+  assert.equal(app.values.get("nons-shortcut-settings"), saved);
+  await app.setShortcutRecording(true); assert.equal(app.registered.size, 0);
+  await app.setShortcutRecording(false); assert.deepEqual([...app.registered.keys()], ["Ctrl+P"]);
 });

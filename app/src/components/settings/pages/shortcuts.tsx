@@ -1,25 +1,65 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
-import { getShortcutStatus, saveShortcuts, shortcutActions, subscribeShortcuts } from "@/lib/shortcuts";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { Switch } from "@/components/ui/switch";
+import { captureShortcut } from "@/lib/shortcut-keys";
+import { getShortcutStatus, saveShortcuts, setShortcutRecording, shortcutActions, subscribeShortcuts, type ShortcutAction } from "@/lib/shortcuts";
 import { SettingsCard } from "../settings-card";
 
 export function ShortcutsPage() {
   const { settings, busy, error } = useSyncExternalStore(subscribeShortcuts, getShortcutStatus);
   const [draft, setDraft] = useState(() => ({ ...settings.bindings }));
   const [saved, setSaved] = useState(false);
+  const [recording, setRecording] = useState<ShortcutAction>();
+  const [captureError, setCaptureError] = useState<string>();
+  const capturedKey = useRef<string | undefined>(undefined);
+  const recorderButtons = useRef<Partial<Record<ShortcutAction, HTMLButtonElement>>>({});
+  const mounted = useRef(true);
   const desktop = isTauri();
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; void setShortcutRecording(false); };
+  }, []);
+  useEffect(() => { if (recording && !busy) recorderButtons.current[recording]?.focus(); }, [recording, busy]);
+  async function start(action: ShortcutAction) {
+    setSaved(false); setCaptureError(undefined);
+    if (await setShortcutRecording(true) && mounted.current) setRecording(action);
+  }
+  function stop() { setRecording(undefined); void setShortcutRecording(false); }
+  function capture(event: KeyboardEvent<HTMLButtonElement>, action: ShortcutAction) {
+    if (recording !== action || event.key === "Tab") return;
+    event.preventDefault(); event.stopPropagation();
+    capturedKey.current = event.code;
+    if (event.repeat) return;
+    if (event.key === "Escape" && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey) { stop(); setCaptureError(undefined); return; }
+    const result = captureShortcut(event.nativeEvent);
+    if (result.error) { setCaptureError(result.error); return; }
+    if (!result.binding) return;
+    if (shortcutActions.some(([other]) => other !== action && draft[other] === result.binding)) { setCaptureError("此组合键已用于其他操作。"); return; }
+    setDraft({ ...draft, [action]: result.binding }); setCaptureError(undefined); stop();
+  }
   return <div className="flex flex-col gap-8">
     <div><h2 className="text-xl font-bold">快捷键设置</h2><p className="mt-2 text-sm text-muted-foreground">应用内与全局播放控制。</p></div>
     <section className="flex flex-col gap-4" aria-labelledby="app-shortcuts"><h3 id="app-shortcuts" className="text-base font-semibold">应用内快捷键</h3>
-      <SettingsCard title="播放/暂停音乐" description="应用内生效，固定不可更改。"><kbd className="rounded border border-border px-4 py-2 text-sm">空格</kbd></SettingsCard>
+      <SettingsCard title="播放/暂停音乐" description="应用内生效，固定不可更改。"><Kbd>Space</Kbd></SettingsCard>
     </section>
     <section className="flex flex-col gap-4" aria-labelledby="global-shortcuts"><h3 id="global-shortcuts" className="text-base font-semibold">全局快捷键</h3>
-      <SettingsCard title="启用全局快捷键" description="应用在后台时也可使用。"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.enabled} disabled={!desktop || busy} onChange={(event) => { setSaved(false); void saveShortcuts({ ...settings, enabled: event.target.checked }); }} />启用</label></SettingsCard>
-      <p className="text-xs text-muted-foreground">填写组合键（如 Ctrl+Alt+P），留空表示不绑定。</p>
-      {shortcutActions.map(([action, title]) => <SettingsCard key={action} title={title} description={action === "like" ? "收藏当前网易云歌曲。" : "留空不绑定。"}><input aria-label={`${title}全局快捷键`} className="music-input w-56 max-w-full" value={draft[action]} maxLength={100} disabled={!desktop || busy} placeholder="未绑定" onChange={(event) => { setSaved(false); setDraft({ ...draft, [action]: event.target.value }); }} /></SettingsCard>)}
-      <Button variant="outline" className="self-end" disabled={!desktop || busy} onClick={() => { void saveShortcuts({ enabled: settings.enabled, bindings: draft }).then(setSaved); }}>{busy ? "正在保存…" : "保存快捷键"}</Button>
-      {saved && <p role="status" className="text-xs text-muted-foreground">已保存</p>}
+      <SettingsCard title="启用全局快捷键" description="应用在后台时也可使用。"><Switch aria-label="启用全局快捷键" checked={settings.enabled} disabled={!desktop || busy} onCheckedChange={(enabled) => { stop(); setSaved(false); void saveShortcuts({ ...settings, enabled }); }} /></SettingsCard>
+      {settings.enabled && <>
+        <p className="text-xs text-muted-foreground">点击录入组合键，最多三个键；Esc 取消，可清除绑定。</p>
+        {shortcutActions.map(([action, title]) => <SettingsCard key={action} title={title} description={action === "like" ? "收藏当前网易云歌曲。" : "留空不绑定。"}>
+          <div className="flex items-center gap-2">
+            <Button ref={(node) => { recorderButtons.current[action] = node ?? undefined; }} variant="outline" className="min-w-40" aria-label={`${title}全局快捷键`} data-shortcut-recorder aria-pressed={recording === action} disabled={!desktop || busy} onClick={() => void start(action)} onKeyDown={(event) => capture(event, action)} onKeyUp={(event) => { if (capturedKey.current === event.code) { capturedKey.current = undefined; event.preventDefault(); event.stopPropagation(); } }} onBlur={() => { if (recording === action) stop(); }}>
+              {recording === action ? "请按组合键…" : draft[action] ? <KbdGroup>{draft[action].split("+").map((key) => <Kbd key={key}>{key}</Kbd>)}</KbdGroup> : "点击录入"}
+            </Button>
+            <Button variant="ghost" size="sm" aria-label={`清除${title}绑定`} disabled={busy || !draft[action]} onClick={() => { stop(); setSaved(false); setDraft({ ...draft, [action]: "" }); }}>清除</Button>
+          </div>
+        </SettingsCard>)}
+        <Button variant="outline" className="self-end" disabled={!desktop || busy || !!recording} onClick={() => { void saveShortcuts({ enabled: settings.enabled, bindings: draft }).then(setSaved); }}>{busy ? "正在保存…" : "保存快捷键"}</Button>
+        {saved && <p role="status" className="text-xs text-muted-foreground">已保存</p>}
+        {captureError && <p role="alert" className="text-sm text-destructive">{captureError}</p>}
+      </>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!desktop && <p className="text-xs text-muted-foreground">快捷键在桌面应用中生效。</p>}
     </section>

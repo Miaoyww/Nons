@@ -1,3 +1,4 @@
+import { normalizeShortcut } from "./shortcut-keys";
 import { isTauri } from "@tauri-apps/api/core";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 import { errorText } from "./player";
@@ -17,7 +18,7 @@ try {
     settings.enabled = saved.enabled === true;
     for (const [action] of shortcutActions) {
       const value = saved.bindings?.[action];
-      if (typeof value === "string" && value.length <= 100) settings.bindings[action] = value.trim();
+      if (typeof value === "string" && value.length <= 100) settings.bindings[action] = normalizeShortcut(value) ?? "";
     }
   }
 } catch { /* Corrupt storage uses unbound defaults. */ }
@@ -27,6 +28,15 @@ const notify = () => { status = { ...status, settings }; listeners.forEach((fn) 
 export const getShortcutStatus = () => status;
 export const subscribeShortcuts = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
 let registered: string[] = [];
+let recording = false;
+let recordingQueue = Promise.resolve(true);
+export function setShortcutRecording(value: boolean) {
+  if (recording === value) return recordingQueue;
+  recording = value;
+  // Serialize pause/resume so navigating away during registration still restores shortcuts.
+  recordingQueue = recordingQueue.then(() => saveShortcuts(settings, false));
+  return recordingQueue;
+}
 let dispatch: (action: ShortcutAction) => void = () => {};
 export function setShortcutDispatcher(fn: (action: ShortcutAction) => void) { dispatch = fn; }
 let initialized = false;
@@ -42,11 +52,11 @@ export async function saveShortcuts(next: ShortcutSettings, persist = true) {
   const cleaned = { enabled: next.enabled, bindings: { ...next.bindings } };
   for (const [action] of shortcutActions) cleaned.bindings[action] = cleaned.bindings[action].trim();
   async function install(value: ShortcutSettings) {
-    if (!isTauri() || !value.enabled) return;
+    if (!isTauri() || !value.enabled || recording) return;
     for (const [action] of shortcutActions) {
       const binding = value.bindings[action];
       if (!binding) continue;
-      await register(binding, (event) => { if (event.state === "Pressed") dispatch(action); });
+      await register(binding, (event) => { if (event.state === "Pressed" && !recording) dispatch(action); });
       registered.push(binding);
     }
   }
@@ -55,6 +65,11 @@ export async function saveShortcuts(next: ShortcutSettings, persist = true) {
     registered = [];
   }
   try {
+    for (const [action, label] of shortcutActions) {
+      const binding = normalizeShortcut(cleaned.bindings[action]);
+      if (binding === undefined) throw new Error(`${label}只能绑定二至三个键的组合键。`);
+      cleaned.bindings[action] = binding;
+    }
     const values = Object.values(cleaned.bindings).filter(Boolean).map((value) => value.toLowerCase());
     if (new Set(values).size !== values.length) throw new Error("同一快捷键不能用于多个操作。");
     await clear();
@@ -75,8 +90,6 @@ export async function saveShortcuts(next: ShortcutSettings, persist = true) {
 
 export function isPlaybackSpace(event: KeyboardEvent) {
   if (event.code !== "Space" || event.isComposing || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
-  // A global Space binding already receives the foreground key press.
-  if (registered.some((binding) => binding.toLowerCase() === "space")) return false;
   const target = event.target;
   return !(target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="slider"], [role="spinbutton"], [data-shortcut-recorder]'));
 }

@@ -1,0 +1,68 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+import { runInNewContext } from "node:vm";
+import * as React from "react";
+import * as jsxRuntime from "react/jsx-runtime";
+import { createRoot } from "react-dom/client";
+import { JSDOM } from "jsdom";
+import ts from "typescript";
+
+function load(path, modules = {}) {
+  const exports = {};
+  runInNewContext(ts.transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText, { exports, require: (name) => modules[name] });
+  return exports;
+}
+
+test("shortcut page hides disabled bindings, records valid chords with Kbd, exposes validation and clears bindings", async () => {
+  const dom = new JSDOM('<div id="root"></div>');
+  globalThis.window = dom.window; globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const keys = load("../src/lib/shortcut-keys.ts");
+  const actions = [["toggle", "播放/暂停音乐"], ["previous", "上一首"], ["next", "下一首"], ["like", "收藏此音乐"], ["volumeUp", "音量加"], ["volumeDown", "音量减"]];
+  let status = { settings: { enabled: false, bindings: Object.fromEntries(actions.map(([name]) => [name, ""])) }, busy: false };
+  const listeners = new Set(), pauses = [];
+  const page = load("../src/components/settings/pages/shortcuts.tsx", {
+    react: React, "react/jsx-runtime": jsxRuntime,
+    "@tauri-apps/api/core": { isTauri: () => true },
+    "@/components/ui/button": { Button: "button" },
+    "@/components/ui/kbd": { Kbd: "kbd", KbdGroup: "div" },
+    "@/components/ui/switch": { Switch: ({ checked, onCheckedChange, ...props }) => React.createElement("button", { ...props, role: "switch", "aria-checked": checked, onClick: () => onCheckedChange(!checked) }) },
+    "@/lib/shortcut-keys": keys,
+    "@/lib/shortcuts": {
+      shortcutActions: actions, getShortcutStatus: () => status,
+      subscribeShortcuts: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
+      setShortcutRecording: async (value) => { pauses.push(value); return true; },
+      saveShortcuts: async (settings) => { status = { ...status, settings }; listeners.forEach((fn) => fn()); return true; },
+    },
+    "../settings-card": { SettingsCard: ({ title, children }) => React.createElement("div", {}, title, children) },
+  }).ShortcutsPage;
+  const root = createRoot(document.getElementById("root"));
+  const click = async (element) => React.act(async () => element.click());
+  const press = async (element, code, props = {}) => React.act(async () => { element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { code, key: code === "Escape" ? "Escape" : "p", bubbles: true, cancelable: true, ...props })); });
+  try {
+    await React.act(async () => root.render(React.createElement(page)));
+    assert.equal(document.querySelector("kbd").textContent, "Space");
+    assert.equal(document.querySelectorAll("[data-shortcut-recorder]").length, 0);
+    await click(document.querySelector('[role="switch"]'));
+    assert.equal(document.querySelectorAll("[data-shortcut-recorder]").length, 6);
+    const recorder = document.querySelector('[aria-label="播放/暂停音乐全局快捷键"]');
+    await click(recorder); assert.equal(document.activeElement, recorder);
+    await press(recorder, "KeyP"); assert.match(document.querySelector('[role="alert"]').textContent, /组合键/);
+    await press(recorder, "KeyP", { ctrlKey: true, altKey: true, shiftKey: true }); assert.match(document.querySelector('[role="alert"]').textContent, /最多三个键/);
+    await press(recorder, "KeyP", { ctrlKey: true, shiftKey: true });
+    assert.deepEqual([...recorder.querySelectorAll("kbd")].map((kbd) => kbd.textContent), ["Ctrl", "Shift", "P"]);
+    const save = [...document.querySelectorAll("button")].find((button) => button.textContent === "保存快捷键");
+    await click(save); assert.equal(status.settings.bindings.toggle, "Ctrl+Shift+P");
+    const previous = document.querySelector('[aria-label="上一首全局快捷键"]');
+    await click(previous); await press(previous, "KeyP", { ctrlKey: true, shiftKey: true });
+    assert.match(document.querySelector('[role="alert"]').textContent, /其他操作/);
+    await press(previous, "Escape");
+    await click(document.querySelector('[aria-label="清除播放/暂停音乐绑定"]')); await click(save);
+    assert.equal(status.settings.bindings.toggle, "");
+    await click(document.querySelector('[role="switch"]')); assert.equal(document.querySelectorAll("[data-shortcut-recorder]").length, 0);
+    assert.ok(pauses.includes(true) && pauses.includes(false));
+  } finally { await React.act(async () => root.unmount()); dom.window.close(); delete globalThis.window; delete globalThis.document; }
+});
