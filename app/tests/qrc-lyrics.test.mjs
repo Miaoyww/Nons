@@ -30,3 +30,36 @@ test("empty or malformed QRC triggers fallback; LRC and YRC still parse", () => 
     assert.equal(exports.parseLyrics({ ...lyrics, format, content }, 4000)[0].words[0].word, "Hello");
   }
 });
+
+test("translation and romanization tolerate timestamp drift through AMLL parsing", () => {
+  for (const [format, content] of [
+    ["qrc", "[1000,500]First(1000,500)\n[3000,500]Second(3000,500)"],
+    ["yrc", "[1000,500](1000,500,0)First\n[3000,500](3000,500,0)Second"],
+    ["lrc", "[00:01.00]First\n[00:03.00]Second"],
+  ]) {
+    const result = exports.parseLyrics({ ...lyrics, format, content,
+      translation: "[00:00.98]第一句\n[00:03.50]第二句",
+      romanization: "[00:01.03]first\n[00:02.96]second",
+    }, 4000);
+    assert.deepEqual(Array.from(result, (line) => line.translatedLyric), ["第一句", "第二句"]);
+    assert.deepEqual(Array.from(result, (line) => line.romanLyric), ["first", "second"]);
+  }
+});
+
+test("auxiliary matching prefers the nearest nonempty line and does not carry distant text", () => {
+  const result = exports.parseLyrics({ ...lyrics, format: "lrc",
+    content: "[00:01.00]First\n[00:03.00]Second\n[00:05.00]Third",
+    translation: "[00:00.60]较远\n[00:00.99]第一句\n[00:01.00]\n[00:03.00]第二句\n[00:03.01]较近\n[00:05.501]不应匹配",
+    romanization: null,
+  }, 6000);
+  assert.deepEqual(Array.from(result, (line) => line.translatedLyric), ["第一句", "第二句", ""]);
+});
+
+test("word-level auxiliary text is parsed by the corresponding AMLL parser", () => {
+  const result = exports.parseLyrics({ ...lyrics,
+    translation: "[980,500](980,500,0)第一句\n[3010,500](3010,500,0)第二句",
+    romanization: "[1020,500]first(1020,500)\n[2990,500]second(2990,500)",
+  }, 4000);
+  assert.deepEqual(Array.from(result, (line) => line.translatedLyric), ["第一句", "第二句"]);
+  assert.deepEqual(Array.from(result, (line) => line.romanLyric), ["first", "second"]);
+});
