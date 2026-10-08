@@ -1927,6 +1927,11 @@
   background: var(--library-primary);
   filter: brightness(1.1);
 }
+.dark .discover-fm-play,
+.dark .discover-fm-play:hover:not(:disabled) {
+  background: var(--library-primary-bg);
+  color: var(--library-primary);
+}
 .discover-fm-play svg {
   width: 20px;
   height: 20px;
