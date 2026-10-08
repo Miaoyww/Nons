@@ -586,29 +586,30 @@
 .discover-greeting { margin-bottom: 24px; }
 .discover-greeting p { margin-top: 4px; color: var(--muted-foreground); }
 .discover-featured { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 20px; }
-.discover-shortcuts { display: grid; gap: 14px; }
-.discover-shortcut { display: flex; align-items: center; gap: 20px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 16px; text-align: left; min-width: 0; background: var(--card); cursor: pointer; transition: background-color 150ms; }
+.discover-shortcuts { display: grid; gap: 12px; }
+.discover-shortcut { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 16px; text-align: left; min-width: 0; background: var(--card); cursor: pointer; transition: background-color 150ms; }
 .discover-shortcut:hover { background: var(--muted); }
-.discover-shortcut-cover { width: 76px; aspect-ratio: 1; }
+.discover-shortcut-cover { width: 60px; aspect-ratio: 1; }
 .discover-shortcut-copy { flex: 1; min-width: 0; }
-.discover-shortcut-title { display: flex; align-items: center; gap: 12px; font-size: 21px; }
-.discover-shortcut-title svg { width: 28px; height: 28px; color: var(--foreground); flex-shrink: 0; }
-.discover-shortcut-desc { display: block; margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
+.discover-shortcut-title { display: flex; align-items: center; gap: 10px; font-size: 18px; }
+.discover-shortcut-title svg { width: 24px; height: 24px; color: var(--foreground); flex-shrink: 0; }
+.discover-shortcut-desc { display: block; margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
 .discover-shortcut-arrow { width: 32px; height: 32px; padding: 6px; flex-shrink: 0; border-radius: 50%; color: var(--library-primary); background: var(--library-primary-bg); }
 .discover-shortcut:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
-.discover-fm { display: flex; align-items: center; gap: 24px; min-width: 0; padding: 20px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
-.discover-fm-cover { width: clamp(140px, 17cqw, 220px); aspect-ratio: 1; border-radius: 12px; }
+.discover-fm { display: flex; align-items: center; gap: 20px; min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
+.discover-fm-cover { width: clamp(120px, 13cqw, 160px); aspect-ratio: 1; border-radius: 12px; }
 .discover-fm-info { display: flex; flex-direction: column; align-self: stretch; flex: 1; min-width: 0; padding-block: 4px; }
-.discover-fm-info h2 { font-size: clamp(22px, 2.4cqw, 32px); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.discover-fm-info > p { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); margin-top: 8px; font-size: 14px; }
+.discover-fm-info h2 { font-size: clamp(20px, 2cqw, 26px); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.discover-fm-info > p { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); margin-top: 6px; font-size: 13px; }
 .discover-fm-info > p svg { width: 17px; height: 17px; flex-shrink: 0; }
 .discover-fm-info > p span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.discover-fm-bottom { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 20px; }
-.discover-fm-controls { display: flex; align-items: center; gap: 10px; }
+.discover-fm-bottom { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 12px; }
+.discover-fm-controls { display: flex; align-items: center; gap: 8px; }
 .discover-fm-controls > button { border-radius: 50%; }
-.discover-fm-play { width: 58px; height: 58px; background: var(--library-primary); color: white; }
+.discover-fm-controls > button:not(.discover-fm-play) { width: 40px; height: 40px; }
+.discover-fm-play { width: 48px; height: 48px; background: var(--library-primary); color: white; }
 .discover-fm-play:hover:not(:disabled) { background: var(--library-primary); filter: brightness(1.1); }
-.discover-fm-play svg { width: 24px; height: 24px; fill: currentColor; }
+.discover-fm-play svg { width: 20px; height: 20px; fill: currentColor; }
 .discover-fm-label { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
 .discover-fm-label svg { width: 16px; height: 16px; }
 .discover-more { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; margin: 28px 0 20px; }
@@ -622,7 +623,7 @@
 .discover-playlist-grid > * { width: 100%; max-width: 240px; min-width: 0; }
 .discover-category-dialog { width: min(720px, calc(100vw - 48px)); max-width: 720px; max-height: min(850px, calc(100dvh - 64px)); display: flex; flex-direction: column; }
 .discover-category-scroll { overflow-y: auto; min-height: 0; margin-block: 20px; padding: 2px 6px 8px 2px; }
-@container (max-width: 950px) { .discover-featured { grid-template-columns: 1fr; } .discover-shortcuts { grid-template-columns: 1fr 1fr; } .discover-shortcut { gap: 12px; } .discover-shortcut-cover { width: 56px; } .discover-shortcut-title { font-size: 18px; } .discover-fm-cover { width: 180px; } }
-@container (max-width: 560px) { .discover-shortcuts { grid-template-columns: 1fr; } .discover-fm { gap: 16px; padding: 16px; } .discover-fm-cover { width: 120px; } .discover-fm-controls { gap: 4px; } .discover-fm-play { width: 48px; height: 48px; } .discover-more { gap: 12px; } .discover-tabs { gap: 8px; } .discover-tabs button { padding-inline: 14px; } .discover-playlist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; } }
+@container (max-width: 950px) { .discover-featured { grid-template-columns: 1fr; } .discover-shortcuts { grid-template-columns: 1fr 1fr; } .discover-shortcut { gap: 12px; } .discover-shortcut-cover { width: 56px; } .discover-shortcut-title { font-size: 18px; } .discover-fm-cover { width: 160px; } }
+@container (max-width: 560px) { .discover-shortcuts { grid-template-columns: 1fr; } .discover-fm { gap: 12px; padding: 14px; } .discover-fm-cover { width: 104px; } .discover-fm-controls { gap: 4px; } .discover-fm-play { width: 48px; height: 48px; } .discover-more { gap: 12px; } .discover-tabs { gap: 8px; } .discover-tabs button { padding-inline: 14px; } .discover-playlist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; } }
 @media (hover: none) { .library-cover-play { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .library-cover-open img, .library-cover-play { transition: none; } .library-cover-art:is(:hover, :focus-within) img { transform: none; } .library-cover-play { transform: none; } }
