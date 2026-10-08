@@ -19,8 +19,8 @@ import { InfiniteLoad } from "./infinite-load";
 const categories = [{ value: "song", label: "音乐", icon: Music2 }, { value: "artist", label: "艺术家", icon: Mic2 }, { value: "album", label: "专辑", icon: Disc3 }, { value: "playlist", label: "歌单", icon: ListMusic }] as const;
 type Kind = typeof categories[number]["value"];
 interface Props { refresh: number; importing: boolean; onImport: () => void; onError: (cause: unknown) => void; onNotice: (message: string) => void }
-interface ResultProps { kind: Kind; keyword: string; refresh: number; onError: Props["onError"]; onNotice: Props["onNotice"] }
-function Results({ kind, keyword, refresh, onError, onNotice }: ResultProps) {
+interface ResultProps { sectionTitle?: string; kind: Kind; keyword: string; refresh: number; onError: Props["onError"]; onNotice: Props["onNotice"] }
+function Results({ sectionTitle, kind, keyword, refresh, onError, onNotice }: ResultProps) {
   const { navigate } = useMusicNavigation(); const player = usePlayer(); const [playing, setPlaying] = useState(false);
   const loader = useCallback((offset: number) => kind === "song"
     ? nativeCall<{ items: Track[]; more: boolean }>("local_entity_tracks", { kind: "song", id: "", keyword, offset })
@@ -31,7 +31,8 @@ function Results({ kind, keyword, refresh, onError, onNotice }: ResultProps) {
     try { if (await playLocalEntity(item.kind, item.id)) onNotice("已将前 1000 首歌曲加入播放队列。"); } catch (cause) { onError(cause); } finally { setPlaying(false); }
   }
   const tracks = list.items as Track[];
-  return <>
+  if (sectionTitle && !list.items.length && !list.busy && !list.error) return null;
+  const content = <>
     {list.items.length > 0 ? kind === "song" ? <TrackList tracks={tracks} busy={!isTauri()} currentKey={player.index === null ? undefined : player.queue[player.index]?.key}
       onPlay={index => void nativeCall("play_queue", { keys: tracks.slice(index >= 1000 ? index : 0, (index >= 1000 ? index : 0) + 1000).map(t => t.key), index: index >= 1000 ? 0 : index }).catch(onError)}
       onAppend={track => void nativeCall("append_queue", { keys: [track.key] }).then(() => onNotice("已设为下一首播放。")).catch(onError)} />
@@ -44,6 +45,7 @@ function Results({ kind, keyword, refresh, onError, onNotice }: ResultProps) {
       })}</div> : !list.error && <div className="library-empty" role="status"><Music2 aria-hidden="true" /><p>{list.busy ? "正在读取…" : keyword ? "没有找到匹配结果" : kind === "playlist" ? "创建歌单，整理你喜欢的本地音乐" : "打开音乐文件，或添加音乐文件夹"}</p></div>}
     <InfiniteLoad more={list.more} busy={list.busy} error={list.error} onLoad={list.loadMore} />
   </>;
+  return sectionTitle ? <section className="local-result-section"><h2 className="mb-4 text-xl font-semibold">{sectionTitle}</h2>{content}</section> : content;
 }
 
 export default function LocalPage({ refresh, importing, onImport, onError, onNotice }: Props) {
@@ -101,7 +103,7 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
           <form className="local-search" onSubmit={event => { event.preventDefault(); navigate("local", input.trim()); }}><Input aria-label="搜索本地音乐、艺术家或专辑" placeholder="搜索音乐、艺术家、专辑" value={input} maxLength={100} onChange={event => setInput(event.target.value)} />{page.query && <ActionButton variant="ghost" size="icon-sm" aria-label="清除本地搜索" onClick={() => { setInput(""); navigate("local"); }}><X aria-hidden="true" /></ActionButton>}<Search aria-hidden="true" /></form>
         </div>
         {page.query ? <Tabs.Root orientation="vertical" value={resultKind} onValueChange={setResultKind} className="local-search-results"><Tabs.List className="local-search-nav" aria-label="本地搜索结果类型">{[{value:"all",label:"所有",icon:Search},...categories.slice(0,3)].map(({ value, label, icon: Icon }) => <Tabs.Tab key={value} value={value}><Icon aria-hidden="true" />{label}</Tabs.Tab>)}</Tabs.List><div className="min-w-0 flex-1">
-          <Tabs.Panel value="all">{categories.slice(0,3).map(({value,label}) => <section key={value} className="local-result-section"><h2 className="mb-4 text-xl font-semibold">{label}</h2><Results kind={value} keyword={page.query} refresh={version} onError={onError} onNotice={onNotice} /></section>)}</Tabs.Panel>
+          <Tabs.Panel value="all">{categories.slice(0,3).map(({value,label}) => <Results key={value} sectionTitle={label} kind={value} keyword={page.query} refresh={version} onError={onError} onNotice={onNotice} />)}</Tabs.Panel>
           {categories.slice(0,3).map(({value}) => <Tabs.Panel key={value} value={value}><Results kind={value} keyword={page.query} refresh={version} onError={onError} onNotice={onNotice} /></Tabs.Panel>)}
         </div></Tabs.Root> : categories.map(({value}) => <Tabs.Panel key={value} value={value}>
           {value === "playlist" && <div className="mb-5"><ActionButton variant="outline" disabled={!isTauri()} onClick={() => { setName(""); setEditing("create"); }}><Plus aria-hidden="true" />创建歌单</ActionButton></div>}
