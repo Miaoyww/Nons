@@ -63,3 +63,16 @@ test("word-level auxiliary text is parsed by the corresponding AMLL parser", () 
   assert.deepEqual(Array.from(result, (line) => line.translatedLyric), ["第一句", "第二句"]);
   assert.deepEqual(Array.from(result, (line) => line.romanLyric), ["first", "second"]);
 });
+
+test("slash placeholders disappear from translation and romanization without changing lyrics", () => {
+  const result = exports.parseLyrics({ ...lyrics, format: "lrc",
+    content: "[00:01.00]Produced by: Example\n[00:03.00]A // B",
+    translation: "[00:01.00] // \n[00:03.00]译文 // 内容",
+    romanization: "[00:01.00]//\n[00:03.00]words / words",
+  }, 4000);
+  assert.equal(result[0].translatedLyric, "");
+  assert.equal(result[0].romanLyric, "");
+  assert.equal(result[1].translatedLyric, "译文 // 内容");
+  assert.equal(result[1].words[0].word, "A // B");
+  assert.equal(result[1].romanLyric, "words / words");
+});

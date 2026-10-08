@@ -13,6 +13,10 @@ export function parseLyricsContent(value: Lyrics): LyricLine[] {
   }
 }
 
+function cleanAuxiliary(text: string) {
+  return text.trim() === "//" ? "" : text;
+}
+
 function auxiliary(text: string) {
   // Only identify the format here; AMLL parses all timestamps and lyric text.
   const lines = /^\[\d+,\d+\]\(/m.test(text)
@@ -20,7 +24,7 @@ function auxiliary(text: string) {
     : /^\[\d+,\d+\]/m.test(text) ? parseQrc(text) : parseLrc(text);
   return lines.map((line) => ({
     start: line.startTime,
-    text: line.words.map((word) => word.word).join("").trim(),
+    text: cleanAuxiliary(line.words.map((word) => word.word).join("").trim()),
   })).filter((line) => Number.isFinite(line.start) && line.text)
     .sort((left, right) => left.start - right.start);
 }
@@ -51,6 +55,6 @@ export function parseLyrics(value: Lyrics, duration: number): LyricLine[] {
     if (!Number.isFinite(line.startTime) || line.startTime < 0 || end < line.startTime) throw new Error("歌词时间轴无效。");
     if (line.words.some((word) => !Number.isFinite(word.startTime) || word.startTime < 0 || !Number.isFinite(word.endTime) || word.endTime < word.startTime)) throw new Error("歌词逐词时间轴无效。");
     return { ...line, endTime: end, words: line.words.map((word) => ({ ...word, endTime: Number.isFinite(word.endTime) && word.endTime > word.startTime ? word.endTime : end })),
-      translatedLyric: line.translatedLyric.trim() ? line.translatedLyric : nearbyText(translations, line.startTime) ?? line.translatedLyric, romanLyric: line.romanLyric.trim() ? line.romanLyric : nearbyText(romans, line.startTime) ?? line.romanLyric };
+      translatedLyric: cleanAuxiliary(line.translatedLyric).trim() ? line.translatedLyric : nearbyText(translations, line.startTime) ?? "", romanLyric: cleanAuxiliary(line.romanLyric).trim() ? line.romanLyric : nearbyText(romans, line.startTime) ?? "" };
   });
 }
