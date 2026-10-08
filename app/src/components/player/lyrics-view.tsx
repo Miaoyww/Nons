@@ -102,13 +102,10 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const { options: localPreferences } = useLocalPreferences();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const [binding, setBinding] = useState("");
   const [showTranslation, setShowTranslation] = useState(true);
   const [showPronunciation, setShowPronunciation] = useState(true);
   const hasTranslation = lines.some((line) => !!line.translatedLyric.trim());
   const hasPronunciation = lines.some((line) => !!line.romanLyric.trim() || line.words.some((word) => !!word.romanWord?.trim() || !!word.ruby?.length));
-  const [refresh, setRefresh] = useState<{ key: string; serial: number }>();
-  const refreshTrack = () => { if (track) setRefresh((r) => ({ key: track.key, serial: (r?.serial ?? 0) + 1 })); };
   const generation = useRef(0);
   const appliedSource = useRef<string | undefined>(undefined);
   const apply = useCallback((value: Lyrics | null, duration: number) => {
@@ -124,14 +121,14 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
     if (!track || !isTauri()) return;
     setLoading(true);
     const load = async () => {
-      await loadLyrics(track, refresh?.key === track.key, sources,
+      await loadLyrics(track, false, sources,
         (value) => apply(value, track.durationMs), () => generation.current === serial);
     };
     void load().catch((cause) => {
       if (generation.current === serial && !(cause instanceof EmptyLyricsError)) setError(errorText(cause));
     }).finally(() => { if (generation.current === serial) setLoading(false); });
     return () => { generation.current++; };
-  }, [track?.key, refresh, apply, sources, localPreferences]);
+  }, [track?.key, apply, sources, localPreferences]);
   useEffect(() => {
     if (!isTauri() || !track) return;
     let disposed = false;
@@ -160,11 +157,6 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
       <div className="now-playing-cover-slot"><Cover cover={track?.cover} className="now-playing-cover aspect-square rounded-xl shadow-2xl" /></div>
       <div className="flex shrink-0 items-start justify-between gap-4"><div className="min-w-0"><h1 className="truncate text-xl font-semibold tracking-tight">{track?.title ?? "让音乐开始"}</h1><p className="mt-1 truncate text-muted-foreground">{track ? <TrackArtists track={track} /> : "选择一首喜欢的音乐"}</p></div><NowPlayingMenu disabled={!track} source={source} /></div>
       <NowPlayingControls onQueue={onQueue} onError={(cause) => setError(errorText(cause))} />
-      {track?.source.kind === "local" && <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">匹配在线歌词</summary><form className="mt-3 space-y-2" onSubmit={(event) => {
-        event.preventDefault(); const id = Number(binding);
-        if (!Number.isSafeInteger(id) || id <= 0) { setError("请输入有效的网易云歌曲 ID。"); return; }
-        void nativeCall("bind_local_lyrics", { key: track.key, neteaseId: id }).then(refreshTrack).catch((cause) => setError(errorText(cause)));
-      }}><label htmlFor="lyric-binding">对应版本的网易云歌曲 ID</label><div className="flex gap-2"><input id="lyric-binding" inputMode="numeric" value={binding} onChange={(e) => setBinding(e.target.value)} className="music-input min-w-0 flex-1" /><ActionButton type="submit" variant="secondary" disabled={loading}>绑定</ActionButton></div><p className="text-xs text-muted-foreground">请确认是同一录音版本，本地歌词文件始终优先。</p></form></details>}
       {(error || state.error || state.mediaError) && <p role="alert" className="text-sm">{error ?? state.error ?? state.mediaError}</p>}
     </div>
     {showLyrics && <div className="now-playing-lyrics min-h-0 min-w-0 overflow-hidden">{lines.length ? <LyricRenderer key={track?.key} lines={lines} showTranslation={showTranslation} showPronunciation={showPronunciation} onError={(cause) => setError(errorText(cause))} /> : <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">正在查找歌词…</div>}</div>}
