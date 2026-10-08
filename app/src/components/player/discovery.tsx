@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { CalendarDays, ChevronDown, ChevronRight, Disc3, LayoutGrid, ListFilter, Pause, Play, Radio, RefreshCw, SkipForward, Sparkles, Tags, ThumbsDown, UserRound } from "lucide-react";
-import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { nativeCall, errorText, usePlayer, type Track } from "@/lib/player";
 import { usePagedList } from "@/lib/use-paged-list";
 import { playLibraryCollection, type CollectionPage } from "@/lib/music-library";
@@ -31,16 +32,18 @@ function CategoryPicker({ value, onChange }: { value: string; onChange: (value: 
   }, [open, revision]);
   const select = (name: string) => { onChange(name); setOpen(false); };
   return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger render={<ActionButton variant="outline" className="rounded-full" />}><ListFilter aria-hidden="true" />{value === "全部" ? "全部歌单" : value}<ChevronDown aria-hidden="true" /></DialogTrigger>
-    <DialogPopup className="discover-category-dialog">
-      <DialogTitle className="flex items-center gap-2"><Tags aria-hidden="true" />歌单分类</DialogTitle>
-      <DialogDescription>选择你喜欢的音乐风格</DialogDescription>
+    <DialogTrigger render={<Button variant="outline" className="rounded-full" />}><ListFilter aria-hidden="true" />{value === "全部" ? "全部歌单" : value}<ChevronDown aria-hidden="true" /></DialogTrigger>
+    <DialogContent className="discover-category-dialog">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2"><Tags aria-hidden="true" />歌单分类</DialogTitle>
+        <DialogDescription>选择你喜欢的音乐风格</DialogDescription>
+      </DialogHeader>
       <div className="discover-category-scroll">
-        <ActionButton className="rounded-full" variant={value === "全部" ? "default" : "secondary"} aria-pressed={value === "全部"} onClick={() => select("全部")}>全部歌单</ActionButton>
-        {error ? <div role="alert" className="mt-5 text-sm text-destructive">{error}<ActionButton variant="ghost" onClick={() => setRevision((v) => v + 1)}>重试</ActionButton></div> : !categories.length ? <p role="status" className="mt-5 text-sm text-muted-foreground">{isTauri() ? "正在读取分类…" : "在桌面应用中查看歌单分类。"}</p> : [...new Set(categories.map((item) => item.group))].map((group) => <section key={group} className="mt-6"><h3 className="mb-3 font-semibold">{group}</h3><div className="flex flex-wrap gap-2">{categories.filter((item) => item.group === group).map((item) => <ActionButton key={item.name} className="rounded-full" variant={value === item.name ? "default" : "secondary"} aria-pressed={value === item.name} onClick={() => select(item.name)}>{item.name}</ActionButton>)}</div></section>)}
+        <Button className="rounded-full" variant={value === "全部" ? "default" : "secondary"} aria-pressed={value === "全部"} onClick={() => select("全部")}>全部歌单</Button>
+        {error ? <div role="alert" className="mt-5 text-sm text-destructive">{error}<Button variant="ghost" onClick={() => setRevision((v) => v + 1)}>重试</Button></div> : !categories.length ? <p role="status" className="mt-5 text-sm text-muted-foreground">{isTauri() ? "正在读取分类…" : "在桌面应用中查看歌单分类。"}</p> : [...new Set(categories.map((item) => item.group))].map((group) => <section key={group} className="mt-6"><h3 className="mb-3 font-semibold">{group}</h3><div className="flex flex-wrap gap-2">{categories.filter((item) => item.group === group).map((item) => <Button key={item.name} className="rounded-full" variant={value === item.name ? "default" : "secondary"} aria-pressed={value === item.name} onClick={() => select(item.name)}>{item.name}</Button>)}</div></section>)}
       </div>
-      <div className="flex justify-end"><DialogClose render={<ActionButton variant="outline" className="rounded-full" />}>关闭</DialogClose></div>
-    </DialogPopup>
+      <DialogFooter><DialogClose render={<Button variant="outline" />}>关闭</DialogClose></DialogFooter>
+    </DialogContent>
   </Dialog>;
 }
 

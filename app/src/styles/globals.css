@@ -622,7 +622,7 @@
 .discover-playlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 26px 24px; }
 .discover-playlist-grid > * { width: 100%; max-width: 240px; min-width: 0; }
 .discover-category-dialog { width: min(720px, calc(100vw - 48px)); max-width: 720px; max-height: min(850px, calc(100dvh - 64px)); display: flex; flex-direction: column; }
-.discover-category-scroll { overflow-y: auto; min-height: 0; margin-block: 20px; padding: 2px 6px 8px 2px; }
+.discover-category-scroll { overflow-y: auto; min-height: 0; padding: 2px 6px 8px 2px; }
 @container (max-width: 950px) { .discover-featured { grid-template-columns: 1fr; } .discover-shortcuts { grid-template-columns: 1fr 1fr; } .discover-shortcut { gap: 12px; } .discover-shortcut-cover { width: 56px; } .discover-shortcut-title { font-size: 18px; } .discover-fm-cover { width: 160px; } }
 @container (max-width: 560px) { .discover-shortcuts { grid-template-columns: 1fr; } .discover-fm { gap: 12px; padding: 14px; } .discover-fm-cover { width: 104px; } .discover-fm-controls { gap: 4px; } .discover-fm-play { width: 48px; height: 48px; } .discover-more { gap: 12px; } .discover-tabs { gap: 8px; } .discover-tabs button { padding-inline: 14px; } .discover-playlist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; } }
 @media (hover: none) { .library-cover-play { opacity: 1; transform: none; } }
