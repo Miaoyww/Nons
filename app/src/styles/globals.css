@@ -1228,6 +1228,8 @@
 }
 .volume-card-slot {
   position: absolute;
+  /* Keep the card and its hover bridge above the player timeline. */
+  z-index: 3;
   left: 50%;
   margin-left: -24px;
   bottom: 100%;
@@ -2422,11 +2424,6 @@
 }
 .playback-timeline-edge .timeline-slider > div {
   min-height: 20px;
-}
-.playback-timeline-edge [data-slot='slider-thumb'] {
-  opacity: 1;
-  width: 8px;
-  height: 8px;
 }
 .timeline-tooltip {
   position: absolute;
