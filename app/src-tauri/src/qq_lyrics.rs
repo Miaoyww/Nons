@@ -1,5 +1,8 @@
 //! QQ search protocol adapted from Lyricify-Lyrics-Helper (Apache-2.0).
 //! Metadata policy ported from AF-Media-Bar (MIT). See notices/.
+use crate::lyric_matching::queries;
+#[cfg(test)]
+use crate::lyric_matching::{compare, similarity, without_translation};
 use crate::{
     model::{AppResult, Lyrics, Track},
     storage::MAX_LYRIC_BYTES,
@@ -10,7 +13,7 @@ use regex::Regex;
 use serde_json::{json, Value};
 use std::{sync::LazyLock, time::Duration};
 
-pub const MINIMUM_SCORE: u32 = 80;
+pub const MINIMUM_SCORE: u32 = crate::lyric_matching::PREFERRED_MINIMUM_SCORE;
 
 #[derive(Debug)]
 struct Candidate {
@@ -26,11 +29,12 @@ pub async fn lookup(
     client: &reqwest::Client,
     track: &Track,
     skip_qrc: bool,
+    separators: &[String],
 ) -> AppResult<Option<Lyrics>> {
     // A single bounded stage; timeout and transport errors must remain retryable.
     tokio::time::timeout(
-        Duration::from_secs(3),
-        lookup_inner(client, track, skip_qrc),
+        Duration::from_secs(6),
+        lookup_inner(client, track, skip_qrc, separators),
     )
     .await
     .map_err(|_| "QQ 歌词查询超时".to_string())?
@@ -40,6 +44,7 @@ async fn lookup_inner(
     client: &reqwest::Client,
     track: &Track,
     skip_qrc: bool,
+    separators: &[String],
 ) -> AppResult<Option<Lyrics>> {
     if track.title.trim().is_empty() || track.artist.trim().is_empty() {
         return Ok(None);
@@ -52,7 +57,7 @@ async fn lookup_inner(
     }
     let mut best: Option<(Candidate, u32)> = None;
     let mut failed = false;
-    for query in queries(track).into_iter().take(3) {
+    for query in queries(track, separators) {
         let request = client.post("https://u.y.qq.com/cgi-bin/musicu.fcg")
             .header("Referer", "https://c.y.qq.com/")
             .json(&json!({"req_1": {"method": "DoSearchForQQMusicDesktop", "module": "music.search.SearchCgiService",
@@ -65,7 +70,14 @@ async fn lookup_inner(
             }
         };
         for candidate in response {
-            let score = metadata_score(track, &candidate);
+            let score = crate::lyric_matching::score(
+                track,
+                &candidate.title,
+                &candidate.artists,
+                &candidate.album,
+                candidate.duration,
+                separators,
+            );
             if best.as_ref().is_none_or(|(_, previous)| score > *previous) {
                 best = Some((candidate, score));
             }
@@ -77,7 +89,7 @@ async fn lookup_inner(
             break;
         }
     }
-    let Some((candidate, _)) = best.filter(|(_, score)| *score >= MINIMUM_SCORE) else {
+    let Some((candidate, score)) = select_candidate(best) else {
         return if failed {
             Err("QQ 歌曲搜索失败".into())
         } else {
@@ -85,7 +97,7 @@ async fn lookup_inner(
         };
     };
     if let Some(id) = candidate.id.filter(|_| !skip_qrc) {
-        // Reserve time for the legacy LRC request within the shared 3-second budget.
+        // Reserve time for the legacy LRC request within the shared 6-second budget.
         let request = client
             .post("https://c.y.qq.com/qqmusic/fcgi-bin/lyric_download.fcg")
             .header("Referer", "https://c.y.qq.com/")
@@ -101,7 +113,10 @@ async fn lookup_inner(
                 .await
                 .map_err(|e| e.to_string())?
         };
-        if let Ok(Ok(Some(lyrics))) = tokio::time::timeout(Duration::from_millis(900), qrc).await {
+        if let Ok(Ok(Some(mut lyrics))) =
+            tokio::time::timeout(Duration::from_millis(900), qrc).await
+        {
+            lyrics.match_score = Some(score);
             return Ok(Some(lyrics));
         }
     }
@@ -120,7 +135,11 @@ async fn lookup_inner(
             ("loginUin", "0"),
             ("hostUin", "0"),
         ]);
-    decode_lyrics(read_json(request).await?)
+    let mut lyrics = decode_lyrics(read_json(request).await?)?;
+    if let Some(value) = &mut lyrics {
+        value.match_score = Some(score);
+    }
+    Ok(lyrics)
 }
 
 async fn read_json(request: reqwest::RequestBuilder) -> AppResult<Value> {
@@ -271,6 +290,7 @@ fn decode_qrc_response(response: &str) -> AppResult<Option<Lyrics>> {
         return Err("QQ QRC 正文与附加歌词过大".into());
     }
     Ok(Some(Lyrics {
+        match_score: None,
         source: "qq".into(),
         format: "qrc".into(),
         content,
@@ -337,6 +357,7 @@ fn decode_lyrics(value: Value) -> AppResult<Option<Lyrics>> {
         return Err("QQ 歌词缺少有效时间轴".into());
     }
     Ok(Some(Lyrics {
+        match_score: None,
         source: "qq".into(),
         format: "lrc".into(),
         content,
@@ -345,178 +366,30 @@ fn decode_lyrics(value: Value) -> AppResult<Option<Lyrics>> {
     }))
 }
 
-fn artists(text: &str) -> Vec<&str> {
-    // Nons joins structured NetEase artists with this exact literal separator.
-    let result: Vec<_> = text
-        .split(" / ")
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .collect();
-    if result.is_empty() {
-        vec![""]
-    } else {
-        result
-    }
-}
-
-fn without_translation(text: &str) -> String {
-    static SUFFIX: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\s*[（(][^（）()]*[\x{4e00}-\x{9fff}][^（）()]*[）)]\s*$").unwrap()
-    });
-    static VERSION: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r"(?i)现场|現場|伴奏|翻唱|混音|重制|重製|倍速|live|remix|cover|acoustic|instrumental",
-        )
-        .unwrap()
-    });
-    if let Some(suffix) = SUFFIX.find(text) {
-        if !VERSION.is_match(suffix.as_str()) {
-            return text[..suffix.start()].trim().into();
-        }
-    }
-    text.trim().into()
-}
-
-fn queries(track: &Track) -> Vec<String> {
-    let title = without_translation(&track.title);
-    let artist = artists(&track.artist)
-        .into_iter()
-        .map(without_translation)
-        .collect::<Vec<_>>()
-        .join(" ");
-    let mut result = Vec::new();
-    for query in [
-        format!("{title} {artist}"),
-        format!("{} {}", track.title, track.artist),
-    ]
-    .into_iter()
-    .chain(
-        artists(&track.artist)
-            .into_iter()
-            .map(|a| format!("{title} {}", without_translation(a))),
-    )
-    .chain(std::iter::once(title.clone()))
-    {
-        let query = query.trim().to_owned();
-        if !query.is_empty() && !result.contains(&query) {
-            result.push(query);
-        }
-    }
-    result
-}
-
-fn compare(left: &str, right: &str) -> f64 {
-    let left = left.trim().to_lowercase();
-    let right = right.trim().to_lowercase();
-    if left.is_empty() && right.is_empty() {
-        return 1.0;
-    }
-    if left.is_empty() || right.is_empty() {
-        return 0.0;
-    }
-    similarity(&left, &right)
-}
-
-fn fingerprint(text: &str) -> String {
-    static NON_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[\p{P}\p{S}]").unwrap());
-    let text = NON_WORD.replace_all(&text.to_lowercase(), " ").into_owned();
-    let mut tokens: Vec<_> = text.split(' ').filter(|s| !s.is_empty()).collect();
-    tokens.sort_by_key(|s| s.encode_utf16().collect::<Vec<_>>());
-    tokens.join(" ")
-}
-
+#[cfg(test)]
 fn metadata_score(track: &Track, candidate: &Candidate) -> u32 {
-    let request_artists = artists(&track.artist);
-    let candidate_artists: Vec<_> = candidate.artists.iter().flat_map(|a| artists(a)).collect();
-    let total = if track.title.trim().is_empty() || candidate.title.trim().is_empty() {
-        request_artists
-            .iter()
-            .flat_map(|a| {
-                candidate_artists.iter().map(move |b| {
-                    let left = fingerprint(&format!("{} {a}", track.title));
-                    let right = fingerprint(&format!("{} {b}", candidate.title));
-                    if left.is_empty() || right.is_empty() {
-                        0.0
-                    } else {
-                        similarity(&left, &right)
-                    }
-                })
-            })
-            .fold(0.0, f64::max)
-    } else {
-        let artist = request_artists
-            .iter()
-            .flat_map(|a| candidate_artists.iter().map(move |b| compare(a, b)))
-            .fold(0.0, f64::max);
-        let local = track.duration_ms as f64 / 1000.0;
-        let remote = candidate.duration;
-        let duration = if local <= 0.0 || remote <= 0.0 || !remote.is_finite() {
-            0.0
-        } else {
-            (1.0 - ((local - remote).abs() - 1.0).max(0.0) / 9.0).max(0.0)
-        };
-        0.4 * compare(&track.title, &candidate.title)
-            + 0.4 * artist
-            + 0.1 * compare(&track.album, &candidate.album)
-            + 0.1 * duration
-    };
-    (100.0 * total).round_ties_even() as u32
+    crate::lyric_matching::score(
+        track,
+        &candidate.title,
+        &candidate.artists,
+        &candidate.album,
+        candidate.duration,
+        &[" / ".into()],
+    )
 }
 
-// Faithful F23.StringSimilarity JaroWinkler port: UTF-16, uncapped prefix,
-// length-dependent bonus, integer half-transpositions and f32 Jaro arithmetic.
-// Copyright 2016 feature[23], MIT; see notices/F23-StringSimilarity-LICENSE.txt.
-fn similarity(left: &str, right: &str) -> f64 {
-    let a: Vec<_> = left.encode_utf16().collect();
-    let b: Vec<_> = right.encode_utf16().collect();
-    if a == b {
-        return 1.0;
-    }
-    let (max, min) = if a.len() > b.len() {
-        (&a, &b)
-    } else {
-        (&b, &a)
-    };
-    let range = (max.len() / 2).saturating_sub(1);
-    let mut indexes = vec![None; min.len()];
-    let mut flags = vec![false; max.len()];
-    for (i, character) in min.iter().enumerate() {
-        for j in i.saturating_sub(range)..(i + range + 1).min(max.len()) {
-            if !flags[j] && *character == max[j] {
-                indexes[i] = Some(j);
-                flags[j] = true;
-                break;
-            }
-        }
-    }
-    let first: Vec<_> = min
-        .iter()
-        .zip(indexes)
-        .filter_map(|(c, i)| i.map(|_| c))
-        .collect();
-    if first.is_empty() {
-        return 0.0;
-    }
-    let second: Vec<_> = max
-        .iter()
-        .zip(flags)
-        .filter_map(|(c, f)| f.then_some(c))
-        .collect();
-    let half = first.iter().zip(second).filter(|(a, b)| *a != b).count() / 2;
-    let m = first.len() as f32;
-    let jaro = ((m / a.len() as f32 + m / b.len() as f32 + (m - half as f32) / m) as f64) / 3.0;
-    if jaro > 0.7 {
-        let prefix = a.iter().zip(&b).take_while(|(a, b)| a == b).count();
-        jaro + 0.1f64.min(1.0 / max.len() as f64) * prefix as f64 * (1.0 - jaro)
-    } else {
-        jaro
-    }
+fn select_candidate(best: Option<(Candidate, u32)>) -> Option<(Candidate, u32)> {
+    best
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::TrackSource;
+    #[test]
+    fn low_qq_candidate_is_retained_for_fallback_comparison() {
+        assert!(select_candidate(Some((candidate(), 79))).is_some());
+    }
     #[test]
     fn encrypted_qrc_xml_auxiliary_fields_and_failures() {
         // Ciphertext generated by AMLL encryptQrcHex from original synthetic text.
@@ -554,14 +427,15 @@ mod tests {
             .connect_timeout(Duration::from_millis(500))
             .build()
             .unwrap();
-        let value = tauri::async_runtime::block_on(lookup(&client, &track(), false))
-            .unwrap()
-            .expect("晴天 should have matched QQ lyrics");
+        let value =
+            tauri::async_runtime::block_on(lookup(&client, &track(), false, &[" / ".into()]))
+                .unwrap()
+                .expect("晴天 should have matched QQ lyrics");
         assert_eq!(value.source, "qq");
         assert_eq!(value.format, "qrc");
         assert!(value.content.contains("["));
         println!("QQ live lookup: {} UTF-8 bytes", value.content.len());
-        let lrc = tauri::async_runtime::block_on(lookup(&client, &track(), true))
+        let lrc = tauri::async_runtime::block_on(lookup(&client, &track(), true, &[" / ".into()]))
             .unwrap()
             .unwrap();
         assert_eq!(lrc.format, "lrc");

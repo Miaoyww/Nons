@@ -231,6 +231,7 @@ impl Netease {
             return Err("网易云歌词过大".into());
         }
         Ok(Some(Lyrics {
+            match_score: None,
             source: "netease".into(),
             format: if word.is_some() { "yrc" } else { "lrc" }.into(),
             content: content.into(),

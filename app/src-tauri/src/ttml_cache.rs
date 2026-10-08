@@ -338,6 +338,7 @@ mod tests {
     use crate::test_support::TestDir;
     fn lyric(size: usize) -> Lyrics {
         Lyrics {
+            match_score: None,
             source: "amll".into(),
             format: "ttml".into(),
             content: format!("<tt><body>{}</body></tt>", "a".repeat(size)),

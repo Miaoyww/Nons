@@ -117,15 +117,13 @@ impl LyricService {
                 }
             }
         }
-        let mut online_track = track;
-        if let Some(options) = preferences {
-            online_track.artist = crate::local_library::split_artists(
-                &online_track.artist,
-                &options.artist_separators,
-            )
-            .join(" / ");
-        }
-        let result = self.get_online(online_track, refresh, skips, app).await;
+        let separators = preferences
+            .as_ref()
+            .map(|options| options.artist_separators.clone())
+            .unwrap_or_else(|| vec![" / ".into()]);
+        let result = self
+            .get_online(track, refresh, skips, separators, app)
+            .await;
         if matches!(result, Ok(Some(_))) {
             return result;
         }
@@ -144,8 +142,10 @@ impl LyricService {
         track: Track,
         refresh: bool,
         skips: LyricSkips,
+        separators: Vec<String>,
         app: tauri::AppHandle,
     ) -> AppResult<Option<Lyrics>> {
+        let started = std::time::Instant::now();
         let id = track.netease_id();
         let sources = self.sources()?;
         let amll_key = format!("amll:{}", id.unwrap_or(0));
@@ -153,18 +153,20 @@ impl LyricService {
         // Metadata belongs in the key: local bindings and corrected tags can change matching.
         let digest = format!(
             "{:x}",
-            Sha256::digest(serde_json::to_vec(&track).map_err(|e| e.to_string())?)
+            Sha256::digest(serde_json::to_vec(&(&track, &separators)).map_err(|e| e.to_string())?)
         );
-        let qrc_key = format!("qq:qrc-v1:{digest}");
-        let lrc_key = format!("qq:lrc-v1:{digest}");
+        let qrc_key = format!("qq:qrc-v2:{digest}");
+        let lrc_key = format!("qq:lrc-v2:{digest}");
+        let search_key = format!("netease:search-v1:{digest}");
         let qq_key = if skips.qrc { &lrc_key } else { &qrc_key };
         if refresh {
             self.disk
-                .refresh_lyrics(&[&amll_key, &ncm_key, &qrc_key, &lrc_key])?;
+                .refresh_lyrics(&[&amll_key, &ncm_key, &qrc_key, &lrc_key, &search_key])?;
             let mut retries = self.retry_after.lock().map_err(|_| "歌词状态不可用")?;
             retries.remove(&amll_key);
             retries.remove(&qrc_key);
             retries.remove(&lrc_key);
+            retries.remove(&search_key);
         }
         if let Some(id) = id.filter(|_| sources.amll && !skips.amll) {
             // Disk failure is a cache miss; it must never prevent online fallback.
@@ -205,30 +207,147 @@ impl LyricService {
                 return Ok(Some(value));
             }
         }
-        if sources.qq && !skips.qq {
-            if let Some(value) = self.get_qq(&track, qq_key, skips.qrc, app.clone()).await? {
+        let preferred = if sources.qq && !skips.qq {
+            self.get_qq(&track, qq_key, skips.qrc, &separators, app.clone())
+                .await
+                .ok()
+                .flatten()
+        } else {
+            None
+        };
+        if preferred.as_ref().is_some_and(|value| {
+            value.match_score.unwrap_or(0) >= crate::lyric_matching::PREFERRED_MINIMUM_SCORE
+        }) {
+            return Ok(preferred);
+        }
+        if skips.netease {
+            return Ok(preferred);
+        }
+        let fallback = if let Some(id) = id {
+            if !refresh {
+                if let Some(cached) = self.store.cached_lyrics(&ncm_key)? {
+                    if cached.fresh {
+                        return Ok(cached.value.or(preferred));
+                    }
+                }
+            }
+            let generation = self.disk.generation();
+            let budget = Duration::from_secs(12)
+                .saturating_sub(started.elapsed())
+                .min(Duration::from_secs(6));
+            match tokio::time::timeout(budget, self.netease.lyrics(id)).await {
+                Ok(Ok(value)) => {
+                    let _ = self.disk.cache_result(
+                        &ncm_key,
+                        value.as_ref(),
+                        if value.is_some() { FOUND_TTL } else { MISS_TTL },
+                        generation,
+                    );
+                    if generation != self.disk.generation() {
+                        return Ok(None);
+                    }
+                    value
+                }
+                _ => None,
+            }
+        } else {
+            let budget = Duration::from_secs(12)
+                .saturating_sub(started.elapsed())
+                .min(Duration::from_secs(6));
+            tokio::time::timeout(
+                budget,
+                self.get_searched_netease(&track, &search_key, &separators, app),
+            )
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .flatten()
+        };
+        // Known playback/bound ID overrides scores; otherwise compare scores with QQ winning ties.
+        Ok(if id.is_some() {
+            fallback.or(preferred)
+        } else {
+            crate::lyric_matching::select(preferred, fallback)
+        })
+    }
+
+    async fn get_searched_netease(
+        self: &Arc<Self>,
+        track: &Track,
+        key: &str,
+        separators: &[String],
+        app: tauri::AppHandle,
+    ) -> AppResult<Option<Lyrics>> {
+        if let Some(cached) = self.store.cached_lyrics(key)? {
+            if cached.fresh {
+                return Ok(cached.value);
+            }
+            if let Some(value) = cached.value {
+                let mut refreshing = self.refreshing.lock().map_err(|_| "歌词状态不可用")?;
+                if refreshing.insert(key.into()) {
+                    let this = Arc::clone(self);
+                    let track = track.clone();
+                    let key = key.to_owned();
+                    let separators = separators.to_vec();
+                    tauri::async_runtime::spawn(async move {
+                        if let Ok(Some(lyrics)) = this
+                            .update_searched_netease(&track, &key, &separators)
+                            .await
+                        {
+                            let _ = app.emit(
+                                "lyrics-updated",
+                                serde_json::json!({"key":track.key,"lyrics":lyrics}),
+                            );
+                        }
+                        if let Ok(mut pending) = this.refreshing.lock() {
+                            pending.remove(&key);
+                        }
+                    });
+                }
                 return Ok(Some(value));
             }
         }
-        let Some(id) = id.filter(|_| !skips.netease) else {
+        self.update_searched_netease(track, key, separators).await
+    }
+
+    async fn update_searched_netease(
+        &self,
+        track: &Track,
+        key: &str,
+        separators: &[String],
+    ) -> AppResult<Option<Lyrics>> {
+        let generation = self.disk.generation();
+        if self
+            .retry_after
+            .lock()
+            .map_err(|_| "歌词状态不可用")?
+            .get(key)
+            .is_some_and(|t| *t > now_seconds())
+        {
             return Ok(None);
-        };
-        if !refresh {
-            if let Some(cached) = self.store.cached_lyrics(&ncm_key)? {
-                if cached.fresh {
-                    return Ok(cached.value);
+        }
+        match crate::netease_lyrics::lookup(&self.netease, track, separators).await {
+            Ok(value) => {
+                let _ = self.disk.cache_result(
+                    key,
+                    value.as_ref(),
+                    if value.is_some() { FOUND_TTL } else { MISS_TTL },
+                    generation,
+                );
+                if generation != self.disk.generation() {
+                    return Ok(None);
                 }
+                Ok(value)
+            }
+            Err(_) => {
+                let mut retries = self.retry_after.lock().map_err(|_| "歌词状态不可用")?;
+                retries.retain(|_, t| *t > now_seconds());
+                if generation == self.disk.generation() && retries.len() < 2000 {
+                    retries.insert(key.into(), now_seconds() + 30);
+                }
+                Ok(None)
             }
         }
-        let generation = self.disk.generation();
-        let value = self.netease.lyrics(id).await?;
-        let _ = self.disk.cache_result(
-            &ncm_key,
-            value.as_ref(),
-            if value.is_some() { FOUND_TTL } else { MISS_TTL },
-            generation,
-        );
-        Ok(value)
     }
 
     async fn get_qq(
@@ -236,6 +355,7 @@ impl LyricService {
         track: &Track,
         key: &str,
         skip_qrc: bool,
+        separators: &[String],
         app: tauri::AppHandle,
     ) -> AppResult<Option<Lyrics>> {
         if let Some(cached) = self.store.cached_lyrics(key)? {
@@ -248,8 +368,11 @@ impl LyricService {
                     let this = Arc::clone(self);
                     let track = track.clone();
                     let cache_key = key.to_owned();
+                    let separators = separators.to_vec();
                     tauri::async_runtime::spawn(async move {
-                        if let Ok(Some(lyrics)) = this.update_qq(&track, &cache_key, skip_qrc).await
+                        if let Ok(Some(lyrics)) = this
+                            .update_qq(&track, &cache_key, skip_qrc, &separators)
+                            .await
                         {
                             let _ = app.emit(
                                 "lyrics-updated",
@@ -264,7 +387,7 @@ impl LyricService {
                 return Ok(Some(value));
             }
         }
-        self.update_qq(track, key, skip_qrc).await
+        self.update_qq(track, key, skip_qrc, separators).await
     }
 
     async fn update_qq(
@@ -272,6 +395,7 @@ impl LyricService {
         track: &Track,
         key: &str,
         skip_qrc: bool,
+        separators: &[String],
     ) -> AppResult<Option<Lyrics>> {
         let generation = self.disk.generation();
         if self
@@ -283,7 +407,7 @@ impl LyricService {
         {
             return Ok(None);
         }
-        match crate::qq_lyrics::lookup(&self.client, track, skip_qrc).await {
+        match crate::qq_lyrics::lookup(&self.client, track, skip_qrc, separators).await {
             Ok(value) => {
                 let _ = self.disk.cache_result(
                     key,
@@ -403,6 +527,7 @@ impl LyricService {
                     if let Ok(content) = String::from_utf8(bytes) {
                         if valid_ttml(&content) {
                             return Lookup::Found(Lyrics {
+                                match_score: None,
                                 source: "amll".into(),
                                 format: "ttml".into(),
                                 content,
@@ -444,6 +569,7 @@ async fn local_lyrics(path: &str) -> AppResult<Option<Lyrics>> {
             continue;
         }
         return Ok(Some(Lyrics {
+            match_score: None,
             source: "local".into(),
             format: extension.into(),
             content,

@@ -158,6 +158,8 @@ pub struct OutputDevice {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Lyrics {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_score: Option<u32>,
     pub source: String,
     pub format: String,
     pub content: String,

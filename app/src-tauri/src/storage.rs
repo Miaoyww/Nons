@@ -323,6 +323,7 @@ mod tests {
         let miss = store.cached_lyrics("amll:1").unwrap().unwrap();
         assert!(miss.fresh && miss.value.is_none());
         let lyrics = Lyrics {
+            match_score: None,
             source: "amll".into(),
             format: "ttml".into(),
             content: "example".into(),
@@ -337,6 +338,7 @@ mod tests {
     fn large_lyrics_are_rejected_before_writing() {
         let store = Store::initialize(Connection::open_in_memory().unwrap()).unwrap();
         let lyrics = Lyrics {
+            match_score: None,
             source: "amll".into(),
             format: "ttml".into(),
             content: "a".repeat(MAX_LYRIC_BYTES),
