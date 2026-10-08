@@ -45,6 +45,19 @@ pub enum Command {
     Shutdown,
 }
 
+fn previous_command(state: &PlayerSnapshot) -> Option<Command> {
+    state.current()?;
+    // Manual navigation always selects a queue entry, regardless of position.
+    // Jump goes through load(), invalidating prepared/armed gapless work.
+    if let Some(index) = state.index.and_then(|i| i.checked_sub(1)) {
+        Some(Command::Jump(index))
+    } else if state.index == Some(0) && state.repeat_mode != RepeatMode::Off {
+        Some(Command::Jump(state.queue.len() - 1))
+    } else {
+        None
+    }
+}
+
 pub struct Player {
     sender: SyncSender<Command>,
     snapshot: Arc<RwLock<PlayerSnapshot>>,
@@ -427,12 +440,8 @@ impl Actor {
                 }
             }
             Command::Previous => {
-                if self.state.position_ms > 3000 {
-                    self.seek(0)?;
-                } else if let Some(index) = self.state.index.and_then(|i| i.checked_sub(1)) {
-                    self.load(index, true)?;
-                } else if self.state.index == Some(0) && self.state.repeat_mode != RepeatMode::Off {
-                    self.load(self.state.queue.len() - 1, true)?;
+                if let Some(command) = previous_command(&self.state) {
+                    self.command(command)?;
                 }
             }
             Command::Pause => {
@@ -881,5 +890,80 @@ impl Actor {
             self.pending_seek = Some(position);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::TrackSource;
+
+    fn snapshot(index: usize, position_ms: u64, mode: RepeatMode) -> PlayerSnapshot {
+        PlayerSnapshot {
+            queue: (0..3)
+                .map(|id| Track {
+                    key: id.to_string(),
+                    title: id.to_string(),
+                    aliases: vec![],
+                    artist: String::new(),
+                    artists: vec![],
+                    album_id: None,
+                    album: String::new(),
+                    duration_ms: 180_000,
+                    cover: String::new(),
+                    source: TrackSource::Netease { id },
+                })
+                .collect(),
+            index: Some(index),
+            position_ms,
+            duration_ms: 180_000,
+            repeat_mode: mode,
+            status: PlaybackStatus::Playing,
+            ..PlayerSnapshot::default()
+        }
+    }
+
+    #[test]
+    fn previous_near_end_switches_track_instead_of_restarting_current() {
+        let state = snapshot(1, 179_000, RepeatMode::Off);
+        assert!(
+            matches!(previous_command(&state), Some(Command::Jump(0))),
+            "上一首必须选择队列中的前一首，不能 seek(0) 重播当前歌曲"
+        );
+    }
+
+    #[test]
+    fn previous_selection_is_independent_of_position_status_and_repeat() {
+        for mode in [RepeatMode::Off, RepeatMode::All, RepeatMode::One] {
+            for position_ms in [0, 3000, 3001, 90_000, 179_000, 180_000] {
+                for status in [
+                    PlaybackStatus::Loading,
+                    PlaybackStatus::Playing,
+                    PlaybackStatus::Paused,
+                    PlaybackStatus::Buffering,
+                ] {
+                    let mut state = snapshot(2, position_ms, mode);
+                    state.status = status;
+                    assert!(matches!(previous_command(&state), Some(Command::Jump(1))));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn previous_wraps_only_when_repeating_and_requires_current_track() {
+        assert!(previous_command(&snapshot(0, 179_000, RepeatMode::Off)).is_none());
+        for mode in [RepeatMode::All, RepeatMode::One] {
+            assert!(matches!(
+                previous_command(&snapshot(0, 179_000, mode)),
+                Some(Command::Jump(2))
+            ));
+        }
+        assert!(previous_command(&PlayerSnapshot::default()).is_none());
+        let mut state = snapshot(0, 179_000, RepeatMode::All);
+        state.queue.clear();
+        assert!(previous_command(&state).is_none());
+        state = snapshot(3, 179_000, RepeatMode::All);
+        assert!(previous_command(&state).is_none());
     }
 }
