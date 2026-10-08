@@ -1,38 +1,15 @@
 import { ChevronLeft, ChevronRight, Heart, Pause, Play, Repeat, Repeat1 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { adjacentIndex, formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
+import { adjacentIndex, nativeCall, statusLabels, usePlayer } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { trackDisplayTitle } from "./track-title";
 import { PlaybackNotice, type PlaybackNoticeMessage } from "./playback-notice";
 import { QueuePopover } from "./queue-popover";
 import { VolumeControl } from "./volume-control";
-import { PlayerSlider } from "./player-slider";
+import { PlaybackTimeline } from "./playback-timeline";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "./account";
-
-export function Timeline({ onError, layout = "inline" }: { onError: (error: unknown) => void; layout?: "inline" | "below" | "above" }) {
-  const progress = useProgress();
-  const [drag, setDrag] = useState<number | null>(null);
-  const [hover, setHover] = useState<number | null>(null);
-  const [focused, setFocused] = useState(false);
-  const position = Math.min(drag ?? progress.positionMs, Math.max(1, progress.durationMs));
-  return <div className={`playback-timeline playback-timeline-${layout} text-xs tabular-nums text-muted-foreground`}>
-    {layout !== "above" && <span className="timeline-elapsed">{formatTime(position)}</span>}
-    <PlayerSlider aria-label="播放进度" min={0} max={Math.max(1, progress.durationMs)} step={1000} value={position}
-      aria-valuetext={`${formatTime(position)} / ${formatTime(progress.durationMs)}`}
-      onPointerMove={layout === "above" ? (event) => { const rect = event.currentTarget.getBoundingClientRect(); setHover(Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * progress.durationMs); } : undefined}
-      onPointerLeave={() => setHover(null)} onFocus={() => setFocused(true)}
-      disabled={!isTauri() || !progress.durationMs || ["stopped", "error", "loading"].includes(progress.status)}
-      onChange={(event) => setDrag(Number(event.target.value))}
-      onPointerUp={(event) => { if (drag !== null) { void nativeCall("player_seek", { positionMs: Number(event.currentTarget.value) }).catch(onError); setDrag(null); } }}
-      onPointerCancel={() => setDrag(null)} onBlur={() => { setDrag(null); setFocused(false); }}
-      onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key) && drag !== null) { void nativeCall("player_seek", { positionMs: Number(event.currentTarget.value) }).catch(onError); setDrag(null); } }}
-      className="timeline-slider" />
-    {layout !== "above" && <span className="timeline-duration">{layout === "below" ? `-${formatTime(Math.max(0, progress.durationMs - position))}` : formatTime(progress.durationMs)}</span>}
-    {layout === "above" && (hover !== null || focused || drag !== null) && <span className="timeline-tooltip glass-surface" aria-hidden="true" style={{ left: `${Math.max(0, Math.min(100, (drag ?? hover ?? position) / Math.max(1, progress.durationMs) * 100))}%` }}>{formatTime(drag ?? hover ?? position)} / {formatTime(progress.durationMs)}</span>}
-  </div>;
-}
 
 export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl, notice }: { notice?: PlaybackNoticeMessage; qualityControl?: ReactNode; onLyrics: () => void; onQueue: () => void; onError: (error: unknown) => void }) {
   const state = usePlayer();
@@ -64,7 +41,7 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl, notice
             <button type="button" className="capsule-title" data-preview={!!previewTrack} aria-label="打开正在播放" title={title} onClick={onLyrics}><span key={title}>{title}</span></button>
             <ActionButton variant="ghost" size="icon-sm" aria-label={next ? `下一首：${trackDisplayTitle(next)}` : "下一首"} disabled={!next || !isTauri()} onMouseEnter={() => setPreview("next")} onMouseLeave={() => setPreview(null)} onFocus={() => setPreview("next")} onBlur={() => setPreview(null)} onClick={() => action("next")}><ChevronRight aria-hidden="true" /></ActionButton>
           </div>
-          <Timeline onError={onError} />
+          <PlaybackTimeline layout="inline" onError={onError} />
         </div>
         <div className="capsule-playback-options">
           {qualityControl}

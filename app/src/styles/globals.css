@@ -729,10 +729,10 @@
 .persistent-playback .now-playing-transport [aria-pressed="true"], .persistent-playback .now-playing-transport [data-active="true"] { color: var(--music-accent); background: var(--accent); }
 .persistent-options { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
 .persistent-options [data-slot="select-trigger"] { border-radius: 8px; }
-.playback-timeline-above { position: relative; height: 20px; margin-bottom: 4px; padding-inline: 20px; }
-.playback-timeline-above .timeline-slider { width: 100%; height: 20px; }
-.playback-timeline-above .timeline-slider::-webkit-slider-thumb { opacity: 1; width: 8px; height: 8px; margin-top: -2px; }
-.playback-timeline-above .timeline-slider::-moz-range-thumb { opacity: 1; width: 8px; height: 8px; }
+.playback-timeline-edge { position: absolute; top: -10px; left: 20px; right: 20px; z-index: 2; width: auto; height: 20px; }
+.playback-timeline-edge .timeline-slider { width: 100%; height: 20px; }
+.playback-timeline-edge .timeline-slider::-webkit-slider-thumb { opacity: 1; width: 8px; height: 8px; margin-top: -2px; }
+.playback-timeline-edge .timeline-slider::-moz-range-thumb { opacity: 1; width: 8px; height: 8px; }
 .timeline-tooltip { position: absolute; bottom: calc(100% + 8px); transform: translateX(-50%); padding: 6px 10px; border-radius: 8px; white-space: nowrap; pointer-events: none; color: var(--foreground); font-size: 12px; }
 .persistent-playback .playback-notice-slot { bottom: calc(100% + 12px); }
 @media (max-width: 900px) {

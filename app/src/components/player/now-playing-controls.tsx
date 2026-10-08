@@ -4,7 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { nativeCall, usePlayer } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { QualitySelect } from "./music-options";
-import { Timeline } from "./playback-bar";
+import { PlaybackTimeline } from "./playback-timeline";
 import { PlayerSlider } from "./player-slider";
 import { PlaybackTransport } from "./playback-transport";
 
@@ -13,7 +13,7 @@ export function NowPlayingControls({ onQueue, onError }: { onQueue: () => void; 
   const [volume, setVolume] = useState(state.volume);
   useEffect(() => setVolume(state.volume), [state.volume]);
   return <div className="now-playing-controls flex shrink-0 flex-col" aria-label="正在播放控制">
-    <Timeline layout="below" onError={onError} />
+    <PlaybackTimeline layout="below" onError={onError} />
     <PlaybackTransport onError={onError} />
     <div className="flex items-center gap-3">
       <Volume1 className="size-4 shrink-0" aria-hidden="true" />

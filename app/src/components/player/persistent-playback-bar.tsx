@@ -1,7 +1,7 @@
 import { statusLabels, usePlayer } from "@/lib/player";
 import { Cover } from "./cover";
 import { QualitySelect } from "./music-options";
-import { Timeline } from "./playback-bar";
+import { PlaybackTimeline } from "./playback-timeline";
 import { PlaybackTransport } from "./playback-transport";
 import { PlaybackNotice, type PlaybackNoticeMessage } from "./playback-notice";
 import { QueuePopover } from "./queue-popover";
@@ -16,9 +16,9 @@ export function PersistentPlaybackBar({ onLyrics, onQueue, onError, notice }: {
   const title = track ? trackDisplayTitle(track) : "选择一首音乐";
   return <footer className="persistent-playback" aria-label="常驻播放栏">
     <PlaybackNotice notice={notice} />
-    <Timeline layout="above" onError={onError} />
     <div className="persistent-playback-surface">
       <div className="capsule-glass glass-surface" aria-hidden="true" />
+      <PlaybackTimeline layout="edge" showTimeOnHover onError={onError} />
       <div className="persistent-track">
         <button type="button" className="persistent-cover" aria-label="打开正在播放" title="打开全屏播放器" onClick={onLyrics}>
           <Cover cover={track?.cover} className="size-12" />
