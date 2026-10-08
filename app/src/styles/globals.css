@@ -458,6 +458,10 @@
 .playback-capsule { position: relative; z-index: 1; isolation: isolate; display: flex; align-items: center; gap: 12px; width: 440px; max-width: min(648px, calc(100vw - 32px)); flex-shrink: 0; padding: 10px 16px; border-radius: 20px; pointer-events: auto; transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1), padding 260ms, gap 260ms, background-color 160ms; }
 .playback-capsule:is(:has(.capsule-main:is(:hover, :focus-within)), :has(.capsule-main [data-slot="select-trigger"][aria-expanded="true"])) { width: 648px; }
 .capsule-main { display: flex; flex: 1; align-items: center; min-width: 0; gap: 0; transition: gap 260ms; }
+@media (hover: hover) and (min-width: 601px) {
+  /* Expand the playback hit area without moving its controls; leave room before the heart. */
+  .capsule-main { padding: 18px 0 18px 24px; margin: -18px 12px -18px -24px; }
+}
 .playback-capsule:is(:has(.capsule-main:is(:hover, :focus-within)), :has(.capsule-main [data-slot="select-trigger"][aria-expanded="true"])) .capsule-main { gap: 12px; }
 .capsule-center { flex: 1; min-width: 0; }
 .capsule-play { width: 0; max-width: 0; padding: 0; overflow: hidden; opacity: 0; visibility: hidden; flex-shrink: 0; transition: max-width 260ms, width 260ms, opacity 160ms; }
