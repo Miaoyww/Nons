@@ -2,7 +2,12 @@ import { TrackArtists } from '@/components/music/music-links'
 import { useCallback, useEffect, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { Tabs } from '@base-ui/react/tabs'
-import { Tabs as MusicTabs, TabsList, TabsTab } from '@/components/animate-ui/components/base/tabs'
+import {
+  Tabs as MusicTabs,
+  TabsList,
+  TabsTab,
+  TabsPanel
+} from '@/components/animate-ui/components/base/tabs'
 import { Disc3, ListMusic, Mic2, Music2, Pencil, Play, Plus, Search, Trash2, X } from 'lucide-react'
 import { nativeCall, errorText, usePlayer, type Track } from '@/lib/player'
 import { localCollection, playLocalEntity, type LocalEntity } from '@/features/local/local-library'
@@ -44,14 +49,12 @@ interface ResultProps {
   refresh: number
   onError: Props['onError']
   onNotice: Props['onNotice']
+  list: ReturnType<typeof useLocalResults>
 }
-function Results({ sectionTitle, kind, keyword, refresh, onError, onNotice }: ResultProps) {
-  const { navigate } = useMusicNavigation()
-  const player = usePlayer()
-  const [playing, setPlaying] = useState(false)
+function useLocalResults(kind: Kind, keyword: string, refresh: number) {
   const loader = useCallback(
-    (offset: number) =>
-      kind === 'song'
+    async (offset: number) => {
+      const page = await (kind === 'song'
         ? nativeCall<{ items: Track[]; more: boolean }>('local_entity_tracks', {
             kind: 'song',
             id: '',
@@ -62,10 +65,23 @@ function Results({ sectionTitle, kind, keyword, refresh, onError, onNotice }: Re
             kind,
             keyword,
             offset
-          }),
+          }))
+      return { ...page, metadata: true as const }
+    },
     [kind, keyword, refresh]
   )
-  const list = usePagedList<Track | LocalEntity>(loader, kind === 'song' ? 100 : 30, isTauri())
+  return usePagedList<Track | LocalEntity, true>(loader, kind === 'song' ? 100 : 30, isTauri())
+}
+
+function BrowseResults(props: Omit<ResultProps, 'list'>) {
+  const list = useLocalResults(props.kind, props.keyword, props.refresh)
+  return <Results {...props} list={list} />
+}
+
+function Results({ sectionTitle, kind, keyword, list, onError, onNotice }: ResultProps) {
+  const { navigate } = useMusicNavigation()
+  const player = usePlayer()
+  const [playing, setPlaying] = useState(false)
   async function play(item: LocalEntity) {
     if (playing) return
     setPlaying(true)
@@ -175,10 +191,81 @@ function Results({ sectionTitle, kind, keyword, refresh, onError, onNotice }: Re
   )
 }
 
+function LocalSearchResults({
+  keyword,
+  refresh,
+  onError,
+  onNotice
+}: Omit<ResultProps, 'kind' | 'list'>) {
+  const [resultKind, setResultKind] = useState('all')
+  const song = useLocalResults('song', keyword, refresh)
+  const artist = useLocalResults('artist', keyword, refresh)
+  const album = useLocalResults('album', keyword, refresh)
+  const lists = { song, artist, album }
+  const empty = Object.values(lists).every(
+    (list) => list.metadata && !list.busy && !list.error && !list.more && !list.items.length
+  )
+  if (empty) {
+    return (
+      <div className="search-empty" role="status">
+        <Search aria-hidden="true" />
+        <p>没有找到与“{keyword}”匹配的本地音乐、艺术家或专辑</p>
+        <span>试试其他关键词，或添加音乐文件和文件夹。</span>
+      </div>
+    )
+  }
+  return (
+    <MusicTabs
+      orientation="vertical"
+      value={resultKind}
+      onValueChange={setResultKind}
+      className="local-search-results"
+    >
+      <TabsList className="music-tabs local-search-nav" aria-label="本地搜索结果类型">
+        {[{ value: 'all', label: '所有', icon: Search }, ...categories.slice(0, 3)].map(
+          ({ value, label, icon: Icon }) => (
+            <TabsTab key={value} value={value}>
+              <Icon aria-hidden="true" />
+              {label}
+            </TabsTab>
+          )
+        )}
+      </TabsList>
+      <div className="min-w-0 flex-1">
+        <TabsPanel value="all" transition={{ duration: 0.15 }}>
+          {categories.slice(0, 3).map(({ value, label }) => (
+            <Results
+              key={value}
+              sectionTitle={label}
+              kind={value}
+              keyword={keyword}
+              refresh={refresh}
+              list={lists[value as keyof typeof lists]}
+              onError={onError}
+              onNotice={onNotice}
+            />
+          ))}
+        </TabsPanel>
+        {categories.slice(0, 3).map(({ value }) => (
+          <TabsPanel key={value} value={value} transition={{ duration: 0.15 }}>
+            <Results
+              kind={value}
+              keyword={keyword}
+              refresh={refresh}
+              list={lists[value as keyof typeof lists]}
+              onError={onError}
+              onNotice={onNotice}
+            />
+          </TabsPanel>
+        ))}
+      </div>
+    </MusicTabs>
+  )
+}
+
 export default function LocalPage({ refresh, importing, onImport, onError, onNotice }: Props) {
   const { page, navigate } = useMusicNavigation()
   const [kind, setKind] = useState<Kind>('song')
-  const [resultKind, setResultKind] = useState('all')
   const [input, setInput] = useState(page.query)
   const [revision, setRevision] = useState(0)
   const [editing, setEditing] = useState<'create' | 'rename' | 'delete'>()
@@ -188,7 +275,6 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
   useEffect(() => setDialogError(undefined), [editing])
   useEffect(() => {
     setInput(page.query)
-    setResultKind('all')
   }, [page.query])
   const initialCollection = page.view !== 'local' ? page.collection : undefined
   const [detail, setDetail] = useState<{ identity: string; item: LocalEntity }>()
@@ -441,49 +527,13 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
               </form>
             </div>
             {page.query ? (
-              <Tabs.Root
-                orientation="vertical"
-                value={resultKind}
-                onValueChange={setResultKind}
-                className="local-search-results"
-              >
-                <Tabs.List className="local-search-nav" aria-label="本地搜索结果类型">
-                  {[{ value: 'all', label: '所有', icon: Search }, ...categories.slice(0, 3)].map(
-                    ({ value, label, icon: Icon }) => (
-                      <Tabs.Tab key={value} value={value}>
-                        <Icon aria-hidden="true" />
-                        {label}
-                      </Tabs.Tab>
-                    )
-                  )}
-                </Tabs.List>
-                <div className="min-w-0 flex-1">
-                  <Tabs.Panel value="all">
-                    {categories.slice(0, 3).map(({ value, label }) => (
-                      <Results
-                        key={value}
-                        sectionTitle={label}
-                        kind={value}
-                        keyword={page.query}
-                        refresh={version}
-                        onError={onError}
-                        onNotice={onNotice}
-                      />
-                    ))}
-                  </Tabs.Panel>
-                  {categories.slice(0, 3).map(({ value }) => (
-                    <Tabs.Panel key={value} value={value}>
-                      <Results
-                        kind={value}
-                        keyword={page.query}
-                        refresh={version}
-                        onError={onError}
-                        onNotice={onNotice}
-                      />
-                    </Tabs.Panel>
-                  ))}
-                </div>
-              </Tabs.Root>
+              <LocalSearchResults
+                key={`${page.query}:${version}`}
+                keyword={page.query}
+                refresh={version}
+                onError={onError}
+                onNotice={onNotice}
+              />
             ) : (
               categories.map(({ value }) => (
                 <Tabs.Panel key={value} value={value}>
@@ -502,7 +552,7 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
                       </ActionButton>
                     </div>
                   )}
-                  <Results
+                  <BrowseResults
                     kind={value}
                     keyword=""
                     refresh={version}
