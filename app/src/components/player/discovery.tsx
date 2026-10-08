@@ -1,4 +1,5 @@
 import { TrackArtists, TrackAlbum } from "./music-links";
+import { GreetingQuote } from "./greeting-quote";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { CalendarDays, ChevronDown, ChevronRight, Disc3, LayoutGrid, ListFilter, Pause, Play, Radio, RefreshCw, SkipForward, Sparkles, Tags, ThumbsDown, UserRound } from "lucide-react";
@@ -142,7 +143,7 @@ export default function Discovery({ onError, onNotice }: { onError: (cause: unkn
   const greeting = hour < 6 ? "夜深了" : hour < 12 ? "上午好" : hour < 18 ? "下午好" : "晚上好";
   return <section className="music-library discovery" aria-label="发现音乐">
     {daily ? <><header className="mb-8"><h1 className="library-heading">每日推荐</h1><p className="mt-2 text-sm text-muted-foreground">根据你的音乐口味，每日更新。</p></header>{!profile ? <div className="library-empty"><p>登录后发现今天为你推荐的音乐。</p><LoginDialog /></div> : <><TrackList tracks={songs.items} busy={playing} currentKey={current?.key} onPlay={(index) => void nativeCall("play_queue", { keys: songs.items.map((t) => t.key), index }).catch(onError)} onAppend={(track) => void nativeCall("append_queue", { keys: [track.key] }).then(() => onNotice(`已将「${track.title}」设为下一首播放。`)).catch(onError)} /><InfiniteLoad more={songs.more} busy={songs.busy} error={songs.error} onLoad={songs.loadMore} /></>}</> : <>
-      <header className="discover-greeting"><h1 className="library-heading">{greeting}{profile ? `，${profile.nickname}` : "，音乐相伴"}</h1><p>由此开启好心情 ～</p></header>
+      <header className="discover-greeting"><h1 className="library-heading">{greeting}{profile ? `，${profile.nickname}` : "，音乐相伴"}</h1><GreetingQuote /></header>
       <div className="discover-featured"><div className="discover-shortcuts">
         <button className="discover-shortcut" onClick={() => navigate("discover", "daily")}><Cover cover={profile?.avatarUrl} className="discover-shortcut-cover" /><span className="discover-shortcut-copy"><span className="discover-shortcut-title"><CalendarDays aria-hidden="true" /><strong>每日推荐</strong></span><span className="discover-shortcut-desc">根据你的音乐口味 · 每日更新</span></span><ChevronRight className="discover-shortcut-arrow" aria-hidden="true" /></button>
         <button className="discover-shortcut" onClick={() => navigate("collection", "", radarInfo)}><Cover cover={radarInfo.cover} className="discover-shortcut-cover" /><span className="discover-shortcut-copy"><span className="discover-shortcut-title"><Radio aria-hidden="true" /><strong>私人雷达</strong></span><span className="discover-shortcut-desc">发现你独特的音乐品味</span></span><ChevronRight className="discover-shortcut-arrow" aria-hidden="true" /></button>

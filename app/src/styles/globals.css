@@ -594,6 +594,12 @@
 .discovery { container-type: inline-size; }
 .discover-greeting { margin-bottom: 24px; }
 .discover-greeting p { margin-top: 4px; color: var(--muted-foreground); }
+.discover-quote { display: grid; }
+.discover-quote > :not(.sr-only) { grid-area: 1 / 1; min-width: 0; overflow-wrap: anywhere; }
+.discover-quote-typing { line-height: inherit; letter-spacing: inherit; }
+@keyframes blink-cursor { 0%, 45% { opacity: 1; } 50%, 95% { opacity: 0; } }
+.animate-blink-cursor { animation: blink-cursor 1s step-end infinite; }
+@media (prefers-reduced-motion: reduce) { .animate-blink-cursor { animation: none; } }
 .discover-featured { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 20px; }
 .discover-shortcuts { display: grid; gap: 12px; }
 .discover-shortcut { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 16px; text-align: left; min-width: 0; background: var(--card); cursor: pointer; transition: background-color 150ms; }

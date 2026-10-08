@@ -1,5 +1,6 @@
 mod audio;
 mod fonts;
+mod hitokoto;
 mod library;
 mod local_folders;
 mod lyrics;
@@ -35,6 +36,11 @@ struct Backend {
     folders: Arc<local_folders::LocalFolders>,
     cover_client: reqwest::Client,
     cover_requests: tokio::sync::Semaphore,
+}
+
+#[tauri::command]
+async fn discovery_hitokoto(backend: State<'_, Backend>) -> AppResult<String> {
+    hitokoto::fetch(&backend.cover_client).await
 }
 
 #[tauri::command]
@@ -683,6 +689,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            discovery_hitokoto,
             #[cfg(feature = "plugin-probe")]
             plugins::probe::plugin_probe_report,
             plugins::plugin_list,

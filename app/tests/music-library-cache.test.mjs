@@ -27,6 +27,22 @@ function harness() {
 }
 const summary = { likedPlaylist: { id: 1, kind: "playlist" }, likedTracks: [], likedError: null };
 
+test("Hitokoto requests coalesce and failures stay retryable", async () => {
+  const { player, requests } = harness();
+  const first = player.nativeCall("discovery_hitokoto");
+  const duplicate = player.nativeCall("discovery_hitokoto");
+  assert.equal(requests.length, 1);
+  const failures = Promise.allSettled([first, duplicate]);
+  requests[0].reject(new Error("timeout"));
+  assert.ok((await failures).every((value) => value.status === "rejected"));
+  const retry = player.nativeCall("discovery_hitokoto");
+  assert.equal(requests.length, 2);
+  requests[1].resolve("音乐相伴");
+  assert.equal(await retry, "音乐相伴");
+  assert.equal(await player.nativeCall("discovery_hitokoto"), "音乐相伴");
+  assert.equal(requests.length, 2);
+});
+
 test("artist and album reads coalesce while preserving entity, type and page boundaries", async () => {
   const { player, requests } = harness();
   for (const [command, args] of [
