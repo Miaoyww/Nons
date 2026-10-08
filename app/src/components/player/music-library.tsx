@@ -1,3 +1,4 @@
+import { PlaylistCard } from "./playlist-card";
 import { CollectionHeader } from "./collection-header";
 import { SongContextMenu } from "./song-actions";
 import { TrackTitle } from "./track-title";
@@ -79,16 +80,7 @@ function LyricExcerpt({ track }: { track?: Track }) {
 }
 
 function CollectionCards({ items, busy, onOpen, onPlay }: { items: MusicCollection[]; busy: boolean; onOpen: (item: MusicCollection) => void; onPlay: (item: MusicCollection) => void }) {
-  return <div className="library-cover-grid">{items.map((item) => <article key={`${item.kind}:${item.id}`} className="library-cover-card">
-    <div className="library-cover-art">
-      <button className="library-cover-open" onClick={() => onOpen(item)} aria-label={`打开 ${item.name}`}>
-        <Cover cover={item.cover} className={`aspect-square w-full ${item.kind === "artist" ? "rounded-full" : "rounded-xl"}`} />
-      </button>
-      <ActionButton size="icon-lg" className="library-cover-play" disabled={busy} aria-label={`播放 ${item.name}`} title="播放收藏（最多 1000 首）" onClick={() => onPlay(item)}><Play aria-hidden="true" /></ActionButton>
-    </div>
-    <button className="library-cover-title" onClick={() => onOpen(item)} title={item.name}>{item.name}</button>
-    <p className="library-cover-subtitle" title={item.subtitle}>{item.kind === "playlist" && item.subtitle ? "by " : ""}{item.subtitle}</p>
-  </article>)}</div>;
+  return <div className="library-cover-grid">{items.map((item) => <PlaylistCard key={`${item.kind}:${item.id}`} item={item} busy={busy} onOpen={onOpen} onPlay={onPlay} />)}</div>;
 }
 
 export default function MusicLibrary({ onError, onNotice }: { onError: (cause: unknown) => void; onNotice: (message: string) => void }) {

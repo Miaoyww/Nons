@@ -71,6 +71,7 @@ export async function nativeCall<T>(command: string, args?: Record<string, unkno
   }
   const result = await invoke<T>(command, args);
   const affected: Record<string, string[]> = {
+    discovery_dislike: ["discovery_tracks"],
     set_song_liked: ["liked_song_ids", "music_library", "library_tracks", "library_collections"],
     remove_playlist_song: ["liked_song_ids", "music_library", "library_tracks", "library_collections"],
     create_library_playlist: ["library_collections", "music_library"],

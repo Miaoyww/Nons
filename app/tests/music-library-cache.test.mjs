@@ -27,6 +27,40 @@ function harness() {
 }
 const summary = { likedPlaylist: { id: 1, kind: "playlist" }, likedTracks: [], likedError: null };
 
+test("discovery reads coalesce and keep category, order and page results separate", async () => {
+  const { player, requests } = harness();
+  const args = { section: "square", category: "日语", order: "hot", offset: 0 };
+  const first = player.nativeCall("discovery_playlists", args);
+  const duplicate = player.nativeCall("discovery_playlists", { offset: 0, order: "hot", category: "日语", section: "square" });
+  assert.equal(requests.length, 1);
+  requests.at(-1).resolve({ items: [{ id: 1, playCount: 25000 }], more: true });
+  assert.equal(await first, await duplicate);
+  for (const changed of [{ category: "华语" }, { order: "new" }, { offset: 30 }]) {
+    const before = requests.length;
+    const read = player.nativeCall("discovery_playlists", { ...args, ...changed });
+    assert.equal(requests.length, before + 1);
+    requests.at(-1).resolve({ items: [], more: false }); await read;
+  }
+});
+
+test("FM refresh bypasses cached batches and dislikes invalidate only after success", async () => {
+  const { player, requests } = harness();
+  const args = { kind: "fm" };
+  const initial = player.nativeCall("discovery_tracks", args);
+  requests.at(-1).resolve([{ key: "netease:1" }]); await initial;
+  const refresh = player.nativeCall("discovery_tracks", { ...args, refresh: true });
+  assert.equal(requests.length, 2);
+  requests.at(-1).resolve([{ key: "netease:2" }]); await refresh;
+  const failed = player.nativeCall("discovery_dislike", { id: 2 });
+  const rejection = assert.rejects(failed, /denied/); requests.at(-1).reject(new Error("denied")); await rejection;
+  assert.equal((await player.nativeCall("discovery_tracks", args))[0].key, "netease:2");
+  const write = player.nativeCall("discovery_dislike", { id: 2 }); requests.at(-1).resolve(); await write;
+  const before = requests.length;
+  const read = player.nativeCall("discovery_tracks", args);
+  assert.equal(requests.length, before + 1);
+  requests.at(-1).resolve([{ key: "netease:3" }]); await read;
+});
+
 test("native reads coalesce by canonical arguments and reuse the same summary and detail", async () => {
   const { library, requests } = harness();
   const first = library.getMusicLibrary(1), duplicate = library.getMusicLibrary(1);

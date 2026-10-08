@@ -18,6 +18,7 @@ pub struct Collection {
     pub track_count: u64,
     pub creator_id: u64,
     pub liked: bool,
+    pub play_count: Option<u64>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -255,7 +256,7 @@ impl Netease {
     }
 }
 
-fn array<'a>(value: &'a Value, key: &str) -> &'a [Value] {
+pub(super) fn array<'a>(value: &'a Value, key: &str) -> &'a [Value] {
     value
         .get(key)
         .and_then(Value::as_array)
@@ -274,7 +275,7 @@ fn collection_description(value: &Value) -> Option<String> {
         .map(|s| s.chars().take(16_000).collect())
 }
 
-fn collection(value: &Value, kind: &str) -> Option<Collection> {
+pub(super) fn collection(value: &Value, kind: &str) -> Option<Collection> {
     let id = value.get("id")?.as_u64().filter(|id| *id > 0)?;
     if kind == "playlist"
         && (text(value, "type") == "VIDEO"
@@ -312,6 +313,12 @@ fn collection(value: &Value, kind: &str) -> Option<Collection> {
         track_count: value.get("trackCount").and_then(Value::as_u64).unwrap_or(0),
         creator_id: creator.get("userId").and_then(Value::as_u64).unwrap_or(0),
         liked: value.get("specialType").and_then(Value::as_u64) == Some(5),
+        play_count: value
+            .get("playCount")
+            .or_else(|| value.get("playcount"))
+            .and_then(Value::as_f64)
+            .filter(|v| v.is_finite() && *v >= 0.0)
+            .map(|v| v as u64),
     })
 }
 fn collection_matches(collection: &Collection, kind: &str, filter: &str, owner_id: u64) -> bool {
@@ -363,6 +370,18 @@ fn track_page<'a>(
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn playlist_play_counts_accept_both_api_fields_and_omit_missing_values() {
+        for (input, expected) in [
+            (json!({"id":1,"playCount":12345.0}), Some(12345)),
+            (json!({"id":1,"playcount":987}), Some(987)),
+            (json!({"id":1,"playCount":0}), Some(0)),
+            (json!({"id":1}), None),
+            (json!({"id":1,"playCount":-1}), None),
+        ] {
+            assert_eq!(collection(&input, "playlist").unwrap().play_count, expected);
+        }
+    }
     #[test]
     fn playlist_description_preserves_lines_and_omits_missing_content() {
         assert_eq!(
