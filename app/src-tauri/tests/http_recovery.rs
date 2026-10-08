@@ -1,5 +1,5 @@
 //! Exercise the actual bundled source when the connection closes in the song's tail.
-#[path = "../src/network.rs"]
+#[path = "../src/playback/network.rs"]
 #[allow(dead_code)]
 mod network;
 use gstreamer::{self as gst, prelude::*};

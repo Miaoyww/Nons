@@ -1,10 +1,10 @@
 //! Measure decoded output amplitude across the same NULL/reload used by track changes.
 use gstreamer::{self as gst, prelude::*};
 use std::sync::{Arc, Mutex};
-#[path = "../src/audio.rs"]
+#[path = "../src/playback/audio.rs"]
 #[allow(dead_code)]
 mod audio;
-#[path = "../src/model.rs"]
+#[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
 

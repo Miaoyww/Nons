@@ -31,7 +31,7 @@ const settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve()
 function quoteHarness() {
   const state = hooks();
   const requests = [];
-  const { GreetingQuote } = load("../src/components/player/greeting-quote.tsx", {
+  const { GreetingQuote } = load("../src/features/discovery/greeting-quote.tsx", {
     react: state.react, "react/jsx-runtime": jsxRuntime,
     "@/lib/player": { nativeCall: (command) => new Promise((resolve, reject) => requests.push({ command, resolve, reject })) },
     "@/components/magicui/typing-animation": { TypingAnimation: "typing" },

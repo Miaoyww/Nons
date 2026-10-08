@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
-const source = readFileSync(new URL("../src/hooks/use-playback-bar-mode.ts", import.meta.url), "utf8");
+const source = readFileSync(new URL("../src/features/playback/use-playback-bar-mode.ts", import.meta.url), "utf8");
 function session(saved, unavailable = false) {
   const exports = {}, values = new Map(saved === undefined ? [] : [["nons-playback-bar-mode", saved]]);
   const notifications = [];

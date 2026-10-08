@@ -29,10 +29,10 @@ function volumeControl({ failure, desktop = true } = {}) {
       statusLabels: { stopped: "已停止" },
     },
     "lucide-react": {},
-    "./action-button": {},
-    "./cover": {},
+    "@/components/music/action-button": {},
+    "@/components/music/cover": {},
   };
-  const source = readFileSync(new URL("../src/components/player/volume-control.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/features/playback/volume-control.tsx", import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   });

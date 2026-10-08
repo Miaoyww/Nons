@@ -10,11 +10,11 @@ function session(saved) {
   const registered = new Map(), values = new Map(saved ? [["nons-shortcut-settings", saved]] : []);
   const keys = loadKeys();
   const exports = {};
-  const source = readFileSync(new URL("../src/lib/shortcuts.ts", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/features/playback/shortcuts/shortcuts.ts", import.meta.url), "utf8");
   runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
     exports, Element: dom.window.Element,
     localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) },
-    require: (name) => name === "./shortcut-keys" ? keys : name === "@tauri-apps/api/core" ? { isTauri: () => true } : name === "./player" ? { errorText: String } : {
+    require: (name) => name === "@/features/playback/shortcuts/shortcut-keys" ? keys : name === "@tauri-apps/api/core" ? { isTauri: () => true } : name === "@/lib/player" ? { errorText: String } : {
       async register(key, fn) { if (key === "Ctrl+Alt+N") throw Error("occupied"); if (registered.has(key)) throw Error("duplicate"); registered.set(key, fn); },
       async unregister(keys) { for (const key of keys) registered.delete(key); },
     },
@@ -75,11 +75,11 @@ function playbackHarness() {
   const modules = {
     react: { useRef: (value) => refs[cursor++] ??= { current: value }, useEffect: (fn) => effects.push(fn) },
     "@tauri-apps/api/core": { isTauri: () => true },
-    "@/components/player/account": { useAccount: () => account },
+    "@/features/account/account": { useAccount: () => account },
     "@/lib/player": { usePlayer: () => state, nativeCall: async (command, args) => { calls.push({ command, args }); } },
-    "@/lib/shortcuts": { initializeShortcuts: async () => {}, isPlaybackSpace: app.isPlaybackSpace, setShortcutDispatcher: (fn) => { dispatch = fn; } },
+    "@/features/playback/shortcuts/shortcuts": { initializeShortcuts: async () => {}, isPlaybackSpace: app.isPlaybackSpace, setShortcutDispatcher: (fn) => { dispatch = fn; } },
   };
-  const source = readFileSync(new URL("../src/hooks/use-playback-shortcuts.ts", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/features/playback/shortcuts/use-playback-shortcuts.ts", import.meta.url), "utf8");
   runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
     exports, require: (name) => modules[name], window: app.window,
   });
@@ -122,7 +122,7 @@ test("Space after clicking a button controls playback and prevents button handle
 
 function loadKeys() {
   const exports = {};
-  const source = readFileSync(new URL("../src/lib/shortcut-keys.ts", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/features/playback/shortcuts/shortcut-keys.ts", import.meta.url), "utf8");
   runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports });
   return exports;
 }

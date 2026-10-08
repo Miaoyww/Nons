@@ -17,12 +17,12 @@ function harness() {
   const requests = [];
   const cache = load("../src/lib/runtime-cache.ts", { "lru-cache": { LRUCache } });
   const player = load("../src/lib/player.ts", {
-    "./runtime-cache": cache, react: {}, "@tauri-apps/api/event": {},
+    "@/lib/runtime-cache": cache, react: {}, "@tauri-apps/api/event": {},
     "@tauri-apps/api/core": { isTauri: () => true, invoke(command, args) {
       return new Promise((resolve, reject) => requests.push({ command, args, resolve, reject }));
     } },
   });
-  const library = load("../src/lib/music-library.ts", { "./player": player, "./runtime-cache": cache });
+  const library = load("../src/features/library/library-api.ts", { "@/lib/player": player, "@/lib/runtime-cache": cache });
   return { requests, cache, player, library };
 }
 const summary = { likedPlaylist: { id: 1, kind: "playlist" }, likedTracks: [], likedError: null };

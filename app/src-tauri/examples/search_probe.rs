@@ -1,13 +1,10 @@
 //! Read-only search smoke test. Prints counts, never account data or cookies.
-#[path = "../src/model.rs"]
+#[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
-#[path = "../src/netease.rs"]
+#[path = "../src/netease/mod.rs"]
 #[allow(dead_code, unused_imports)]
 mod netease;
-#[path = "../src/storage.rs"]
-#[allow(dead_code)]
-mod storage;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

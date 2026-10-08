@@ -36,13 +36,17 @@ Windows x64、GStreamer 1.28.7：裁剪内容实测约 34.0 MiB（文件字节�
 
 ## 模块
 
-- `model.rs` 定义歌曲、本地/网易云资源和播放状态；当前没有多来源插件框架。
-- `player.rs` 单线程拥有 GStreamer playbin3、设备监视和 SMTC；有界命令队列、可取消资源解析、仅一首下一曲预加载。流线程回调只消费已准备 URI。
-- `netease.rs` 直接嵌入固定提交的 ncm-api-rs，不运行额外 API 服务。Cookie 留在 Rust 与系统钥匙串，IPC 只返回二维码和登录结果。
-- `storage.rs` 使用 SQLite，列表分页；`library.rs` 使用 Lofty 读取元数据，批量入库。
-- `lyrics.rs` 管理歌词来源、超时与缓存；AMLL 负责前端解析和显示。
-- `media.rs` 从同一播放状态同步 Windows SMTC；StartTime/MinSeekTime 为 0，EndTime/MaxSeekTime 为曲目时长，Position 限定在有效范围。
-- `network.rs` 静态注册随应用固定的 Rust reqwest HTTP 插件（0.15.4，`vendor/gst-plugin-reqwest`），使用独立的 `nonshttpsrc` 名称避免运行时插件冲突。首次请求发送开放 Range，以实际 206/Content-Range 确认定位能力，兼容网易云 CDN 缺少 Accept-Ranges 的响应；忽略 Range 的服务器仍不可定位。不新增整曲下载或缓存，播放缓冲仍为 4 MiB / 10 秒上限。当前完整运行时的 `curlhttpsrc` 在线准备阶段超时，不能作为已验证路径。Windows 原生来源读取手动系统代理与 bypass（不修改系统设置），明确环境变量优先；PAC 动态解析尚未接通。HTTP 请求超时 12 秒，有重试能力的来源限制为 2 次。Windows 开发脚本同时生成并链接 gstbase 的 import library。
+前端业务位于 `app/src/features/`，按工作区、账号、发现、音乐库、本地音乐、搜索、队列、播放、歌词和设置归组，专用控件、hook 与服务随功能存放。跨功能音乐控件位于 `components/music/`，通用 UI 保持在 `components/ui/`；`lib/` 与 `hooks/` 保留共享基础能力，插件宿主保持在 `plugins/`。
+
+Rust 后端位于 `app/src-tauri/src/`，`lib.rs` 声明模块并导出启动入口，`application/` 负责 Tauri 组装与 IPC；播放、本地曲库、歌词、网易云、发现、平台服务、基础设施、共享模型和插件各有独立目录。以下路径均相对该后端目录。
+
+- `model/mod.rs` 定义歌曲、本地/网易云资源和播放状态；当前没有多来源插件框架。
+- `playback/player.rs` 单线程拥有 GStreamer playbin3、设备监视和 SMTC；有界命令队列、可取消资源解析、仅一首下一曲预加载。流线程回调只消费已准备 URI。
+- `netease/mod.rs` 直接嵌入固定提交的 ncm-api-rs，不运行额外 API 服务。Cookie 留在 Rust 与系统钥匙串，IPC 只返回二维码和登录结果。
+- `infrastructure/storage.rs` 使用 SQLite，列表分页；`local/library.rs` 使用 Lofty 读取元数据，批量入库。
+- `lyrics/mod.rs` 管理歌词来源、超时与缓存；AMLL 负责前端解析和显示。
+- `playback/media.rs` 从同一播放状态同步 Windows SMTC；StartTime/MinSeekTime 为 0，EndTime/MaxSeekTime 为曲目时长，Position 限定在有效范围。
+- `playback/network.rs` 静态注册随应用固定的 Rust reqwest HTTP 插件（0.15.4，`vendor/gst-plugin-reqwest`），使用独立的 `nonshttpsrc` 名称避免运行时插件冲突。首次请求发送开放 Range，以实际 206/Content-Range 确认定位能力，兼容网易云 CDN 缺少 Accept-Ranges 的响应；忽略 Range 的服务器仍不可定位。不新增整曲下载或缓存，播放缓冲仍为 4 MiB / 10 秒上限。当前完整运行时的 `curlhttpsrc` 在线准备阶段超时，不能作为已验证路径。Windows 原生来源读取手动系统代理与 bypass（不修改系统设置），明确环境变量优先；PAC 动态解析尚未接通。HTTP 请求超时 12 秒，有重试能力的来源限制为 2 次。Windows 开发脚本同时生成并链接 gstbase 的 import library。
 - WebUI 的队列/元数据状态与 4 Hz 播放进度分开订阅；AMLL 单独按需加载，歌词页卸载后停止动画。
 
 ## 当前资源约束

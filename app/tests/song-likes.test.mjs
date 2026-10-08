@@ -28,14 +28,14 @@ function harness() {
     react,
     "react/jsx-runtime": { jsx: (type, props) => ({ type, props }) },
     "@tauri-apps/api/core": { isTauri: () => true },
-    "@/lib/music-library": { resetAccountCache() {}, invalidateMusicLibrary() { libraryRefreshes.push("invalidate"); }, getMusicLibrary(userId) { libraryRefreshes.push(userId); return Promise.resolve(); } },
+    "@/features/library/library-api": { resetAccountCache() {}, invalidateMusicLibrary() { libraryRefreshes.push("invalidate"); }, getMusicLibrary(userId) { libraryRefreshes.push(userId); return Promise.resolve(); } },
     "@/lib/player": {
       errorText: String,
       nativeCall(command, args) { return new Promise((resolve, reject) => requests.push({ command, args, resolve, reject })); },
     },
   };
   const exports = {};
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/player/account.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/features/account/account.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   runInNewContext(outputText, { exports, require: (name) => modules[name] });
   function render() { cursor = 0; const value = exports.AccountProvider({ children: null }).props.value; effects.splice(0).forEach((fn) => fn()); return value; }
   return { requests, render, libraryRefreshes };

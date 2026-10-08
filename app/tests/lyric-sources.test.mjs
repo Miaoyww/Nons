@@ -7,7 +7,7 @@ import ts from "typescript";
 function harness(responses, kind = "netease") {
   const calls = [];
   const exports = {};
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/lib/load-lyrics.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } });
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/features/lyrics/load-lyrics.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } });
   runInNewContext(outputText, { exports, require: () => ({ nativeCall: async (_command, args) => { calls.push(args); return responses.shift(); } }) });
   return { calls, load: (sources = { amll: true, qq: true }, current) => exports.loadLyrics({ key: `${kind}:1`, source: { kind } }, true, sources,
     (lyrics) => { if (lyrics?.content === "broken") throw new Error("invalid lyrics"); return lyrics?.content; }, current) };

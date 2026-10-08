@@ -1,13 +1,10 @@
 //! Opt-in QR generation probe. Never prints keys, URLs, cookies, or image contents.
-#[path = "../src/model.rs"]
+#[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
-#[path = "../src/netease.rs"]
+#[path = "../src/netease/mod.rs"]
 #[allow(dead_code)]
 mod netease;
-#[path = "../src/storage.rs"]
-#[allow(dead_code)]
-mod storage;
 use base64::Engine;
 
 #[tokio::main]

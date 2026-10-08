@@ -21,15 +21,15 @@ function harness() {
     "@tauri-apps/api/core": { isTauri: () => true },
     "@/lib/player": { coverSource: (cover) => cover, nativeCall: (command, args) => new Promise((resolve, reject) => requests.push({ command, args, resolve, reject })) },
     "@/lib/runtime-cache": { coverCache: { delete: (key) => deleted.push(key) }, requestKey: (command, args) => `${command}:${JSON.stringify(args)}` },
-    "./use-local-options": { useLocalOptions: () => ({ showCovers: true }) },
+    "@/features/local/use-local-options": { useLocalOptions: () => ({ showCovers: true }) },
   };
   const exports = {};
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/hooks/use-cover-source.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } });
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/music/use-cover-source.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } });
   runInNewContext(outputText, { exports, URL, require(name) { assert.ok(name in modules, name); return modules[name]; } });
   const components = {};
   const jsx = (type, props) => ({ type, props });
-  Object.assign(modules, { "react/jsx-runtime": { jsx, jsxs: jsx }, "lucide-react": {}, "@/hooks/use-cover-source": exports });
-  const componentText = ts.transpileModule(readFileSync(new URL("../src/components/player/cover.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  Object.assign(modules, { "react/jsx-runtime": { jsx, jsxs: jsx }, "lucide-react": {}, "@/components/music/use-cover-source": exports });
+  const componentText = ts.transpileModule(readFileSync(new URL("../src/components/music/cover.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   runInNewContext(componentText, { exports: components, require: (name) => modules[name], IntersectionObserver: class {
     constructor(callback) { this.callback = callback; } observe() { this.callback([{ isIntersecting: true }]); } disconnect() {}
   } });

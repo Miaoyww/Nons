@@ -15,11 +15,11 @@ function harness() {
     "react/jsx-runtime": { jsx, jsxs: jsx },
     "@base-ui/react/context-menu": { ContextMenu: menu },
     "@tauri-apps/api/core": { isTauri: () => true },
-    "lucide-react": {}, "@/lib/player": {}, "@/lib/music-library": {}, "@/components/ui/dialog": {}, "@/components/ui/button": {},
-    "./account": { useAccount: () => ({ profile }) }, "./music-navigation": {},
+    "lucide-react": {}, "@/lib/player": {}, "@/features/library/library-api": {}, "@/components/ui/dialog": {}, "@/components/ui/button": {},
+    "@/features/account/account": { useAccount: () => ({ profile }) }, "@/features/workspace/music-navigation": {},
   };
   const exports = {};
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/player/collection-actions.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/features/library/collection-actions.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   runInNewContext(outputText, { exports, require: name => modules[name] });
   function flatten(node) { return Array.isArray(node) ? node.flatMap(flatten) : node && typeof node === "object" ? [node, ...flatten(node.props?.children)] : []; }
   return { calls, logout: () => { profile = undefined; }, menu(item, busy = false, options = {}) { return flatten(exports.CollectionContextMenu({ item, busy, render: jsx("article", {}), children: "card", ...options })).filter(node => node.type === "Item"); } };
@@ -54,11 +54,11 @@ test("song favorite action precedes the divider and unavailable remove actions a
     react: { createContext: () => ({}), useContext: () => ({}) },
     "react/jsx-runtime": { jsx, jsxs: jsx }, "@base-ui/react/context-menu": { ContextMenu: menu },
     "@tauri-apps/api/core": { isTauri: () => true }, "lucide-react": {}, "@/lib/player": {},
-    "@/components/animate-ui/components/base/dialog": {}, "./action-button": {}, "./playlist-picker": {},
-    "./account": { useAccount: () => ({ profile: { userId: 7 }, likedIds: new Set([12]), likesReady: true, pendingLikes: new Set() }) },
+    "@/components/animate-ui/components/base/dialog": {}, "@/components/music/action-button": {}, "@/features/library/playlist-picker": {},
+    "@/features/account/account": { useAccount: () => ({ profile: { userId: 7 }, likedIds: new Set([12]), likesReady: true, pendingLikes: new Set() }) },
   };
   const exports = {};
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/player/song-actions.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/music/song-actions.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   runInNewContext(outputText, { exports, require: name => modules[name] });
   function flatten(node) { return Array.isArray(node) ? node.flatMap(flatten) : node && typeof node === "object" ? [node, ...flatten(node.props?.children)] : []; }
   const props = { track: { title: "Song", source: { kind: "netease", id: 12 } }, render: jsx("div", {}), children: null, onPlay() {} };

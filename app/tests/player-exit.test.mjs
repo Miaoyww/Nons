@@ -27,28 +27,28 @@ function harness(initialMode = "collapsible") {
   const App = load("../src/App.tsx", {
     react: { useState(initial) { phase ??= initial; return [phase, (next) => { phase = typeof next === "function" ? next(phase) : next; }]; } },
     "motion/react": { MotionConfig: "MotionConfig" },
-    "@/components/titlebar": { Titlebar: "Titlebar" },
-    "@/components/player/music-workspace": { MusicWorkspace: "MusicWorkspace" },
-    "@/components/player/music-options": { MusicOptionsProvider: "MusicOptionsProvider" },
-    "@/components/player/music-navigation": { MusicNavigationProvider: "MusicNavigationProvider" },
-    "@/components/player/account": { AccountProvider: "AccountProvider" },
+    "@/features/workspace/titlebar": { Titlebar: "Titlebar" },
+    "@/features/workspace/music-workspace": { MusicWorkspace: "MusicWorkspace" },
+    "@/features/playback/music-options": { MusicOptionsProvider: "MusicOptionsProvider" },
+    "@/features/workspace/music-navigation": { MusicNavigationProvider: "MusicNavigationProvider" },
+    "@/features/account/account": { AccountProvider: "AccountProvider" },
     "@/plugins/host": { PluginProvider: "PluginProvider", PluginSlot: "PluginSlot" },
   }).default;
-  const MusicWorkspace = load("../src/components/player/music-workspace.tsx", {
+  const MusicWorkspace = load("../src/features/workspace/music-workspace.tsx", {
     react: { useState: (value) => [value, () => {}], useRef: (current) => ({ current }), useCallback: (fn) => fn, useEffect() {}, lazy: () => "LazyView", Suspense: "Suspense" },
     "@tauri-apps/api/core": { isTauri: () => false }, "@tauri-apps/plugin-dialog": {}, "lucide-react": {},
-    "@tauri-apps/api/event": {}, "@/components/settings/folder-manager": { FolderManager: "FolderManager" }, "@/lib/runtime-cache": {},
+    "@tauri-apps/api/event": {}, "@/features/local/folder-manager": { FolderManager: "FolderManager" }, "@/lib/runtime-cache": {},
     "motion/react": { AnimatePresence: "AnimatePresence" },
-    "@/hooks/use-playback-bar-mode": { usePlaybackBarMode: () => [barMode, () => {}] },
-    "./persistent-playback-bar": { PersistentPlaybackBar: "PersistentPlaybackBar" },
-    "@/hooks/use-playback-shortcuts": { usePlaybackShortcuts() {} },
+    "@/features/playback/use-playback-bar-mode": { usePlaybackBarMode: () => [barMode, () => {}] },
+    "@/features/playback/persistent-playback-bar": { PersistentPlaybackBar: "PersistentPlaybackBar" },
+    "@/features/playback/shortcuts/use-playback-shortcuts": { usePlaybackShortcuts() {} },
     "@/lib/player": { usePlayer: () => ({ index: null, queue: [] }) },
-    "./action-button": { ActionButton: "ActionButton" }, "./playback-bar": { PlaybackBar: "PlaybackBar" },
+    "@/components/music/action-button": { ActionButton: "ActionButton" }, "@/features/playback/playback-bar": { PlaybackBar: "PlaybackBar" },
     "@/plugins/host": { PluginPageHost: "PluginPageHost" },
-    "./music-navigation": { useMusicNavigation: () => ({ page: { view: "local", query: "" } }) },
-    "./infinite-load": {}, "@/lib/use-paged-list": { usePagedList: () => ({ items: [], more: false, busy: false }) },
-    "./music-options": { QualitySelect: "QualitySelect" }, "./track-list": {}, "./queue-page": { QueuePage: "QueuePage" }, "./collection-actions": { CollectionActionsProvider: "collection-actions" },
-    "./song-actions": { SongActionsProvider: "SongActionsProvider" },
+    "@/features/workspace/music-navigation": { useMusicNavigation: () => ({ page: { view: "local", query: "" } }) },
+    "@/components/music/infinite-load": {}, "@/lib/use-paged-list": { usePagedList: () => ({ items: [], more: false, busy: false }) },
+    "@/features/playback/music-options": { QualitySelect: "QualitySelect" }, "@/components/music/track-list": {}, "@/features/queue/queue-page": { QueuePage: "QueuePage" }, "@/features/library/collection-actions": { CollectionActionsProvider: "collection-actions" },
+    "@/components/music/song-actions": { SongActionsProvider: "SongActionsProvider" },
   }).MusicWorkspace;
   function render() {
     const props = find(App(), "MusicWorkspace").props;

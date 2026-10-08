@@ -7,7 +7,7 @@ import * as amll from "@applemusic-like-lyrics/lyric";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/qrc.json", import.meta.url), "utf8"));
 const exports = {};
-const { outputText } = ts.transpileModule(readFileSync(new URL("../src/lib/parse-lyrics.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } });
+const { outputText } = ts.transpileModule(readFileSync(new URL("../src/features/lyrics/parse-lyrics.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } });
 runInNewContext(outputText, { exports, require: () => amll });
 const lyrics = { source: "qq", format: "qrc", content: fixture.main, translation: "[00:01.00]你好世界\n[00:03.00]再次", romanization: "[1000,1000]hello (1000,400)world(1400,600)" };
 

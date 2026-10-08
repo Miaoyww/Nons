@@ -9,18 +9,18 @@ function lyricControl({ failure, desktop = true } = {}) {
   const errors = [];
   const jsx = (type, props) => ({ type, props });
   const modules = {
-    "@/hooks/use-local-preferences": { useLocalPreferences: () => ({ options: { lyricPriority: "local", artistSeparators: [] } }) },
+    "@/features/local/use-local-preferences": { useLocalPreferences: () => ({ options: { lyricPriority: "local", artistSeparators: [] } }) },
     "react/jsx-runtime": { jsx, jsxs: jsx },
     react: { useState: (initial) => [initial, () => {}], useEffect() {}, useCallback: (fn) => fn, useMemo: (fn) => fn() },
     "@applemusic-like-lyrics/react": { LyricPlayer: "lyric-player" },
-    "@/hooks/use-font-settings": { useFontSettings: () => ({ fonts: { app: "", lyrics: "" } }) },
+    "@/features/settings/use-font-settings": { useFontSettings: () => ({ fonts: { app: "", lyrics: "" } }) },
     "@applemusic-like-lyrics/lyric": {},
     "@applemusic-like-lyrics/core/style.css": {},
     "@tauri-apps/api/event": {},
     "@tauri-apps/api/core": { isTauri: () => desktop },
-    "@/hooks/use-lyric-sources": {},
-    "@/lib/load-lyrics": {},
-    "@/lib/parse-lyrics": {},
+    "@/features/lyrics/use-lyric-sources": {},
+    "@/features/lyrics/load-lyrics": {},
+    "@/features/lyrics/parse-lyrics": {},
     "motion/react": { useReducedMotion: () => false },
     "lucide-react": {},
     "@/lib/player": {
@@ -30,9 +30,9 @@ function lyricControl({ failure, desktop = true } = {}) {
         return failure ? Promise.reject(failure) : Promise.resolve();
       },
     },
-    "./music-links": {}, "./action-button": {}, "./cover": {}, "./album-background": {}, "./now-playing-controls": {}, "./now-playing-menu": {},
+    "@/components/music/music-links": {}, "@/components/music/action-button": {}, "@/components/music/cover": {}, "@/features/lyrics/album-background": {}, "@/features/playback/now-playing-controls": {}, "@/features/playback/now-playing-menu": {},
   };
-  const source = readFileSync(new URL("../src/components/player/lyrics-view.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/features/lyrics/lyrics-view.tsx", import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   });

@@ -1,5 +1,5 @@
 //! Online gapless regression through the same playbin and HTTP source as the app.
-#[path = "../src/network.rs"]
+#[path = "../src/playback/network.rs"]
 mod network;
 use gstreamer::{self as gst, prelude::*};
 use std::{

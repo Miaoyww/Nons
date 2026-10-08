@@ -21,10 +21,10 @@ function harness() {
     },
     "lucide-react": { Search: "Search" },
     "@/lib/player": { usePlayer: () => ({ queue, index: 2 }), nativeCall: (command, args) => { calls.push({ command, args }); return Promise.resolve(); } },
-    "./queue-controls": { QueueControls: "QueueControls" },
-    "./track-list": { TrackList: "TrackList" },
+    "@/features/queue/queue-controls": { QueueControls: "QueueControls" },
+    "@/components/music/track-list": { TrackList: "TrackList" },
   };
-  const source = readFileSync(new URL("../src/components/player/queue-page.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/features/queue/queue-page.tsx", import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   const exports = {};
   runInNewContext(outputText, { exports, require: (name) => { assert.ok(name in modules, name); return modules[name]; } });

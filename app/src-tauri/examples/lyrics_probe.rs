@@ -1,22 +1,22 @@
 //! Read-only online lyrics probe; optionally pass a local audio file.
-#[path = "../src/model.rs"]
+#[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
 mod storage {
-    pub const MAX_LYRIC_BYTES: usize = 2 * 1024 * 1024;
+    pub use crate::model::MAX_LYRIC_BYTES;
 }
-#[path = "../src/lyric_matching.rs"]
+#[path = "../src/lyrics/lyric_matching.rs"]
 #[allow(dead_code)]
 mod lyric_matching;
-#[path = "../src/netease.rs"]
+#[path = "../src/netease/mod.rs"]
 #[allow(dead_code, unused_imports)]
 mod netease;
-#[path = "../src/netease_lyrics.rs"]
+#[path = "../src/lyrics/netease_lyrics.rs"]
 mod netease_lyrics;
-#[path = "../src/qq_lyrics.rs"]
+#[path = "../src/lyrics/qq_lyrics.rs"]
 #[allow(dead_code)]
 mod qq_lyrics;
-#[path = "../src/qrc_decrypt.rs"]
+#[path = "../src/lyrics/qrc_decrypt.rs"]
 mod qrc_decrypt;
 
 #[tokio::main]

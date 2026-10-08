@@ -1,15 +1,12 @@
 //! Opt-in read-only live probe. Never prints cookies or expiring media URLs.
-#[path = "../src/model.rs"]
+#[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
-#[path = "../src/netease.rs"]
+#[path = "../src/netease/mod.rs"]
 #[allow(dead_code)]
 mod netease;
-#[path = "../src/network.rs"]
+#[path = "../src/playback/network.rs"]
 mod network;
-#[path = "../src/storage.rs"]
-#[allow(dead_code)]
-mod storage;
 use gstreamer::{self as gst, prelude::*};
 
 #[tokio::main]

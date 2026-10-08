@@ -34,20 +34,20 @@ function harness(track) {
     },
     "react/jsx-runtime": { jsx, jsxs: jsx },
     "@/lib/player": { usePlayer: () => player, getPlayer: () => player, errorText: String },
-    "@/lib/load-lyrics": { loadLyrics: (_track, _refresh, _sources, apply, isCurrent) => new Promise(resolve => {
+    "@/features/lyrics/load-lyrics": { loadLyrics: (_track, _refresh, _sources, apply, isCurrent) => new Promise(resolve => {
       pending.push(value => { if (isCurrent()) apply(value); resolve(null); });
     }) },
-    "@/lib/parse-lyrics": { EmptyLyricsError: class extends Error {}, parseLyrics: value => {
+    "@/features/lyrics/parse-lyrics": { EmptyLyricsError: class extends Error {}, parseLyrics: value => {
       parsed.push(value); return [{ words: [], translatedLyric: "", romanLyric: "" }];
     } },
-    "@/hooks/use-local-preferences": { useLocalPreferences: () => ({ options: {} }) },
-    "@/hooks/use-lyric-sources": { useLyricSources: () => ({ sources: { amll: true, qq: true } }) },
+    "@/features/local/use-local-preferences": { useLocalPreferences: () => ({ options: {} }) },
+    "@/features/lyrics/use-lyric-sources": { useLyricSources: () => ({ sources: { amll: true, qq: true } }) },
     "@tauri-apps/api/core": { isTauri: () => true },
     "@tauri-apps/api/event": { listen: async (_name, fn) => { events.push(fn); return () => {}; } },
     "motion/react": { motion: { section: "section" }, useIsPresent: () => true, useReducedMotion: () => false },
   };
   const exports = {};
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/player/lyrics-view.tsx", import.meta.url), "utf8"),
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/features/lyrics/lyrics-view.tsx", import.meta.url), "utf8"),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   runInNewContext(outputText, { exports, require: name => modules[name] ?? {} });
   const render = () => { cursor = 0; return exports.default({ onQueue() {} }); };

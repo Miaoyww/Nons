@@ -17,7 +17,7 @@ function harness(options = { layout: "edge", showTimeOnHover: true }) {
     "react/jsx-runtime": { jsx, jsxs: jsx },
     react: { useEffect: (effect) => effects.push(effect), useRef(initial) { const slot = cursor++; return values[slot] ??= { current: initial }; }, useState(initial) { const slot = cursor++; if (!(slot in values)) values[slot] = initial; return [values[slot], (next) => { values[slot] = next; }]; } },
     "@tauri-apps/api/core": { isTauri: () => true },
-    "./player-slider": { PlayerSlider: "slider" },
+    "@/features/playback/player-slider": { PlayerSlider: "slider" },
     "@/lib/player": {
       useProgress: () => progress, getProgress: () => progress,
       currentPosition: (time = now) => Math.min(progress.durationMs, progress.positionMs + (progress.status === "playing" ? Math.min(500, Math.max(0, time - progress.receivedAt)) : 0)),
@@ -25,7 +25,7 @@ function harness(options = { layout: "edge", showTimeOnHover: true }) {
       nativeCall: async (command, args) => { calls.push({ command, ...args }); },
     },
   };
-  runInNewContext(ts.transpileModule(readFileSync(new URL("../src/components/player/playback-timeline.tsx", import.meta.url), "utf8"), {
+  runInNewContext(ts.transpileModule(readFileSync(new URL("../src/features/playback/playback-timeline.tsx", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, { exports, document, performance: { now: () => now }, requestAnimationFrame: (fn) => { frames.set(++nextFrame, fn); return nextFrame; }, cancelAnimationFrame: (id) => frames.delete(id), require: (name) => modules[name] ?? {} });
   function render() {

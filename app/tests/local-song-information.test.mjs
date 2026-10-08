@@ -16,8 +16,8 @@ function harness() {
     },
     "@tauri-apps/api/core": { isTauri: () => true },
     "@base-ui/react/context-menu": { ContextMenu: {} }, "lucide-react": {},
-    "./playlist-picker": { PlaylistPicker: "PlaylistPicker" }, "./local-playlist-picker": { LocalPlaylistPicker: "LocalPlaylistPicker" },
-    "./action-button": { ActionButton: "ActionButton" }, "./account": {},
+    "@/features/library/playlist-picker": { PlaylistPicker: "PlaylistPicker" }, "@/features/local/local-playlist-picker": { LocalPlaylistPicker: "LocalPlaylistPicker" },
+    "@/components/music/action-button": { ActionButton: "ActionButton" }, "@/features/account/account": {},
     "@/components/ui/dialog": Object.fromEntries(["Dialog", "DialogContent", "DialogHeader", "DialogTitle", "DialogDescription"].map(v => [v,v])),
     "@/lib/player": { errorText: String, formatTime: () => "2:00", nativeCall: async (command, args) => {
       calls.push({ command, args }); return command === "local_track_information" ? { trackNumber: 3, discNumber: 1, bitrate: 1411, sampleRate: 44100, bitDepth: 16, channels: 2, format: "WAV", fileSize: 1048576 }
@@ -25,7 +25,7 @@ function harness() {
     } },
   };
   const exports = {};
-  const code = ts.transpileModule(readFileSync(new URL("../src/components/player/song-actions.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  const code = ts.transpileModule(readFileSync(new URL("../src/components/music/song-actions.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   runInNewContext(code, { exports, Date, navigator: { clipboard: { writeText: async value => copied.push(value) } }, require: name => { assert.ok(name in modules, name); return modules[name]; } });
   function render() { cursor = 0; const tree = exports.SongActionsProvider({ children: null, onError: error => { throw error; }, onNotice() {} }); effects.splice(0).forEach(fn => fn()); return tree; }
   function nodes(tree, type) { if (!tree || typeof tree !== "object") return []; return [...(tree.type === type ? [tree] : []), ...[tree.props?.children].flat(Infinity).flatMap(child => nodes(child,type))]; }

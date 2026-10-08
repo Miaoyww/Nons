@@ -12,9 +12,9 @@ function harness() {
     react: { Fragment: "fragment" },
     "react/jsx-runtime": { jsx, jsxs: jsx },
     "@/lib/player": {},
-    "./music-navigation": { useMusicNavigation: () => ({ navigate: (...args) => navigations.push(args) }) },
+    "@/features/workspace/music-navigation": { useMusicNavigation: () => ({ navigate: (...args) => navigations.push(args) }) },
   };
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/player/music-links.tsx", import.meta.url), "utf8"), {
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/music/music-links.tsx", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   });
   runInNewContext(outputText, { exports, require: (name) => modules[name] });

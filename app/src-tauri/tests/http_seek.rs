@@ -1,5 +1,5 @@
 //! Real HTTP + decode regression: Range support without Accept-Ranges.
-#[path = "../src/network.rs"]
+#[path = "../src/playback/network.rs"]
 #[allow(dead_code)]
 mod network;
 use gstreamer::{self as gst, prelude::*};

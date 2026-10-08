@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
-const source = readFileSync(new URL("../src/lib/font-settings.ts", import.meta.url), "utf8");
+const source = readFileSync(new URL("../src/features/settings/font-settings.ts", import.meta.url), "utf8");
 function session(saved, storageFailure = false) {
   const values = new Map(saved === undefined ? [] : [["nons-font-settings", saved]]);
   const styles = new Map();

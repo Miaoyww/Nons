@@ -22,11 +22,11 @@ test("album cards fill missing list dates from visible album details and ignore 
   const modules = {
     react: React, "react/jsx-runtime": jsx,
     "@tauri-apps/api/core": { isTauri: () => true },
-    "./player": { errorText: String, nativeCall: (command, args) => new Promise((resolve, reject) => requests.push({ command, args, resolve, reject })) },
-    "./collection-actions": { CollectionContextMenu: ({ render, children }) => React.cloneElement(render, {}, children) },
+    "@/lib/player": { errorText: String, nativeCall: (command, args) => new Promise((resolve, reject) => requests.push({ command, args, resolve, reject })) },
+    "@/features/library/collection-actions": { CollectionContextMenu: ({ render, children }) => React.cloneElement(render, {}, children) },
     "lucide-react": { Play: () => null },
-    "./action-button": { ActionButton: ({ children, size, ...props }) => React.createElement("button", props, children) },
-    "./cover": { Cover: () => null },
+    "@/components/music/action-button": { ActionButton: ({ children, size, ...props }) => React.createElement("button", props, children) },
+    "@/components/music/cover": { Cover: () => null },
   };
   function load(path) {
     const exports = {};
@@ -34,11 +34,11 @@ test("album cards fill missing list dates from visible album details and ignore 
     runInNewContext(code, { exports, require: name => modules[name], IntersectionObserver: Observer });
     return exports;
   }
-  modules["@/lib/music-entities"] = load("../src/lib/music-entities.ts");
-  modules["./music-navigation"] = {};
+  modules["@/features/library/music-entities"] = load("../src/features/library/music-entities.ts");
+  modules["@/features/workspace/music-navigation"] = {};
   modules["@/lib/player"] = {};
-  modules["./music-links"] = load("../src/components/player/music-links.tsx");
-  const { AlbumCard } = load("../src/components/player/album-card.tsx");
+  modules["@/components/music/music-links"] = load("../src/components/music/music-links.tsx");
+  const { AlbumCard } = load("../src/features/library/album-card.tsx");
   const root = createRoot(document.getElementById("root"));
   const album = { id: 142163139, kind: "album", name: "Summer Ghost", trackCount: 29, cover: "", subtitle: "", publishedAt: null };
   const render = item => act(async () => root.render(React.createElement(AlbumCard, { item, busy: false, onOpen() {}, onPlay() {} })));

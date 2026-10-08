@@ -17,10 +17,10 @@ function harness({ source = { kind: "netease", id: 7 }, desktop = true, loggedIn
     "react/jsx-runtime": { jsx, jsxs: jsx }, react: { useState: (value) => [value, () => {}] },
     "@tauri-apps/api/core": { isTauri: () => desktop },
     "@/lib/player": { adjacentIndex: () => null, usePlayer: () => ({ queue: [{ key: "track", title: "Song", source }], index: 0, status: "playing", repeatMode: "off" }), statusLabels: {} },
-    "./account": { useAccount: () => account }, "./track-title": { trackDisplayTitle: (track) => track.title },
+    "@/features/account/account": { useAccount: () => account }, "@/components/music/track-title": { trackDisplayTitle: (track) => track.title },
   };
   const exports = {};
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/player/playback-bar.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/features/playback/playback-bar.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   runInNewContext(outputText, { exports, require: (name) => modules[name] ?? {} });
   function find(node) {
     if (!node || typeof node !== "object") return;

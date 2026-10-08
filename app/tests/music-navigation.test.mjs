@@ -26,7 +26,7 @@ function harness() {
   };
   const jsx = (type, props) => ({ type, props });
   const exports = {};
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/components/player/music-navigation.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/features/workspace/music-navigation.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   runInNewContext(outputText, { exports, window, document: window.document, require: name => name === "react" ? react : { jsx, jsxs: jsx } });
   function render() { cursor = 0; const state = exports.MusicNavigationProvider({ children: null }).props.value; effects.splice(0).forEach(fn => fn()); return state; }
   function mouse(type, button) {

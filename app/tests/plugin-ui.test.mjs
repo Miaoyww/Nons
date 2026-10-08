@@ -70,8 +70,8 @@ test("real dynamic ui.mjs uses host React and scoped events, renders and cleans 
     let finish;
     const sdk = load("../src/plugins/sdk.ts", { react: React, "./scope": scopeModule, "./types": routing,
       "@/lib/player": { nativeCall: (...args) => { calls.push(args); return new Promise((resolve) => { finish = resolve; }); } },
-      "@/hooks/use-theme": {}, "@/hooks/use-cover-source": { useCoverSource: () => undefined },
-      "@/components/player/music-navigation": {}, "@/components/ui/button": { Button: ({ children, variant: _variant, size: _size, ...props }) => React.createElement("button", props, children) },
+      "@/features/settings/use-theme": {}, "@/components/music/use-cover-source": { useCoverSource: () => undefined },
+      "@/features/workspace/music-navigation": {}, "@/components/ui/button": { Button: ({ children, variant: _variant, size: _size, ...props }) => React.createElement("button", props, children) },
     });
     globalThis.__NONS_PLUGIN_HOST__ = { react: React, jsx, sdk };
     await buildFrontend(fileURLToPath(new URL("../../plugins/netease-island", import.meta.url)), directory, "ui.mjs");

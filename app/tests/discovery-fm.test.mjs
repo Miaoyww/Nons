@@ -21,10 +21,10 @@ function harness() {
   const modules = {
     react, "react/jsx-runtime": { jsx, jsxs: jsx }, "lucide-react": {},
     "@tauri-apps/api/core": { isTauri: () => true },
-    "./account": { useAccount: () => ({ profile }) },
+    "@/features/account/account": { useAccount: () => ({ profile }) },
     "@/lib/player": { usePlayer: () => player, errorText: String, nativeCall: (command, args) => new Promise((resolve, reject) => requests.push({ command, args, resolve, reject })) },
   };
-  const source = readFileSync(new URL("../src/components/player/discovery.tsx", import.meta.url), "utf8") + "\nexport { PrivateFM };";
+  const source = readFileSync(new URL("../src/features/discovery/discovery.tsx", import.meta.url), "utf8") + "\nexport { PrivateFM };";
   const exports = {};
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } });
   runInNewContext(outputText, { exports, require: (name) => modules[name] ?? {} });

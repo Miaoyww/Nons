@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { nativeCall, usePlayer as useHostPlayer, useProgress } from "@/lib/player";
-import { useTheme as useHostTheme } from "@/hooks/use-theme";
-import { useCoverSource as useHostCoverSource } from "@/hooks/use-cover-source";
-import { useMusicNavigation } from "@/components/player/music-navigation";
+import { useTheme as useHostTheme } from "@/features/settings/use-theme";
+import { useCoverSource as useHostCoverSource } from "@/components/music/use-cover-source";
+import { useMusicNavigation } from "@/features/workspace/music-navigation";
 import { checkScope, useScope, type Scope } from "./scope";
 import { pluginPath, resolvePluginPath } from "./types";
 export { Button } from "@/components/ui/button";

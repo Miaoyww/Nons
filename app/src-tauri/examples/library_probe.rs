@@ -1,13 +1,10 @@
 //! Read-only opt-in library probe; never prints account identifiers or cookies.
-#[path = "../src/model.rs"]
+#[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
-#[path = "../src/netease.rs"]
+#[path = "../src/netease/mod.rs"]
 #[allow(dead_code)]
 mod netease;
-#[path = "../src/storage.rs"]
-#[allow(dead_code)]
-mod storage;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

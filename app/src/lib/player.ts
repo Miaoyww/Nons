@@ -1,7 +1,7 @@
 import { invoke, isTauri, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useSyncExternalStore } from "react";
-import { cachedCommands, coverCache, invalidateNativeCache, requestCache, requestKey } from "./runtime-cache";
+import { cachedCommands, coverCache, invalidateNativeCache, requestCache, requestKey } from "@/lib/runtime-cache";
 
 export type TrackSource = { kind: "netease"; id: number } | { kind: "local"; path: string; neteaseId: number | null };
 export interface MusicCredit { name: string; id?: number | null }

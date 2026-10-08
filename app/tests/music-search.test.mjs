@@ -25,11 +25,11 @@ function harness(saved = "[]", storageUnavailable = false) {
     "@base-ui/react/combobox": { Combobox: { Root: "combo", Input: "input" } },
     "@/components/ui/button": { Button: "button" },
     "@/components/ui/combobox": { ComboboxContent: "popup", ComboboxItem: "item", ComboboxList: "list" },
-    "./music-navigation": { useMusicNavigation: () => ({ page, navigate: (...args) => navigations.push(args) }) },
+    "@/features/workspace/music-navigation": { useMusicNavigation: () => ({ page, navigate: (...args) => navigations.push(args) }) },
     "@/lib/player": { nativeCall: (command, args) => new Promise((resolve, reject) => requests.push({ command, args, resolve, reject })) },
   };
   const exports = {};
-  runInNewContext(ts.transpileModule(readFileSync(new URL("../src/components/player/music-search.tsx", import.meta.url), "utf8"), {
+  runInNewContext(ts.transpileModule(readFileSync(new URL("../src/features/search/music-search.tsx", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, { exports, require: name => modules[name], localStorage: {
     getItem(key) { if (storageUnavailable) throw Error("unavailable"); return storage.get(key); },

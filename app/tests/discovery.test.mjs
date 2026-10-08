@@ -6,7 +6,7 @@ import ts from "typescript";
 
 function harness(responses) {
   const requests = [];
-  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/lib/discovery.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } });
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../src/features/discovery/discovery-api.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } });
   const exports = {};
   runInNewContext(outputText, { exports, require: () => ({ nativeCall: async (command, args) => {
     requests.push({ command, ...args });

@@ -1,9 +1,9 @@
 import { MotionConfig } from "motion/react";
-import { Titlebar } from "@/components/titlebar";
-import { MusicWorkspace } from "@/components/player/music-workspace";
-import { MusicOptionsProvider } from "@/components/player/music-options";
-import { MusicNavigationProvider } from "@/components/player/music-navigation";
-import { AccountProvider } from "@/components/player/account";
+import { Titlebar } from "@/features/workspace/titlebar";
+import { MusicWorkspace } from "@/features/workspace/music-workspace";
+import { MusicOptionsProvider } from "@/features/playback/music-options";
+import { MusicNavigationProvider } from "@/features/workspace/music-navigation";
+import { AccountProvider } from "@/features/account/account";
 import { useState } from "react";
 import { PluginProvider, PluginSlot } from "@/plugins/host";
 

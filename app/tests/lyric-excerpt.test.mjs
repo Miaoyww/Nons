@@ -9,16 +9,16 @@ function harness() {
   let cursor = 0;
   const sources = { amll: true, qq: true };
   const modules = {
-    "@/hooks/use-local-preferences": { useLocalPreferences: () => ({ options: { lyricPriority: "local", artistSeparators: [] } }) },
+    "@/features/local/use-local-preferences": { useLocalPreferences: () => ({ options: { lyricPriority: "local", artistSeparators: [] } }) },
     react: {
       useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => { slots[i] = value; }]; },
       useEffect(fn, deps) { const i = cursor++, old = slots[i]; if (!old || deps.some((v, j) => v !== old.deps[j])) { old?.cleanup?.(); slots[i] = { deps }; effects.push(() => { slots[i].cleanup = fn(); }); } },
     },
     "react/jsx-runtime": { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     "@tauri-apps/api/core": { isTauri: () => true },
-    "@/hooks/use-lyric-sources": { useLyricSources: () => ({ sources }) },
+    "@/features/lyrics/use-lyric-sources": { useLyricSources: () => ({ sources }) },
     "lucide-react": { Heart: "heart" },
-    "@/lib/parse-lyrics": { parseLyrics: value => { if (value.broken) throw Error("解析失败"); return value.content; } },
+    "@/features/lyrics/parse-lyrics": { parseLyrics: value => { if (value.broken) throw Error("解析失败"); return value.content; } },
     "@/lib/player": { errorText: e => e.message, nativeCall: (command, args) => new Promise((resolve, reject) => requests.push({ command, args, resolve, reject })) },
   };
   function load(path) {
@@ -27,9 +27,9 @@ function harness() {
     runInNewContext(code, { exports, require: name => modules[name] });
     return exports;
   }
-  modules["./player"] = modules["@/lib/player"];
-  modules["@/lib/load-lyrics"] = load("../src/lib/load-lyrics.ts");
-  const { LyricExcerpt } = load("../src/components/player/lyric-excerpt.tsx");
+  modules["@/lib/player"] = modules["@/lib/player"];
+  modules["@/features/lyrics/load-lyrics"] = load("../src/features/lyrics/load-lyrics.ts");
+  const { LyricExcerpt } = load("../src/features/lyrics/lyric-excerpt.tsx");
   return { requests, render(tracks, enabled = true) { cursor = 0; const tree = LyricExcerpt({ tracks, enabled }); effects.splice(0).forEach(fn => fn()); return tree; }, dispose() { slots.forEach(slot => slot?.cleanup?.()); } };
 }
 const tracks = [{ key: "one", title: "第一首", durationMs: 1000 }, { key: "two", title: "第二首", durationMs: 1000 }, { key: "three", title: "第三首" }];
