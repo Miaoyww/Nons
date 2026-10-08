@@ -522,8 +522,6 @@
   padding: var(--music-page-top) var(--music-page-inline) var(--music-page-bottom);
   margin-top: -48px;
 }
-.search-heading { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
-.search-heading h1 { overflow-wrap: anywhere; }
 .music-tabs { height: 48px; padding: 4px; border-radius: 12px; gap: 4px; }
 .music-tabs [data-slot="tabs-tab"] { padding: 8px 20px; font-size: 16px; border-radius: 9px; }
 .music-tabs [data-slot="tabs-highlight-item"] { display: flex; }
@@ -614,8 +612,8 @@
 .playlist-play-count svg { width: 12px; height: 12px; fill: currentColor; }
 .library-cover-play svg { fill: currentColor; }
 .discovery { container-type: inline-size; }
-.discover-greeting { margin-bottom: 24px; }
-.discover-greeting p { margin-top: 4px; color: var(--muted-foreground); }
+.music-page-heading { margin-bottom: 24px; }
+.music-page-heading p { margin-top: 4px; color: var(--muted-foreground); }
 .discover-quote { display: grid; }
 .discover-quote > :not(.sr-only) { grid-area: 1 / 1; min-width: 0; overflow-wrap: anywhere; }
 .discover-quote-typing { line-height: inherit; letter-spacing: inherit; }
@@ -649,16 +647,16 @@
 .discover-fm-play svg { width: 20px; height: 20px; fill: currentColor; }
 .discover-fm-label { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
 .discover-fm-label svg { width: 16px; height: 16px; }
-.discover-more { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; margin: 28px 0 20px; }
-.discover-more h2 { font-size: 26px; font-weight: 700; }
-.discover-more > button { margin-left: auto; }
+.music-page-section-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; margin: 28px 0 20px; }
+.music-page-section-bar h2 { font-size: 26px; font-weight: 700; }
+.music-page-section-bar > button { margin-left: auto; }
 .discover-filters { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
 .discover-playlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 26px 24px; }
 .discover-playlist-grid > * { width: 100%; max-width: 240px; min-width: 0; }
 .discover-category-dialog { width: min(720px, calc(100vw - 48px)); max-width: 720px; max-height: min(850px, calc(100dvh - 64px)); display: flex; flex-direction: column; }
 .discover-category-scroll { overflow-y: auto; min-height: 0; padding: 2px 6px 8px 2px; }
 @container (max-width: 950px) { .discover-featured { grid-template-columns: 1fr; } .discover-shortcuts { grid-template-columns: 1fr 1fr; } .discover-shortcut { gap: 12px; } .discover-shortcut-cover { width: 56px; } .discover-shortcut-title { font-size: 18px; } .discover-fm-cover { width: 160px; } }
-@container (max-width: 560px) { .discover-shortcuts { grid-template-columns: 1fr; } .discover-fm { gap: 12px; padding: 14px; } .discover-fm-cover { width: 104px; } .discover-fm-controls { gap: 4px; } .discover-fm-play { width: 48px; height: 48px; } .discover-more { gap: 12px; } .discover-tabs { gap: 8px; } .discover-tabs button { padding-inline: 14px; } .discover-playlist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; } }
+@container (max-width: 560px) { .discover-shortcuts { grid-template-columns: 1fr; } .discover-fm { gap: 12px; padding: 14px; } .discover-fm-cover { width: 104px; } .discover-fm-controls { gap: 4px; } .discover-fm-play { width: 48px; height: 48px; } .music-page-section-bar { gap: 12px; } .discover-tabs { gap: 8px; } .discover-tabs button { padding-inline: 14px; } .discover-playlist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; } }
 @media (hover: none) { .library-cover-play { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .library-cover-open img, .library-cover-play { transition: none; } .library-cover-art:is(:hover, :focus-within) img { transform: none; } .library-cover-play { transform: none; } }
 

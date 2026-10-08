@@ -5,7 +5,7 @@ import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/animate-ui/comp
 import { nativeCall, usePlayer, type Track } from "@/lib/player";
 import { usePagedList } from "@/lib/use-paged-list";
 import { playLibraryCollection } from "@/lib/music-library";
-import { MusicPage } from "./music-page";
+import { MusicPage, MusicPageHeader } from "./music-page";
 import { useMusicNavigation, type MusicCollection } from "./music-navigation";
 import { TrackList } from "./track-list";
 import { PlaylistCard } from "./playlist-card";
@@ -53,9 +53,9 @@ export default function SearchPage({ onError, onNotice }: { onError: (cause: unk
   const { page } = useMusicNavigation();
   const [kind, setKind] = useState<SearchKind>("song");
   return <MusicPage className="search-page" aria-label="搜索网易云音乐">
-    <header className="search-heading"><p className="text-sm text-muted-foreground">网易云音乐 · 搜索</p><h1 className="library-heading">{page.query || "搜索音乐"}</h1><p className="text-sm text-muted-foreground">{page.query ? "找到你想听的音乐" : "从一个名字，发现更多音乐"}</p></header>
-    <Tabs value={kind} onValueChange={value => setKind(value as SearchKind)} className="gap-8">
-      <TabsList className="music-tabs" aria-label="搜索结果类型">{categories.map(({ value, label, icon: Icon }) => <TabsTab key={value} value={value}><Icon aria-hidden="true" />{label}</TabsTab>)}</TabsList>
+    <MusicPageHeader title={page.query || "搜索音乐"}><p>{page.query ? "网易云音乐搜索结果" : "输入歌曲、歌手、歌单或专辑名称开始搜索。"}</p></MusicPageHeader>
+    <Tabs value={kind} onValueChange={value => setKind(value as SearchKind)} className="gap-0">
+      <div className="music-page-section-bar"><h2>搜索结果</h2><TabsList className="music-tabs" aria-label="搜索结果类型">{categories.map(({ value, label, icon: Icon }) => <TabsTab key={value} value={value}><Icon aria-hidden="true" />{label}</TabsTab>)}</TabsList></div>
       {categories.map(({ value }) => <TabsPanel key={value} value={value} transition={{ duration: 0.15 }}><Results kind={value} keyword={page.query} onError={onError} onNotice={onNotice} /></TabsPanel>)}
     </Tabs>
   </MusicPage>;
