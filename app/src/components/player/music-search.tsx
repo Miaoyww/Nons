@@ -29,7 +29,10 @@ export function MusicSearch() {
   const anchor = useRef<HTMLFormElement>(null);
   const showingHistory = !keyword.trim();
   const items = showingHistory ? history : suggestions;
-  useEffect(() => { setKeyword(page.view === "search" || page.view === "local" ? page.query : ""); setOpen(false); }, [page]);
+  useEffect(() => {
+    if (page.view === "search" || page.view === "local") setKeyword(page.query);
+    setOpen(false);
+  }, [page]);
   useEffect(() => {
     let disposed = false;
     setSuggestions([]);
@@ -55,7 +58,11 @@ export function MusicSearch() {
   }
   return <div className="titlebar-search-slot mr-2">
     <Primitive.Root items={items} filter={null} value={null} inputValue={keyword}
-      onInputValueChange={value => setKeyword(value)} open={open && focused && !local && !composing && items.length > 0}
+      onInputValueChange={(value, details) => {
+        // Closing the popup must not reset this search field to the null selection.
+        if (details.reason === "input-clear") { details.cancel(); return; }
+        setKeyword(value);
+      }} open={open && focused && !local && !composing && items.length > 0}
       onOpenChange={setOpen} onValueChange={value => { if (typeof value === "string") search(value); }}>
       <form ref={anchor} className="titlebar-search" onSubmit={event => { event.preventDefault(); search(keyword); }}>
         <Button type="button" variant="ghost" size="icon-sm" aria-label="展开音乐搜索" onClick={() => input.current?.focus()}><Search aria-hidden="true" /></Button>

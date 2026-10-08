@@ -41,11 +41,38 @@ function harness(saved = "[]", storageUnavailable = false) {
   const render = () => { cursor = 0; const tree = exports.MusicSearch(); effects.splice(0).forEach(fn => fn()); return tree.props.children; };
   const input = () => render().props.children[0].props.children[1];
   return { render, input, requests, navigations, storage, changePage(value) { page = value; render(); },
-    type(value) { render().props.onInputValueChange(value); render(); },
+    type(value) { render().props.onInputValueChange(value, { reason: "input-change", cancel() {} }); render(); },
     tick() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
   };
 }
 const settle = async () => { await Promise.resolve(); await Promise.resolve(); };
+
+test("popup dismissal preserves input before and after submitting search", () => {
+  const h = harness(); h.render(); h.input().props.onFocus(); h.type("song");
+  function dismiss() {
+    h.input().props.onBlur(); h.render().props.onOpenChange(false);
+    let cancelled = false;
+    h.render().props.onInputValueChange("", { reason: "input-clear", cancel() { cancelled = true; } });
+    assert.equal(h.render().props.inputValue, "song");
+    assert.equal(cancelled, true);
+    assert.equal(h.render().props.open, false);
+  }
+  dismiss();
+  h.render().props.children[0].props.onSubmit({ preventDefault() {} });
+  assert.deepEqual(h.navigations, [["search", "song"]]); dismiss();
+  h.changePage({ view: "search", query: "song" }); dismiss();
+  h.changePage({ view: "library", query: "" });
+  assert.equal(h.render().props.inputValue, "song");
+  h.type(""); assert.equal(h.render().props.inputValue, "");
+});
+
+test("selecting a suggestion preserves its keyword when the popup closes", () => {
+  const h = harness(); h.render(); h.type("partial");
+  h.render().props.onValueChange("selected song");
+  h.render().props.onInputValueChange("", { reason: "input-clear", cancel() {} });
+  assert.equal(h.render().props.inputValue, "selected song");
+  assert.deepEqual(h.navigations, [["search", "selected song"]]);
+});
 
 test("empty focused input shows persisted history and selecting it searches again", () => {
   const h = harness(JSON.stringify(["recent", "older"]));
