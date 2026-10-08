@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1] / ".local"
 DEST = ROOT / "gstreamer"
 PACKAGES = (
     "gstreamer_ext_runtime", "gstreamer_libs", "gstreamer_plugins",
-    "gstreamer_plugins_restricted", "gstreamer_plugins_gpl",
+    "gstreamer_plugins_libs", "gstreamer_plugins_restricted", "gstreamer_plugins_gpl",
     "gstreamer_plugins_gpl_restricted", "gstreamer_cli",
 )
 
