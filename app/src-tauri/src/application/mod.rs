@@ -465,6 +465,39 @@ fn play_queue(keys: Vec<String>, index: usize, backend: State<'_, Backend>) -> A
 }
 
 #[tauri::command]
+fn play_private_fm(keys: Vec<String>, backend: State<'_, Backend>) -> AppResult<()> {
+    if keys.is_empty() || keys.len() > 1000 {
+        return Err("播放队列无效".into());
+    }
+    let tracks = keys
+        .iter()
+        .map(|key| backend.store.track(key))
+        .collect::<AppResult<Vec<_>>>()?;
+    backend.player.send(Command::FmQueue(tracks))
+}
+
+#[tauri::command]
+fn append_private_fm(
+    session: u64,
+    queue_len: usize,
+    keys: Vec<String>,
+    backend: State<'_, Backend>,
+) -> AppResult<()> {
+    if keys.is_empty() || keys.len() > 1000 {
+        return Err("待添加的歌曲无效".into());
+    }
+    let tracks = keys
+        .iter()
+        .map(|key| backend.store.track(key))
+        .collect::<AppResult<Vec<_>>>()?;
+    backend.player.send(Command::AppendFm {
+        session,
+        queue_len,
+        tracks,
+    })
+}
+
+#[tauri::command]
 fn append_queue(keys: Vec<String>, backend: State<'_, Backend>) -> AppResult<()> {
     if keys.is_empty() || keys.len() > 1000 {
         return Err("待添加的歌曲无效".into());
@@ -812,6 +845,8 @@ pub fn run() {
             rescan_music_folders,
             runtime_cover,
             play_queue,
+            play_private_fm,
+            append_private_fm,
             append_queue,
             player_action,
             player_jump,

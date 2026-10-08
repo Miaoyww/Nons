@@ -33,7 +33,14 @@ import {
   DialogTrigger
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { nativeCall, errorText, usePlayer, type Track } from '@/lib/player'
+import {
+  nativeCall,
+  errorText,
+  usePlayer,
+  getPlayer,
+  retryPrivateFm,
+  type Track
+} from '@/lib/player'
 import { usePagedList } from '@/lib/use-paged-list'
 import { playLibraryCollection } from '@/features/library/library-api'
 import { createDiscoveryPlaylistLoader } from '@/features/discovery/discovery-api'
@@ -158,11 +165,9 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
   const [revision, setRevision] = useState(0)
   const generation = useRef(0)
   const pending = useRef(false)
-  const queueKeys = useRef<string[]>([])
   useEffect(() => {
     const serial = ++generation.current
     pending.current = false
-    queueKeys.current = []
     setTracks([])
     setError(undefined)
     setBusy(false)
@@ -183,7 +188,7 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
     }
   }, [profile, revision])
   const current = player.index !== null ? player.queue[player.index] : undefined
-  const active = !!current && queueKeys.current.includes(current.key)
+  const active = !!current && player.privateFmSession != null
   const track = active ? current : tracks[0]
   const playing = active && player.status === 'playing'
   async function play() {
@@ -192,10 +197,9 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
     setBusy(true)
     const serial = generation.current
     try {
-      if (active) await nativeCall(playing ? 'pause' : 'resume')
+      if (active) await nativeCall('player_action', { action: playing ? 'pause' : 'resume' })
       else {
-        queueKeys.current = tracks.map((item) => item.key)
-        await nativeCall('play_queue', { keys: queueKeys.current, index: 0 })
+        await nativeCall('play_private_fm', { keys: tracks.map((item) => item.key) })
       }
     } catch (cause) {
       if (serial === generation.current) onError(cause)
@@ -215,6 +219,12 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
     try {
       if (dislike && track.source.kind === 'netease')
         await nativeCall('discovery_dislike', { id: track.source.id })
+      if (serial !== generation.current) return
+      if (active) {
+        if (getPlayer().privateFmSession !== player.privateFmSession) return
+        await nativeCall('player_action', { action: 'next' })
+        return
+      }
       const remaining = tracks.slice(tracks.findIndex((item) => item.key === track.key) + 1)
       const items = remaining.length
         ? remaining
@@ -223,8 +233,7 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
       const fresh = items.filter((item) => item.key !== track.key)
       if (!fresh.length) throw new Error('暂时没有新的 FM 歌曲，请重试。')
       setTracks(fresh)
-      queueKeys.current = fresh.map((item) => item.key)
-      await nativeCall('play_queue', { keys: queueKeys.current, index: 0 })
+      await nativeCall('play_private_fm', { keys: fresh.map((item) => item.key) })
     } catch (cause) {
       if (serial === generation.current) setError(errorText(cause))
     } finally {
@@ -247,10 +256,18 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
           <Disc3 aria-hidden="true" />
           <span>{track ? <TrackAlbum track={track} /> : '私人 FM'}</span>
         </p>
-        {error && (
+        {(error || (active && player.privateFmError)) && (
           <div role="alert" className="text-xs text-destructive">
-            {error}
-            <ActionButton variant="ghost" size="sm" onClick={() => setRevision((v) => v + 1)}>
+            {error || player.privateFmError}
+            <ActionButton
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setError(undefined)
+                if (active) retryPrivateFm()
+                else setRevision((v) => v + 1)
+              }}
+            >
               重试
             </ActionButton>
           </div>

@@ -47,6 +47,7 @@ function harness() {
     '@/features/account/account': { useAccount: () => ({ profile }) },
     '@/lib/player': {
       usePlayer: () => player,
+      getPlayer: () => player,
       errorText: String,
       nativeCall: (command, args) =>
         new Promise((resolve, reject) => requests.push({ command, args, resolve, reject }))
@@ -99,7 +100,7 @@ const settle = async () => {
   for (let i = 0; i < 6; i++) await Promise.resolve()
 }
 
-test('FM starts once on repeated clicks and consumes the remaining batch before fetching', async () => {
+test('FM starts once on repeated clicks and skips through the existing queue', async () => {
   const app = harness()
   app.render()
   app.requests[0].resolve([track(1), track(2), track(3)])
@@ -108,16 +109,21 @@ test('FM starts once on repeated clicks and consumes the remaining batch before 
   play.onClick()
   play.onClick()
   assert.equal(app.requests.length, 2)
-  assert.equal(app.requests[1].command, 'play_queue')
+  assert.equal(app.requests[1].command, 'play_private_fm')
   assert.deepEqual(Array.from(app.requests[1].args.keys), ['netease:1', 'netease:2', 'netease:3'])
   app.requests[1].resolve()
   await settle()
-  app.setPlayer({ index: 0, queue: [track(1), track(2), track(3)], status: 'playing' })
+  app.setPlayer({
+    privateFmSession: 1,
+    index: 0,
+    queue: [track(1), track(2), track(3)],
+    status: 'playing'
+  })
   app.button('下一首私人 FM').onClick()
   await settle()
   assert.equal(app.requests.length, 3)
-  assert.equal(app.requests[2].command, 'play_queue')
-  assert.deepEqual(Array.from(app.requests[2].args.keys), ['netease:2', 'netease:3'])
+  assert.equal(app.requests[2].command, 'player_action')
+  assert.equal(app.requests[2].args.action, 'next')
   app.requests[2].resolve()
   await settle()
 })
@@ -149,4 +155,22 @@ test('account change discards an old FM batch', async () => {
   assert.deepEqual(Array.from(app.requests[2].args.keys), ['netease:2'])
   app.requests[2].resolve()
   await settle()
+})
+
+test('editing the queue while dislike is pending does not skip the replacement queue', async () => {
+  const app = harness()
+  app.render()
+  app.requests[0].resolve([track(1), track(2), track(3)])
+  await settle()
+  app.setPlayer({
+    privateFmSession: 7,
+    index: 1,
+    queue: [track(1), track(2), track(3)],
+    status: 'playing'
+  })
+  app.button('不喜欢这首歌').onClick()
+  app.setPlayer({ privateFmSession: null, index: 0, queue: [track(9)], status: 'playing' })
+  app.requests[1].resolve()
+  await settle()
+  assert.equal(app.requests.length, 2)
 })

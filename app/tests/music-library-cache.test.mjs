@@ -24,6 +24,7 @@ function harness() {
   const cache = load('../src/lib/runtime-cache.ts', { 'lru-cache': { LRUCache } })
   const player = load('../src/lib/player.ts', {
     '@/lib/runtime-cache': cache,
+    '@/features/discovery/private-fm': {},
     react: {},
     '@tauri-apps/api/event': {},
     '@tauri-apps/api/core': {

@@ -1,3 +1,4 @@
+import { createPrivateFm } from '@/features/discovery/private-fm'
 import { invoke, isTauri, convertFileSrc } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { useSyncExternalStore } from 'react'
@@ -29,6 +30,8 @@ export interface Track {
 }
 export type PlaybackStatus = 'stopped' | 'loading' | 'playing' | 'paused' | 'buffering' | 'error'
 export interface PlayerSnapshot {
+  privateFmSession: number | null
+  privateFmError?: string
   shuffle: boolean
   shuffleOrder: number[]
   repeatMode: 'off' | 'all' | 'one'
@@ -64,6 +67,7 @@ export interface OutputDevice {
 }
 
 let snapshot: PlayerSnapshot = {
+  privateFmSession: null,
   shuffle: false,
   shuffleOrder: [],
   repeatMode: 'off',
@@ -133,10 +137,15 @@ function updateProgress(value: Omit<Progress, 'receivedAt'>) {
 
 function updateState(value: PlayerSnapshot) {
   if (value.revision < snapshot.revision) return
-  snapshot = value
+  snapshot = {
+    ...value,
+    privateFmError:
+      value.privateFmSession === snapshot.privateFmSession ? snapshot.privateFmError : undefined
+  }
   updateSerial++
   updateProgress(value)
   stateListeners.forEach((notify) => notify())
+  privateFm?.update()
 }
 
 export async function nativeCall<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -232,8 +241,22 @@ export async function nativeCall<T>(command: string, args?: Record<string, unkno
   return result
 }
 
+let privateFm: ReturnType<typeof createPrivateFm> | undefined
+export function retryPrivateFm() {
+  privateFm?.retry()
+}
+
 export async function connectPlayer(): Promise<UnlistenFn> {
   if (!isTauri()) return () => {}
+  const fm = createPrivateFm(
+    () => snapshot,
+    nativeCall,
+    (privateFmError) => {
+      snapshot = { ...snapshot, privateFmError }
+      stateListeners.forEach((notify) => notify())
+    }
+  )
+  privateFm = fm
   const listeners: UnlistenFn[] = []
   try {
     listeners.push(
@@ -248,8 +271,14 @@ export async function connectPlayer(): Promise<UnlistenFn> {
     const serial = updateSerial
     const initial = await nativeCall<PlayerSnapshot>('player_snapshot')
     if (serial === updateSerial) updateState(initial)
-    return () => listeners.forEach((unlisten) => unlisten())
+    return () => {
+      fm.dispose()
+      if (privateFm === fm) privateFm = undefined
+      listeners.forEach((unlisten) => unlisten())
+    }
   } catch (error) {
+    fm.dispose()
+    if (privateFm === fm) privateFm = undefined
     listeners.forEach((unlisten) => unlisten())
     throw error
   }

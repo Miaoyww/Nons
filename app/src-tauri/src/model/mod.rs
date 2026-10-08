@@ -73,6 +73,8 @@ pub struct PlayerSnapshot {
     pub shuffle_order: Vec<usize>,
     #[serde(default)]
     pub repeat_mode: RepeatMode,
+    #[serde(default, skip_deserializing)]
+    pub private_fm_session: Option<u64>,
     pub revision: u64,
     pub queue: Vec<Track>,
     pub index: Option<usize>,
@@ -92,6 +94,7 @@ impl Default for PlayerSnapshot {
             shuffle: false,
             shuffle_order: vec![],
             repeat_mode: RepeatMode::Off,
+            private_fm_session: None,
             revision: 0,
             queue: vec![],
             index: None,
@@ -196,6 +199,43 @@ impl PlayerSnapshot {
         })
     }
 
+    pub fn append_private_fm(
+        &mut self,
+        session: u64,
+        queue_len: usize,
+        tracks: Vec<Track>,
+    ) -> AppResult<Option<usize>> {
+        if self.private_fm_session != Some(session) || self.queue.len() != queue_len {
+            return Ok(None);
+        }
+        let mut seen: std::collections::HashSet<String> =
+            self.queue.iter().map(|t| t.key.clone()).collect();
+        let tracks: Vec<_> = tracks
+            .into_iter()
+            .filter(|t| seen.insert(t.key.clone()))
+            .collect();
+        if tracks.is_empty() {
+            return Err("暂时没有新的 FM 歌曲，请重试。".into());
+        }
+        let trim = (self.queue.len() + tracks.len()).saturating_sub(1000);
+        if trim > self.index.unwrap_or(0) {
+            return Err("播放队列最多支持 1000 首歌曲".into());
+        }
+        self.queue.drain(..trim);
+        self.index = self.index.map(|i| i - trim);
+        self.shuffle_order = self
+            .shuffle_order
+            .iter()
+            .filter_map(|i| i.checked_sub(trim))
+            .collect();
+        let start = self.queue.len();
+        self.queue.extend(tracks);
+        if self.shuffle {
+            self.shuffle_order.extend(start..self.queue.len());
+        }
+        Ok(Some(trim))
+    }
+
     pub fn insert_next(&mut self, tracks: Vec<Track>) -> AppResult<usize> {
         if tracks.len() + self.queue.len() > 1000 {
             return Err("播放队列最多支持 1000 首歌曲".into());
@@ -218,6 +258,7 @@ impl PlayerSnapshot {
             self.shuffle_order
                 .splice(slot..slot, position..position + count);
         }
+        self.private_fm_session = None;
         self.queue.splice(position..position, tracks);
         if self.index.is_none() && !self.queue.is_empty() {
             self.index = Some(0);
@@ -238,6 +279,7 @@ impl PlayerSnapshot {
                     .or_else(|| self.previous().filter(|i| *i != index))
             })
             .flatten();
+        self.private_fm_session = None;
         self.queue.remove(index);
         self.shuffle_order.retain(|i| *i != index);
         for entry in &mut self.shuffle_order {

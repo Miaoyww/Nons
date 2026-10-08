@@ -22,6 +22,12 @@ use tauri::Emitter;
 
 pub enum Command {
     Queue(Vec<Track>, usize),
+    FmQueue(Vec<Track>),
+    AppendFm {
+        session: u64,
+        queue_len: usize,
+        tracks: Vec<Track>,
+    },
     PlayNext(Vec<Track>),
     Jump(usize),
     Pause,
@@ -349,9 +355,67 @@ impl Actor {
                 if queue.is_empty() || queue.len() > 1000 || index >= queue.len() {
                     return Err("播放队列无效，最多支持 1000 首歌曲".into());
                 }
+                self.state.private_fm_session = None;
                 self.state.queue = queue;
                 self.state.reset_shuffle_order(Some(index));
                 self.load(index, true)?;
+            }
+            Command::FmQueue(queue) => {
+                self.command(Command::Queue(queue, 0))?;
+                self.state.shuffle = false;
+                self.state.shuffle_order.clear();
+                self.state.repeat_mode = crate::model::RepeatMode::Off;
+                self.state.private_fm_session = Some(self.state.revision);
+                self.publish();
+            }
+            Command::AppendFm {
+                session,
+                queue_len,
+                tracks,
+            } => {
+                let exhausted = self.state.status == PlaybackStatus::Stopped
+                    && self.state.duration_ms > 0
+                    && self.state.position_ms >= self.state.duration_ms
+                    && self.state.index == self.state.queue.len().checked_sub(1);
+                // Lock in the streaming callback's order while shifting history.
+                let (trim, displaced) = {
+                    let mut prepared = self.prepared.lock().map_err(|_| "预加载状态不可用")?;
+                    let mut armed = self.armed.lock().map_err(|_| "预加载状态不可用")?;
+                    let Some(trim) = self.state.append_private_fm(session, queue_len, tracks)?
+                    else {
+                        return Ok(());
+                    };
+                    let mut displaced = false;
+                    if trim > 0 {
+                        for slot in [&mut *prepared, &mut *armed] {
+                            if let Some(next) = slot {
+                                if let Some(index) = next.index.checked_sub(trim) {
+                                    next.index = index;
+                                } else {
+                                    *slot = None;
+                                    displaced = true;
+                                }
+                            }
+                        }
+                    }
+                    (trim, displaced)
+                };
+                if trim > 0 {
+                    if let Some(job) = self.next_job.take() {
+                        job.abort();
+                    }
+                    self.next_attempt = None;
+                    self.next_attempts = 0;
+                    if displaced || self.state.status == PlaybackStatus::Loading {
+                        self.load(self.state.index.unwrap_or(0), self.desired_playing)?;
+                    }
+                }
+                if exhausted {
+                    if let Some(index) = self.state.index {
+                        self.load(index + 1, true)?;
+                    }
+                }
+                self.publish();
             }
             Command::PlayNext(tracks) => {
                 if tracks.is_empty() {
@@ -479,6 +543,7 @@ impl Actor {
                     .set_state(gst::State::Null)
                     .map_err(|e| e.to_string())?;
                 if clear {
+                    self.state.private_fm_session = None;
                     self.state.queue.clear();
                     self.state.shuffle_order.clear();
                     self.state.index = None;
@@ -913,6 +978,72 @@ mod tests {
             repeat_mode: mode,
             status: PlaybackStatus::Playing,
             ..PlayerSnapshot::default()
+        }
+    }
+
+    #[test]
+    fn fm_edits_end_session_and_late_batches_are_rejected() {
+        for insert in [false, true] {
+            let mut state = snapshot(1, 0, RepeatMode::Off);
+            state.private_fm_session = Some(7);
+            let new_track = state.queue[0].clone();
+            if insert {
+                state.insert_next(vec![new_track.clone()]).unwrap();
+            } else {
+                state.remove_track(0, "0").unwrap();
+            }
+            assert_eq!(state.private_fm_session, None);
+            let original_len = state.queue.len();
+            assert_eq!(
+                state
+                    .append_private_fm(7, original_len, vec![new_track])
+                    .unwrap(),
+                None
+            );
+            assert_eq!(state.queue.len(), original_len);
+        }
+    }
+
+    #[test]
+    fn fm_append_preserves_playback_and_rejects_old_sessions() {
+        let mut state = snapshot(1, 42_000, RepeatMode::Off);
+        state.private_fm_session = Some(7);
+        let mut track = state.queue[0].clone();
+        track.key = "fresh".into();
+        assert_eq!(
+            state.append_private_fm(6, 3, vec![track.clone()]).unwrap(),
+            None
+        );
+        assert_eq!(
+            state.append_private_fm(7, 2, vec![track.clone()]).unwrap(),
+            None
+        );
+        assert_eq!(
+            state
+                .append_private_fm(7, 3, vec![track.clone(), track])
+                .unwrap(),
+            Some(0)
+        );
+        assert_eq!(state.queue.len(), 4);
+        assert_eq!(state.index, Some(1));
+        assert_eq!(state.position_ms, 42_000);
+        assert_eq!(state.private_fm_session, Some(7));
+    }
+
+    #[test]
+    fn fm_keeps_a_bounded_queue_across_repeated_refills() {
+        let mut state = snapshot(1, 42_000, RepeatMode::Off);
+        state.private_fm_session = Some(7);
+        for id in 3..2003 {
+            state.index = Some(state.queue.len() - 2);
+            let current_key = state.current().unwrap().key.clone();
+            let mut track = state.queue[0].clone();
+            track.key = id.to_string();
+            let len = state.queue.len();
+            state.append_private_fm(7, len, vec![track]).unwrap();
+            assert!(state.queue.len() <= 1000);
+            assert_eq!(state.current().unwrap().key, current_key);
+            assert_eq!(state.position_ms, 42_000);
         }
     }
 
