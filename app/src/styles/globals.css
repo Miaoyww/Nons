@@ -349,14 +349,14 @@
 .library-profile { display: flex; align-items: center; gap: 12px; }
 .library-avatar { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; object-fit: cover; }
 .library-heading { font-size: clamp(30px, 3.5vw, 42px); font-weight: 700; letter-spacing: -0.035em; line-height: 1.25; overflow-wrap: anywhere; }
-.library-featured { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 7fr); gap: 36px; margin-top: 32px; }
+.library-featured { display: grid; grid-template-columns: minmax(0, 3.5fr) minmax(0, 6.5fr); gap: 36px; margin-top: 32px; }
 .library-liked-card { position: relative; min-height: 220px; border-radius: 16px; background: var(--library-primary-bg); color: var(--library-primary); }
 .library-liked-open { display: flex; flex-direction: column; justify-content: space-between; gap: 24px; width: 100%; height: 100%; min-height: 220px; padding: 20px 24px; border-radius: inherit; text-align: left; cursor: pointer; }
 .library-liked-open:disabled { cursor: default; }
 .library-liked-open h2 { font-size: 24px; font-weight: 700; padding-right: 40px; }
 .library-liked-open p { font-size: 14px; }
 .library-liked-top { flex: 1; }
-.library-lyric-excerpt { line-height: 1.45; opacity: 0.9; }
+.library-lyric-excerpt { line-height: 1.45; opacity: 0.9; overflow-wrap: anywhere; }
 .library-liked-play { position: absolute; right: 22px; bottom: 24px; width: 44px; height: 44px; border-radius: 50%; color: white; background: var(--library-primary); box-shadow: 0 6px 12px -4px rgb(0 0 0 / 20%); }
 .library-liked-play svg { fill: currentColor; }
 .library-liked-play:hover:not(:disabled) { background: var(--library-primary); filter: brightness(1.1); }
@@ -410,7 +410,7 @@
 .library-liked-open:focus-visible, .library-song:focus-visible, .library-cover-open:focus-visible, .library-cover-title:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
 @media (max-width: 1050px) {
   .music-library { padding-inline: 32px; }
-  .library-featured { grid-template-columns: minmax(240px, 3fr) minmax(0, 7fr); gap: 24px; }
+  .library-featured { grid-template-columns: minmax(260px, 3.5fr) minmax(0, 6.5fr); gap: 24px; }
   .library-song-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .library-cover-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

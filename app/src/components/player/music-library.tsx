@@ -9,7 +9,7 @@ import { TrackTitle } from "./track-title";
 // Copyright (c) 2020-2023 qier222, MIT. See notices/YesPlayMusic-LICENSE.txt.
 import { useCallback, useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { Heart, Play, RefreshCw, UserRound } from "lucide-react";
+import { Play, RefreshCw, UserRound } from "lucide-react";
 import { errorText, nativeCall, usePlayer, type Track } from "@/lib/player";
 import { getLibraryCollections, getLibraryHistory, getLibraryTracks, getMusicLibrary, peekMusicLibrary, invalidateMusicLibrary, playLibraryCollection,
   type CollectionTracks, type LibrarySummary, type LibraryTab, type PlaylistFilter } from "@/lib/music-library";
@@ -23,35 +23,11 @@ import { useMusicNavigation, type MusicCollection } from "./music-navigation";
 import { TrackList } from "./track-list";
 import { InfiniteLoad } from "./infinite-load";
 import { usePagedList } from "@/lib/use-paged-list";
-import { useLyricSources } from "@/hooks/use-lyric-sources";
-import { loadLyrics } from "@/lib/load-lyrics";
+import { LyricExcerpt } from "./lyric-excerpt";
 
 const filters = [{ value: "all", label: "全部歌单" }, { value: "mine", label: "创建的歌单" }, { value: "liked", label: "收藏的歌单" }];
 const tabs = [{ value: "playlist", label: "歌单" }, { value: "album", label: "专辑" }, { value: "artist", label: "艺人" }, { value: "history", label: "听歌记录" }] as const;
 
-
-function LyricExcerpt({ track }: { track?: Track }) {
-  const { sources } = useLyricSources();
-  const [lines, setLines] = useState<string[]>([]);
-  useEffect(() => {
-    let disposed = false;
-    setLines([]);
-    if (!track || !isTauri()) return;
-    const load = async () => {
-      const { parseLyrics } = await import("@/lib/parse-lyrics");
-      if (disposed) return;
-      const result = await loadLyrics(track, false, sources, (value) => value ? parseLyrics(value, track.durationMs) : [], () => !disposed);
-      if (!result || disposed) return;
-      const excerpt = result.parsed.map((line) => line.words.map((word) => word.word).join("").trim())
-        .filter((line) => line && !/作词|作曲|纯音乐|编曲/.test(line));
-      const start = Math.floor(Math.random() * Math.max(1, excerpt.length - 2));
-      setLines(excerpt.slice(start, start + 3));
-    };
-    void load().catch(() => { /* Optional lyrics never block the collection or playback. */ });
-    return () => { disposed = true; };
-  }, [track?.key, sources]);
-  return lines.length ? <p className="library-lyric-excerpt">{lines.map((line, index) => <span key={index}>{line}<br /></span>)}</p> : <Heart className="size-10 opacity-30" aria-hidden="true" />;
-}
 
 function CollectionCards({ items, busy, onOpen, onPlay }: { items: MusicCollection[]; busy: boolean; onOpen: (item: MusicCollection) => void; onPlay: (item: MusicCollection) => void }) {
   return <div className={items[0]?.kind === "album" ? "discover-playlist-grid" : "library-cover-grid"}>{items.map((item) => item.kind === "album" ? <AlbumCard key={`${item.kind}:${item.id}`} item={item} busy={busy} onOpen={onOpen} onPlay={onPlay} /> : <PlaylistCard key={`${item.kind}:${item.id}`} item={item} busy={busy} onOpen={onOpen} onPlay={onPlay} />)}</div>;
@@ -147,7 +123,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
       <div className="library-featured">
         <CollectionContextMenu item={liked ? { ...liked, name: "我喜欢的音乐", liked: true } : undefined} busy={playing} render={<div className="library-liked-card" />}>
           <button className="library-liked-open" aria-label="打开我喜欢的音乐" disabled={!liked} onClick={() => { if (liked) openCollection({ ...liked, name: "我喜欢的音乐" }); }}>
-            <div className="library-liked-top"><LyricExcerpt track={summary?.likedTracks[0]} /></div>
+            <div className="library-liked-top"><LyricExcerpt tracks={summary?.likedTracks} enabled={!!profile && !summaryBusy && !!(summary || summaryError)} /></div>
             <div><h2>我喜欢的音乐</h2><p>{summaryBusy ? "正在加载…" : summaryError || summary?.likedError ? "暂时无法读取" : liked ? `${liked.trackCount} 首歌` : profile ? "还没有喜欢的音乐" : "登录后收藏你的音乐"}</p></div>
           </button>
           <ActionButton size="icon-lg" className="library-liked-play" aria-label="播放我喜欢的音乐" disabled={playing || !liked || !summary?.likedTracks.length} onClick={() => { if (liked) void playCollection(liked); }} title="播放收藏（最多 1000 首）"><Play aria-hidden="true" /></ActionButton>
