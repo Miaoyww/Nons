@@ -1,3 +1,4 @@
+mod about;
 mod audio;
 mod fonts;
 mod hitokoto;
@@ -734,6 +735,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            about::open_devtools,
             discovery_hitokoto,
             #[cfg(feature = "plugin-probe")]
             plugins::probe::plugin_probe_report,
