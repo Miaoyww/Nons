@@ -1,3 +1,4 @@
+import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -39,12 +40,12 @@ export function LocalCachePage() {
     <div><h2 className="text-xl font-bold">本地与缓存</h2><p className="mt-2 text-sm text-muted-foreground">管理本地音乐与歌词缓存。</p></div>
     <section aria-labelledby="local-heading" className="flex flex-col gap-8">
       <h3 id="local-heading" className="text-base font-semibold">本地歌曲</h3>
-      <SettingsCard title="显示本地歌曲封面" description="显示内嵌封面，关闭可减少图片加载。"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showCovers} disabled={busy || !desktop} onChange={(event) => void perform(() => setShowCovers(event.target.checked))} />显示内嵌封面</label></SettingsCard>
+      <SettingsCard title="显示本地歌曲封面" description="显示内嵌封面，关闭可减少图片加载。"><label className="flex items-center gap-2 text-sm"><Switch checked={showCovers} disabled={busy || !desktop} onCheckedChange={(checked) => void perform(() => setShowCovers(checked))} />显示内嵌封面</label></SettingsCard>
       <SettingsCard title="音乐文件夹" description="管理音乐文件夹，自动扫描变更。"><FolderManager /></SettingsCard>
     </section>
     <section aria-labelledby="cache-heading" className="flex flex-col gap-8">
       <h3 id="cache-heading" className="text-base font-semibold">缓存配置</h3>
-      <SettingsCard title="启用本地缓存" description="保存 TTML 歌词，加快加载并支持离线读取。"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={options?.enabled ?? true} disabled={disabled} onChange={(event) => { const enabled = event.target.checked; void perform(() => nativeCall("set_local_cache_options", { options: { ...options, enabled } })); }} />保存歌词缓存</label></SettingsCard>
+      <SettingsCard title="启用本地缓存" description="保存 TTML 歌词，加快加载并支持离线读取。"><label className="flex items-center gap-2 text-sm"><Switch checked={options?.enabled ?? true} disabled={disabled} onCheckedChange={(checked) => { const enabled = checked; void perform(() => nativeCall("set_local_cache_options", { options: { ...options, enabled } })); }} />保存歌词缓存</label></SettingsCard>
       <SettingsCard title="缓存大小上限" description="范围 1–4096 MB，超出时清理最久未使用的歌词。">
         <form className="flex items-center gap-2" onSubmit={(event) => { event.preventDefault(); const maxMb = Number(limit); if (!Number.isInteger(maxMb) || maxMb < 1 || maxMb > 4096) { setError("请输入 1–4096 之间的整数容量。"); return; } void perform(() => nativeCall("set_local_cache_options", { options: { ...options, maxMb } }), "缓存上限已保存。"); }}>
           <input type="number" min={1} max={4096} step={1} aria-label="缓存大小上限（MB）" className="music-input w-24" disabled={disabled} value={limit} onChange={(event) => setLimit(event.target.value)} /><span className="text-sm text-muted-foreground">MB</span><Button variant="outline" size="sm" disabled={disabled || Number(limit) === options?.maxMb}>保存</Button>

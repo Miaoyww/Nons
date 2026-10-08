@@ -1,3 +1,4 @@
+import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { errorText, nativeCall, usePlayer, type OutputDevice } from "@/lib/player";
@@ -33,7 +34,7 @@ export function PlaybackPage() {
       </Select>
     </SettingsCard>
     <SettingsCard title="允许音质降级" description="所选音质不可用时自动降级。">
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={options.allowDowngrade} disabled={!isTauri() || busy} onChange={(event) => update({ allowDowngrade: event.target.checked })} />不可用时允许降低音质</label>
+      <label className="flex items-center gap-2 text-sm"><Switch checked={options.allowDowngrade} disabled={!isTauri() || busy} onCheckedChange={(checked) => update({ allowDowngrade: checked })} />不可用时允许降低音质</label>
     </SettingsCard>
     {(error || optionsError) && <p role="alert" className="text-sm text-destructive">{error ?? optionsError}</p>}
   </div>;

@@ -3,7 +3,6 @@ import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ExternalLink, FileText, RefreshCw, Terminal } from "lucide-react";
 import appIcon from "../../../../app-icon.png";
-import yesPlayMusicLicense from "../../../../../notices/YesPlayMusic-LICENSE.txt?raw";
 import { Button } from "@/components/ui/button";
 import { errorText, nativeCall } from "@/lib/player";
 import { SettingsCard } from "../settings-card";
@@ -35,6 +34,5 @@ export function AboutPage({ version }: { version: string }) {
     <SettingsCard title="GitHub 仓库" description="查看源码或提交 Issue。">{link(repository, "Miaoyww/Nons")}</SettingsCard>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     <section aria-labelledby="thanks-heading" className="flex flex-col gap-4"><h2 id="thanks-heading" className="text-xl font-bold">特别鸣谢</h2>{thanks.map(([name, repo]) => <SettingsCard key={repo} title={name} description="致谢与敬意。">{link(`https://github.com/${repo}`, repo)}</SettingsCard>)}</section>
-    <details className="text-xs"><summary className="cursor-pointer">第三方许可 · YesPlayMusic · MIT · qier222</summary><pre className="mt-3 whitespace-pre-wrap font-sans leading-5 text-muted-foreground">{yesPlayMusicLicense}</pre></details>
   </div>;
 }

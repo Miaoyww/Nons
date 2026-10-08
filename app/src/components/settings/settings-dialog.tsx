@@ -48,6 +48,7 @@ export function SettingsDialog() {
                 aria-current={section === "playback" ? "page" : undefined} onClick={() => setSection("playback")}>
                 <Volume2 aria-hidden="true" /><span>播放设置</span>
               </Button>
+              <Button variant={section === "shortcuts" ? "secondary" : "ghost"} className="justify-start gap-2.5 rounded-lg px-3" aria-current={section === "shortcuts" ? "page" : undefined} onClick={() => setSection("shortcuts")}><Keyboard aria-hidden="true" /><span>快捷键设置</span></Button>
               <Button variant={section === "lyrics" ? "secondary" : "ghost"} className="justify-start gap-2.5 rounded-lg px-3"
                 aria-current={section === "lyrics" ? "page" : undefined} onClick={() => setSection("lyrics")}>
                 <Mic2 aria-hidden="true" /><span>歌词设置</span>
@@ -57,7 +58,6 @@ export function SettingsDialog() {
                 <FolderCog aria-hidden="true" /><span>本地与缓存</span>
               </Button>
               <Button variant={section === "plugins" ? "secondary" : "ghost"} className="justify-start gap-2.5 rounded-lg px-3" aria-current={section === "plugins" ? "page" : undefined} onClick={() => setSection("plugins")}><LayoutGrid aria-hidden="true" /><span>插件设置</span></Button>
-              <Button variant={section === "shortcuts" ? "secondary" : "ghost"} className="justify-start gap-2.5 rounded-lg px-3" aria-current={section === "shortcuts" ? "page" : undefined} onClick={() => setSection("shortcuts")}><Keyboard aria-hidden="true" /><span>快捷键设置</span></Button>
               <Button variant={section === "about" ? "secondary" : "ghost"} className="mt-auto justify-start gap-2.5 rounded-lg px-3"
                 aria-current={section === "about" ? "page" : undefined} onClick={() => setSection("about")}>
                 <Info aria-hidden="true" /><span>关于</span>

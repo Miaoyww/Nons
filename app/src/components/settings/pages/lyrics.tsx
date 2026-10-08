@@ -1,3 +1,4 @@
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { defaultBackgroundSpeed, useLyricsSettings } from "@/hooks/use-lyrics-settings";
 import { useLyricSources } from "@/hooks/use-lyric-sources";
@@ -13,9 +14,6 @@ export function LyricsPage() {
     <div><h2 className="text-xl font-bold">歌词设置</h2><p className="mt-2 text-sm text-muted-foreground">调整歌词显示与在线歌词来源。</p></div>
     <section aria-labelledby="lyrics-display-heading" className="flex flex-col gap-8">
     <h3 id="lyrics-display-heading" className="text-base font-semibold">歌词显示</h3>
-    <SettingsCard title="歌词字体" description="用于歌词、翻译与发音，默认跟随应用字体。">
-      <FontPicker label="歌词字体" value={fonts.lyrics} onChange={(family) => setFont("lyrics", family)} defaultLabel="跟随应用字体" />
-    </SettingsCard>
     <div className="rounded-lg bg-muted/40 px-6 py-5" aria-label="歌词字体预览" style={{ fontFamily: "var(--nons-lyrics-font)" }}>
       <h4 className="mb-5 text-xs font-medium text-muted-foreground">字体预览</h4>
       {[false, true].map((active) => <div key={String(active)} className={`mb-5 last:mb-0 ${active ? "text-foreground" : "text-muted-foreground/60"}`}>
@@ -24,6 +22,9 @@ export function LyricsPage() {
         <p className="mt-1 text-base font-medium">wo shi yi ju ge ci</p>
       </div>)}
     </div>
+    <SettingsCard title="歌词字体" description="用于歌词、翻译与发音，默认跟随应用字体。">
+      <FontPicker label="歌词字体" value={fonts.lyrics} onChange={(family) => setFont("lyrics", family)} defaultLabel="跟随应用字体" />
+    </SettingsCard>
     <SettingsCard title="背景流速" description="设为 0 停止流动，遵循系统减少动态效果设置。">
       <div className="flex w-60 flex-col gap-2">
         <div className="flex items-center gap-3">
@@ -39,10 +40,10 @@ export function LyricsPage() {
     <section aria-labelledby="lyrics-sources-heading" className="flex flex-col gap-8">
       <div><h3 id="lyrics-sources-heading" className="text-base font-semibold">歌词来源</h3><p className="mt-2 text-sm text-muted-foreground">本地歌词优先；在线依次尝试 AMLL DB、QQ 音乐、网易云音乐。</p></div>
       <SettingsCard title="AMLL DB" description="优先获取 TTML 逐字歌词，失败时尝试下一来源。">
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sources.amll} disabled={!ready || busy} onChange={(event) => void setSources({ ...sources, amll: event.target.checked })} />从 AMLL DB 获取歌词</label>
+        <label className="flex items-center gap-2 text-sm"><Switch checked={sources.amll} disabled={!ready || busy} onCheckedChange={(checked) => void setSources({ ...sources, amll: checked })} />从 AMLL DB 获取歌词</label>
       </SettingsCard>
       <SettingsCard title="QQ 音乐" description="匹配歌曲信息，未命中时使用网易云音乐。">
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sources.qq} disabled={!ready || busy} onChange={(event) => void setSources({ ...sources, qq: event.target.checked })} />从 QQ 音乐获取歌词</label>
+        <label className="flex items-center gap-2 text-sm"><Switch checked={sources.qq} disabled={!ready || busy} onCheckedChange={(checked) => void setSources({ ...sources, qq: checked })} />从 QQ 音乐获取歌词</label>
       </SettingsCard>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </section>

@@ -1,3 +1,4 @@
+import { Switch } from "@/components/ui/switch";
 import { useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -38,7 +39,7 @@ export function PluginsPage() {
       {review?.manifest.id === plugin.manifest.id && <div className="mt-4 rounded-lg bg-muted/50 p-4 text-sm">
         <h4 className="font-semibold">启用前确认</h4><ul className="my-3 list-disc space-y-1 pl-5">{plugin.manifest.permissions.map((p) => <li key={p}>{permissionLabels[p] ?? p}</li>)}</ul>
         <p className="leading-6 text-muted-foreground">前端插件与播放器运行在同一界面环境，能够执行代码。只启用你信任的插件；WASM 权限限制不代表前端沙箱。</p>
-        <label className="my-3 flex items-center gap-2"><input type="checkbox" checked={trusted} onChange={(e) => setTrusted(e.target.checked)} />我信任此插件并同意以上权限</label>
+        <label className="my-3 flex items-center gap-2"><Switch checked={trusted} onCheckedChange={setTrusted} />我信任此插件并同意以上权限</label>
         <div className="flex gap-2"><Button disabled={!trusted || busy} onClick={() => { void action(plugin.manifest.id, "enable", true); setReview(undefined); }}>确认启用</Button><Button variant="ghost" onClick={() => setReview(undefined)}>取消</Button></div>
       </div>}
       {removing === plugin.manifest.id && <div className="mt-4 rounded-lg bg-muted/50 p-4 text-sm"><p>删除插件会同时删除其独立存储数据。</p><div className="mt-3 flex gap-2"><Button variant="destructive" disabled={busy} onClick={() => { void action(plugin.manifest.id, "uninstall"); setRemoving(undefined); }}>确认删除</Button><Button variant="ghost" onClick={() => setRemoving(undefined)}>取消</Button></div></div>}
