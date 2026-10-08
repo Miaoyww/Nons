@@ -505,6 +505,7 @@ fn player_action(action: &str, backend: State<'_, Backend>) -> AppResult<()> {
         "next" => Command::Next,
         "previous" => Command::Previous,
         "repeat" => Command::Repeat,
+        "shuffle" => Command::Shuffle,
         _ => return Err("播放操作无效".into()),
     };
     backend.player.send(command)

@@ -1,8 +1,8 @@
 use crate::{
     media::MediaControls,
     model::{
-        following_index, AppResult, OutputDevice, PlaybackStatus, PlayerSnapshot, Progress,
-        RepeatMode, ResolvedTrack, Track,
+        AppResult, OutputDevice, PlaybackStatus, PlayerSnapshot, Progress, RepeatMode,
+        ResolvedTrack, Track,
     },
     netease::Netease,
     storage::Store,
@@ -31,6 +31,7 @@ pub enum Command {
     Next,
     Previous,
     Repeat,
+    Shuffle,
     Seek(u64),
     Volume(f64),
     Device(Option<String>),
@@ -49,13 +50,7 @@ fn previous_command(state: &PlayerSnapshot) -> Option<Command> {
     state.current()?;
     // Manual navigation always selects a queue entry, regardless of position.
     // Jump goes through load(), invalidating prepared/armed gapless work.
-    if let Some(index) = state.index.and_then(|i| i.checked_sub(1)) {
-        Some(Command::Jump(index))
-    } else if state.index == Some(0) && state.repeat_mode != RepeatMode::Off {
-        Some(Command::Jump(state.queue.len() - 1))
-    } else {
-        None
-    }
+    state.previous().map(Command::Jump)
 }
 
 pub struct Player {
@@ -86,6 +81,7 @@ impl Player {
                 s.media_error = None;
                 s.revision = 0;
                 s.position_ms = 0;
+                s.restore_shuffle_order();
                 s.duration_ms = s.current().map_or(0, |t| t.duration_ms);
                 s
             })
@@ -353,6 +349,7 @@ impl Actor {
                     return Err("播放队列无效，最多支持 1000 首歌曲".into());
                 }
                 self.state.queue = queue;
+                self.state.reset_shuffle_order(Some(index));
                 self.load(index, true)?;
             }
             Command::PlayNext(tracks) => {
@@ -411,12 +408,17 @@ impl Actor {
                 }
             }
             Command::Jump(index) => self.load(index, true)?,
-            Command::Repeat => {
-                self.state.repeat_mode = match self.state.repeat_mode {
-                    RepeatMode::Off => RepeatMode::All,
-                    RepeatMode::All => RepeatMode::One,
-                    RepeatMode::One => RepeatMode::Off,
-                };
+            Command::Repeat | Command::Shuffle => {
+                if matches!(command, Command::Shuffle) {
+                    self.state.shuffle = !self.state.shuffle;
+                    self.state.reset_shuffle_order(self.state.index);
+                } else {
+                    self.state.repeat_mode = match self.state.repeat_mode {
+                        RepeatMode::Off => RepeatMode::All,
+                        RepeatMode::All => RepeatMode::One,
+                        RepeatMode::One => RepeatMode::Off,
+                    };
+                }
                 if let Some(job) = self.next_job.take() {
                     job.abort();
                 }
@@ -427,15 +429,7 @@ impl Actor {
                 self.publish();
             }
             Command::Next => {
-                if let Some(index) = following_index(
-                    self.state.index,
-                    self.state.queue.len(),
-                    if self.state.repeat_mode == RepeatMode::One {
-                        RepeatMode::All
-                    } else {
-                        self.state.repeat_mode
-                    },
-                ) {
+                if let Some(index) = self.state.following(true) {
                     self.load(index, true)?;
                 }
             }
@@ -476,6 +470,7 @@ impl Actor {
                     .map_err(|e| e.to_string())?;
                 if clear {
                     self.state.queue.clear();
+                    self.state.shuffle_order.clear();
                     self.state.index = None;
                     self.state.duration_ms = 0;
                     self.state.actual_quality = None;
@@ -508,11 +503,7 @@ impl Actor {
                     return Ok(());
                 }
                 if next {
-                    if following_index(
-                        self.state.index,
-                        self.state.queue.len(),
-                        self.state.repeat_mode,
-                    ) != Some(index)
+                    if self.state.following(false) != Some(index)
                         || self
                             .state
                             .queue
@@ -728,11 +719,7 @@ impl Actor {
                     .map_or(self.state.duration_ms, |t| t.mseconds());
             }
             MessageView::Eos(_) => {
-                if let Some(index) = following_index(
-                    self.state.index,
-                    self.state.queue.len(),
-                    self.state.repeat_mode,
-                ) {
+                if let Some(index) = self.state.following(false) {
                     if let Err(error) = self.load(index, true) {
                         self.state.error = Some(error);
                         self.state.status = PlaybackStatus::Error;
@@ -803,11 +790,7 @@ impl Actor {
                 let ready = self.prepared.lock().map(|p| p.is_some()).unwrap_or(false)
                     || self.armed.lock().map(|p| p.is_some()).unwrap_or(false);
                 if !ready {
-                    if let Some(index) = following_index(
-                        self.state.index,
-                        self.state.queue.len(),
-                        self.state.repeat_mode,
-                    ) {
+                    if let Some(index) = self.state.following(false) {
                         self.next_attempt = Some(Instant::now());
                         self.next_attempts += 1;
                         self.resolve(index, self.state.queue[index].clone(), true);

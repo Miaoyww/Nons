@@ -3370,6 +3370,7 @@ dependencies = [
  "clipboard-rs",
  "clipboard-win",
  "cookie",
+ "fastrand",
  "flate2",
  "font-kit",
  "glob",

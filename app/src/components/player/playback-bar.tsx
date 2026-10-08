@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Heart, Pause, Play, Repeat, Repeat1 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
+import { adjacentIndex, formatTime, nativeCall, statusLabels, usePlayer, useProgress } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { trackDisplayTitle } from "./track-title";
 import { PlaybackNotice, type PlaybackNoticeMessage } from "./playback-notice";
@@ -38,8 +38,10 @@ export function PlaybackBar({ onLyrics, onQueue, onError, qualityControl, notice
   const playing = ["playing", "buffering", "loading"].includes(state.status);
   const [preview, setPreview] = useState<"previous" | "next" | null>(null);
   const looping = state.repeatMode === "all" || state.repeatMode === "one";
-  const previous = state.index === null ? undefined : state.queue[state.index - 1] ?? (looping ? state.queue[state.queue.length - 1] : undefined);
-  const next = state.index === null ? undefined : state.queue[state.index + 1] ?? (looping ? state.queue[0] : undefined);
+  const previousIndex = adjacentIndex(state, "previous");
+  const nextIndex = adjacentIndex(state, "next");
+  const previous = previousIndex === null ? undefined : state.queue[previousIndex];
+  const next = nextIndex === null ? undefined : state.queue[nextIndex];
   const previewTrack = preview === "previous" ? previous : preview === "next" ? next : undefined;
   const title = previewTrack ? trackDisplayTitle(previewTrack) : track ? trackDisplayTitle(track) : "选择一首音乐";
   const action = (action: string) => void nativeCall("player_action", { action }).catch(onError);

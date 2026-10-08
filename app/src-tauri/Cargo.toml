@@ -42,6 +42,7 @@ rusqlite = { version = "0.38", features = ["bundled"] }
 lofty = "0.25"
 url = "2"
 sha2 = "0.10"
+fastrand = "2"
 walkdir = "2"
 notify = "8"
 quick-xml = "0.39"

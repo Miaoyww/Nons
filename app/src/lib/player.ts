@@ -12,6 +12,7 @@ export interface Track {
 }
 export type PlaybackStatus = "stopped" | "loading" | "playing" | "paused" | "buffering" | "error";
 export interface PlayerSnapshot {
+  shuffle: boolean; shuffleOrder: number[];
   repeatMode: "off" | "all" | "one";
   revision: number; queue: Track[]; index: number | null; status: PlaybackStatus;
   positionMs: number; durationMs: number; volume: number; deviceId: string | null;
@@ -26,7 +27,7 @@ export interface Lyrics {
 }
 export interface OutputDevice { id: string; name: string }
 
-let snapshot: PlayerSnapshot = { repeatMode: "off", revision: 0, queue: [], index: null, status: "stopped", positionMs: 0,
+let snapshot: PlayerSnapshot = { shuffle: false, shuffleOrder: [], repeatMode: "off", revision: 0, queue: [], index: null, status: "stopped", positionMs: 0,
   durationMs: 0, volume: 0.8, deviceId: null, actualQuality: null, error: null, mediaError: null };
 let progress: Progress = { revision: 0, positionMs: 0, durationMs: 0, status: "stopped", receivedAt: 0 };
 let updateSerial = 0;
@@ -39,6 +40,20 @@ const subscribeNothing = (_listener: () => void) => () => {};
 export const useProgress = (enabled = true) => useSyncExternalStore(enabled ? subscribeProgress : subscribeNothing, () => progress);
 export const getPlayer = () => snapshot;
 export const getProgress = () => progress;
+
+export function adjacentIndex(state: PlayerSnapshot, direction: "previous" | "next"): number | null {
+  if (state.index === null || !state.queue[state.index]) return null;
+  const order = state.shuffle ? state.shuffleOrder : null;
+  const slot = order ? order.indexOf(state.index) : state.index;
+  if (slot < 0) return null;
+  const count = order ? order.length : state.queue.length;
+  let target = slot + (direction === "next" ? 1 : -1);
+  if (target < 0 || target >= count) {
+    if (state.repeatMode === "off") return null;
+    target = (target + count) % count;
+  }
+  return order ? order[target] : target;
+}
 
 function updateProgress(value: Omit<Progress, "receivedAt">) {
   if (value.revision !== snapshot.revision) return;

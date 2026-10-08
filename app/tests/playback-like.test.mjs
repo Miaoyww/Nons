@@ -16,7 +16,7 @@ function harness({ source = { kind: "netease", id: 7 }, desktop = true, loggedIn
   const modules = {
     "react/jsx-runtime": { jsx, jsxs: jsx }, react: { useState: (value) => [value, () => {}] },
     "@tauri-apps/api/core": { isTauri: () => desktop },
-    "@/lib/player": { usePlayer: () => ({ queue: [{ key: "track", title: "Song", source }], index: 0, status: "playing", repeatMode: "off" }), statusLabels: {} },
+    "@/lib/player": { adjacentIndex: () => null, usePlayer: () => ({ queue: [{ key: "track", title: "Song", source }], index: 0, status: "playing", repeatMode: "off" }), statusLabels: {} },
     "./account": { useAccount: () => account }, "./track-title": { trackDisplayTitle: (track) => track.title },
   };
   const exports = {};
