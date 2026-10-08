@@ -15,7 +15,6 @@ if (Test-Path -LiteralPath (Join-Path $nonsGst 'VERSION')) {
 Push-Location (Join-Path $nonsRoot 'app')
 try {
     if ($Task -in @('dev','build')) {
-        if ($Task -eq 'build') { throw 'Release native-runtime bundling has not been validated. Use cargo build for a development binary.' }
         & pnpm tauri $Task @ExtraArgs
     } else {
         Push-Location 'src-tauri'

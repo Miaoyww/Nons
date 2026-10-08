@@ -13,11 +13,26 @@ cd app
 pnpm tauri dev
 ```
 
-依赖脚本从官方 PyPI 获取固定版本 1.28.7 的 GStreamer wheel，校验 SHA256 后只解压到忽略目录 `.local/gstreamer`，用现有 MSVC 工具生成 Rust 链接所需 import libraries。不会运行安装程序，也不会永久更改系统环境。此完整开发运行时约 252.3 MiB，包含开发工具及额外插件，不能当作最终安装包体积。
+依赖脚本从官方 PyPI 获取固定版本 1.28.7 的 GStreamer wheel，校验 SHA256 后只解压到忽略目录 `.local/gstreamer`，用现有 MSVC 工具生成 Rust 链接所需 import libraries。不会运行安装程序，也不会永久更改系统环境。此完整开发运行时（包含插件依赖包）约 303.1 MiB，包含开发工具及额外插件，不能当作最终安装包体积。
 
-`native.ps1 -Task check|test|clippy` 为当前进程设置原生依赖路径。发布打包尚未接通，`-Task build` 会明确拒绝执行，避免生成遗漏 DLL 的安装包。Cargo.lock 暂将 kstring 固定到 2.0.2；更新依赖时遵守 manifest 的 Rust 1.95 最低版本。
+`native.ps1 -Task check|test|clippy` 为当前进程设置原生依赖路径。Windows x64 发布打包已接入私有音频运行时，`-Task build` 与 `pnpm tauri build` 共用打包入口。Cargo.lock 暂将 kstring 固定到 2.0.2；更新依赖时遵守 manifest 的 Rust 1.95 最低版本。
 
 `pnpm tauri dev` 自动为子进程配置项目内 GStreamer 链接库、DLL 和插件路径，并启动 Vite。`pnpm dev` 只启动 WebUI 预览，无需与桌面命令同时运行。也可以在仓库根目录使用 `native.ps1 -Task dev`。
+
+## Windows 发布打包
+
+在 `app` 目录执行 `pnpm tauri build`。首次构建先运行 `python scripts/bootstrap-gstreamer.py`，已引导的旧工作区也需重跑以补齐 `gstreamer_plugins_libs`。构建脚本使用已有 MSVC `dumpbin` 递归收集 DLL 依赖，生成 `.local/gstreamer-bundle/root`；Windows 专用 Tauri 配置将核心 DLL 放在安装目录的 EXE 旁，音频插件与扫描器位于 `runtime/`。同一布局也复制到 Cargo 输出目录，因此 `target/release/Nons.exe` 可直接启动；分发便携版时必须携带整个运行时，不能只复制 EXE。
+
+当前选择 24 个播放、解析、音频解码与 Windows 输出插件；其间接依赖仍包含 FFmpeg 的共用库。遗漏核心文件或非系统间接 DLL 时构建立即失败，不生成缺件安装包。应用在 GStreamer 初始化前选择私有插件目录与扫描器，覆盖继承的 SDK 路径；扫描器使用 EXE 旁的 DLL，插件注册缓存独立位于应用缓存目录。这是原生插件元数据缓存，非歌曲或歌词资源缓存；更换运行时后由 GStreamer 按插件路径与文件时间重新扫描。
+
+验收命令：
+
+```powershell
+python -m unittest discover -s scripts/tests
+python scripts/smoke-audio-runtime.py app/src-tauri/target/release
+```
+
+Windows x64、GStreamer 1.28.7：裁剪内容实测约 34.0 MiB（文件字节总和，非安装包或内存占用），59 个原生文件；清空 SDK 路径后验证 14 个音频工厂、WAV/FLAC/MP3/AAC/Vorbis/Opus 解码与静音输出。Release NSIS 构建通过，安装包约 17.60 MiB，安装脚本已核对包含全部运行时文件；尚未在无 SDK 的另一台机器上安装验收。macOS/Linux 沿用平台 GStreamer SDK，本次未验证其发布打包。
 
 ## 模块
 
@@ -108,4 +123,4 @@ AMLL 当前依赖标注 AGPL-3.0-only，项目现有许可证为 GPL-3.0；发�
 - `scripts/probe-plugins.ps1` 的实际隐藏 WebView 探测通过：合成剪贴板分享文本 → Host 过滤 → WASM → 既有网易云 Client → 插件事件 → 动态 `ui.mjs` → React singleton → PluginSlot DOM；同时验证无授权播放／存储操作被拒、停用后代次和资源失效、界面清理、目录安装、隔离存储、导航／页面、子路径保留组件状态及删除后移除存储与贡献。原播放队列保持为空，不改动用户播放或剪贴板。
 - 一次 Windows Debug 样本中，从合成候选 URL 交付到探测确认歌曲 DOM 为 101ms，包含真实歌曲元数据请求，50ms 轮询确认；不是操作系统剪贴板通知延迟、统计分位数或 Release 性能承诺。没有实测整个应用所属 WebView 的内存增量。WASM Store、并发、事件、安装大小和缓存容量设有明确上限，不能据此推导全进程占用。
 - 修复真实 ESM namespace 不能直接冻结导致的启动错误，公共桥接改为冻结普通对象副本；实际 ESM 回归覆盖重复初始化。独立测试还执行懒加载产物，验证 `assets/` 中的 chunk 正确引用公共 Host 模块。
-- macOS/Linux 编译及基本播放、OS 真实复制通知、官方短链在线跳转矩阵、真实账号异常网络矩阵与 Release 原生运行时打包仍需对应环境验收。前端共享主 WebView，必须信任代码；WASM Capability 限制不能作为前端恶意代码沙箱。
+- macOS/Linux 编译及基本播放、OS 真实复制通知、官方短链在线跳转矩阵、真实账号异常网络矩阵与无 SDK 机器的安装验收仍需对应环境验证。前端共享主 WebView，必须信任代码；WASM Capability 限制不能作为前端恶意代码沙箱。

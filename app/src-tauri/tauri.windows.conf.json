@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": {
+      "bundled-plugins/": "bundled-plugins/",
+      "../../.local/gstreamer-bundle/root/": ""
+    }
+  }
+}

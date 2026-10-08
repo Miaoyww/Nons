@@ -1,5 +1,6 @@
 mod about;
 mod audio;
+mod audio_runtime;
 mod fonts;
 mod hitokoto;
 mod library;
@@ -669,6 +670,7 @@ pub fn run() {
             #[cfg(feature = "plugin-probe")]
             let data = plugins::probe::directory();
             std::fs::create_dir_all(&data)?;
+            audio_runtime::configure(&app.path().app_cache_dir()?)?;
             let covers = app.path().app_cache_dir()?.join("covers");
             std::fs::create_dir_all(&covers)?;
             let fallback = covers.join("default.png");

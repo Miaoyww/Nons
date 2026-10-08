@@ -17,6 +17,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+__pycache__/
 app/src-tauri/bundled-plugins/*
 !app/src-tauri/bundled-plugins/.gitkeep
 plugins/*/backend/target/

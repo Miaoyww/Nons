@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const app = join(root, "app");
@@ -30,9 +30,21 @@ if (process.platform === "win32" && existsSync(join(gst, "VERSION"))) {
   }
 }
 
+const args = process.argv.slice(2);
+if (process.platform === "win32" && args[0] === "build") {
+  const metadata = spawnSync("cargo", ["metadata", "--no-deps", "--format-version", "1"], { cwd: join(app, "src-tauri"), env, encoding: "utf8" });
+  if (metadata.status !== 0) { process.stderr.write(metadata.stderr); process.exit(metadata.status ?? 1); }
+  const targetArg = args.find((arg) => arg.startsWith("--target="))?.slice(9) ?? (args.includes("--target") ? args[args.indexOf("--target") + 1] : env.CARGO_BUILD_TARGET);
+  if (targetArg && targetArg !== "x86_64-pc-windows-msvc") throw new Error("Bundled audio runtime currently supports Windows x64 MSVC only.");
+  const targetDir = JSON.parse(metadata.stdout).target_directory;
+  const destination = join(targetDir, ...(targetArg ? [targetArg] : []), args.includes("--debug") ? "debug" : "release");
+  const staged = spawnSync("python", [join(root, "scripts/bundle-gstreamer.py"), "--destination", destination], { cwd: root, env, stdio: "inherit" });
+  if (staged.status !== 0) process.exit(staged.status ?? 1);
+}
+
 const require = createRequire(join(app, "package.json"));
 const cli = require.resolve("@tauri-apps/cli/tauri.js");
-const child = spawn(process.execPath, [cli, ...process.argv.slice(2)], {
+const child = spawn(process.execPath, [cli, ...args], {
   cwd: app,
   env,
   stdio: "inherit",
