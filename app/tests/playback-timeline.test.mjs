@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
-import { JSDOM } from 'jsdom'
 
 function harness(options = { layout: 'edge', showTimeOnHover: true }) {
   const calls = [],
@@ -147,15 +146,18 @@ test('edge timeline reveals hover and focus time without permanent time labels',
 })
 test('timeline commits pointer and keyboard seeks and cancels abandoned drags', () => {
   const app = harness()
-  app.render().slider.onChange({ target: { value: '90000' } })
-  app.render().slider.onPointerUp({ currentTarget: { value: '90000' } })
+  app.render().slider.onValueChange(90000)
+  app.render().slider.onValueCommitted(90000)
   assert.equal(app.calls[0].positionMs, 90_000)
-  app.render().slider.onChange({ target: { value: '95000' } })
-  app.render().slider.onKeyUp({ key: 'ArrowRight', currentTarget: { value: '95000' } })
+  app.render().slider.thumbProps.onKeyDown({
+    key: 'ArrowRight',
+    currentTarget: { value: '94000' },
+    preventDefault() {}
+  })
   assert.equal(app.calls[1].positionMs, 95_000)
-  app.render().slider.onChange({ target: { value: '99000' } })
+  app.render().slider.onValueChange(99000)
   app.render().slider.onPointerCancel()
-  app.render().slider.onPointerUp({ currentTarget: { value: '99000' } })
+  assert.equal(app.render().slider.value, 95000)
   assert.equal(app.calls.length, 2)
 })
 
@@ -168,23 +170,16 @@ test('hover time defaults off and full screen retains elapsed and remaining labe
   assert.equal(tree.slider.step, 1)
 })
 
-test('animation paints frames without component renders and stops for hidden or stale playback', () => {
+test('animation updates controlled slider values and stops for hidden or stale playback', () => {
   const app = harness()
-  const { slider } = app.render()
-  const dom = new JSDOM('<input type=range min=0 max=180000 step=1>')
-  const input = dom.window.document.querySelector('input')
-  slider.ref.current = input
+  app.render()
   const cleanup = app.effects.at(-1)()
   app.frame(125)
-  assert.equal(input.value, '30125')
-  assert.equal(
-    Number.parseFloat(input.style.getPropertyValue('--slider-progress')),
-    (30125 / 180000) * 100
-  )
+  assert.equal(app.render().slider.value, 30125)
   app.frame(250)
-  assert.equal(input.value, '30250')
+  assert.equal(app.render().slider.value, 30250)
   app.frame(700)
-  assert.equal(input.value, '30500', 'native clock extrapolation is bounded')
+  assert.equal(app.render().slider.value, 30500, 'native clock extrapolation is bounded')
   assert.equal(app.frames.size, 0)
   app.progress.receivedAt = 700
   app.document.visibilityState = 'hidden'
@@ -196,17 +191,14 @@ test('animation paints frames without component renders and stops for hidden or 
   cleanup()
   assert.equal(app.frames.size, 0)
   assert.equal(app.listeners.size, 0)
-  dom.window.close()
 })
 
 test('paused playback and drag previews do not run a frame loop; old revisions stop painting', () => {
   const app = harness()
-  const dom = new JSDOM('<input type=range min=0 max=180000 step=1>')
-  const input = dom.window.document.querySelector('input')
   app.progress.status = 'paused'
-  app.render().slider.ref.current = input
+  app.render()
   const stopPaused = app.effects.at(-1)()
-  assert.equal(input.value, '30000')
+  assert.equal(app.render().slider.value, 30000)
   assert.equal(app.frames.size, 0)
   stopPaused()
   app.progress.status = 'playing'
@@ -214,12 +206,11 @@ test('paused playback and drag previews do not run a frame loop; old revisions s
   const stopPlaying = app.effects.at(-1)()
   app.replaceProgress({ revision: app.progress.revision + 1 })
   app.frame(200)
-  assert.equal(input.value, '30000')
+  assert.equal(app.render().slider.value, 30000)
   assert.equal(app.frames.size, 0)
   stopPlaying()
-  app.render().slider.onChange({ target: { value: '90000' } })
+  app.render().slider.onValueChange(90000)
   app.render()
   assert.equal(app.effects.at(-1)(), undefined)
   assert.equal(app.frames.size, 0)
-  dom.window.close()
 })

@@ -32,8 +32,8 @@ export function NowPlayingControls({
           step={0.01}
           value={volume}
           disabled={!isTauri()}
-          onChange={(event) => {
-            const value = Number(event.target.value)
+          onValueChange={(next) => {
+            const value = Number(next)
             setVolume(value)
             void nativeCall('player_volume', { volume: value }).catch(onError)
           }}

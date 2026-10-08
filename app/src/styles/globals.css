@@ -317,8 +317,7 @@
 }
 
 .music-input:focus-visible,
-.music-select:focus-visible,
-.music-range:focus-visible {
+.music-select:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
@@ -331,86 +330,16 @@
   color: var(--foreground);
 }
 
-.music-range {
-  height: 1.5rem;
-  accent-color: var(--music-accent);
-  cursor: pointer;
-}
-
-.music-range:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
 .player-slider {
-  appearance: none;
-  display: block;
   min-width: 0;
-  height: 24px;
-  margin: 0;
-  padding: 0;
-  background: transparent;
   cursor: pointer;
-  --slider-fill: var(--music-accent);
-  --slider-track: var(--muted);
 }
-.now-playing-controls .player-slider {
-  --slider-fill: var(--foreground);
-  --slider-track: rgb(160 160 160 / 45%);
-}
-.player-slider:disabled {
+.player-slider[data-disabled] {
   cursor: default;
-  opacity: 0.45;
 }
-.player-slider:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-.player-slider::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    var(--slider-fill) var(--slider-progress),
-    var(--slider-track) var(--slider-progress)
-  );
-}
-.player-slider::-webkit-slider-thumb {
-  appearance: none;
+.player-slider [data-slot='slider-thumb'] {
   width: 12px;
   height: 12px;
-  margin-top: -4px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--slider-fill);
-  opacity: 0;
-}
-.player-slider:hover:not(:disabled)::-webkit-slider-thumb,
-.player-slider:active:not(:disabled)::-webkit-slider-thumb {
-  opacity: 1;
-}
-.player-slider::-moz-range-track {
-  height: 4px;
-  border-radius: 999px;
-  background: var(--slider-track);
-}
-.player-slider::-moz-range-progress {
-  height: 4px;
-  border-radius: 999px;
-  background: var(--slider-fill);
-}
-.player-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--slider-fill);
-  opacity: 0;
-}
-.player-slider:hover:not(:disabled)::-moz-range-thumb,
-.player-slider:active:not(:disabled)::-moz-range-thumb {
-  opacity: 1;
 }
 .playback-timeline {
   display: grid;
@@ -1219,8 +1148,8 @@
   color: var(--foreground);
   background: var(--accent);
 }
-.playback-capsule .capsule-center .music-range {
-  height: 16px;
+.playback-capsule .capsule-center .player-slider > div {
+  min-height: 16px;
 }
 .playback-capsule .capsule-center > div:last-child {
   gap: 8px;
@@ -1431,11 +1360,11 @@
   padding-bottom: 112px;
 }
 .playback-capsule .capsule-play {
-  background: var(--music-accent);
-  color: white;
+  background: var(--foreground);
+  color: var(--background);
 }
 .playback-capsule .capsule-play:hover:not(:disabled) {
-  background: var(--music-accent);
+  background: var(--foreground);
   filter: brightness(1.08);
 }
 .volume-percentage {
@@ -1443,54 +1372,13 @@
   line-height: 16px;
   color: var(--muted-foreground);
 }
-.volume-range {
-  appearance: none;
-  writing-mode: vertical-lr;
-  direction: rtl;
+.volume-card .volume-range {
   width: 20px;
   height: 96px;
-  background: transparent;
 }
-.volume-range::-webkit-slider-runnable-track {
-  width: 4px;
-  border-radius: 999px;
-  background: linear-gradient(
-    to top,
-    var(--music-accent) var(--volume-progress),
-    var(--muted) var(--volume-progress)
-  );
-}
-.volume-range::-webkit-slider-thumb {
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-left: -4px;
-  border-radius: 50%;
-  background: var(--background);
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
-}
-.volume-range::-moz-range-track {
-  width: 4px;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--muted);
-}
-.volume-range::-moz-range-progress {
-  width: 4px;
-  background: var(--music-accent);
-}
-.volume-range::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--background);
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
-}
-/* Override the shared horizontal range height for this vertical control. */
-.volume-card .volume-range {
-  height: 96px;
+.volume-range > div {
+  min-height: 0;
+  width: 20px;
 }
 /* Keep the glass layer beside controls so the volume card can blur the page itself. */
 .capsule-glass {
@@ -2496,7 +2384,7 @@
   gap: 4px;
 }
 .persistent-playback .now-playing-toggle {
-  color: var(--music-accent);
+  color: var(--foreground);
 }
 .persistent-playback .now-playing-transport [aria-pressed='true'],
 .persistent-playback .now-playing-transport [data-active='true'] {
@@ -2523,13 +2411,10 @@
   width: 100%;
   height: 20px;
 }
-.playback-timeline-edge .timeline-slider::-webkit-slider-thumb {
-  opacity: 1;
-  width: 8px;
-  height: 8px;
-  margin-top: -2px;
+.playback-timeline-edge .timeline-slider > div {
+  min-height: 20px;
 }
-.playback-timeline-edge .timeline-slider::-moz-range-thumb {
+.playback-timeline-edge [data-slot='slider-thumb'] {
   opacity: 1;
   width: 8px;
   height: 8px;

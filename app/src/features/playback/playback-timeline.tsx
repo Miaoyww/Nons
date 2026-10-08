@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { currentPosition, formatTime, getProgress, nativeCall, useProgress } from '@/lib/player'
 import { PlayerSlider } from '@/features/playback/player-slider'
@@ -16,10 +16,8 @@ export function PlaybackTimeline({
   const [drag, setDrag] = useState<number | null>(null)
   const [hover, setHover] = useState<number | null>(null)
   const [focused, setFocused] = useState(false)
-  const slider = useRef<HTMLInputElement>(null)
-  const elapsed = useRef<HTMLSpanElement>(null)
-  const duration = useRef<HTMLSpanElement>(null)
-  const position = Math.min(drag ?? currentPosition(), Math.max(1, progress.durationMs))
+  const [clock, setClock] = useState(currentPosition())
+  const position = Math.min(drag ?? clock, Math.max(1, progress.durationMs))
   const labelsVisible = layout !== 'edge' && !showTimeOnHover
   const disabled =
     !isTauri() || !progress.durationMs || ['stopped', 'error', 'loading'].includes(progress.status)
@@ -28,28 +26,10 @@ export function PlaybackTimeline({
     if (drag !== null || disabled) return
     let frame = 0
     function paint(now = performance.now()) {
-      const input = slider.current
       const live = getProgress()
-      if (!input || document.visibilityState === 'hidden' || live.revision !== progress.revision)
-        return
+      if (document.visibilityState === 'hidden' || live.revision !== progress.revision) return
       const position = currentPosition(now)
-      input.value = String(position)
-      input.style.setProperty(
-        '--slider-progress',
-        `${(position / Math.max(1, live.durationMs)) * 100}%`
-      )
-      const time = formatTime(position)
-      const end =
-        layout === 'below'
-          ? `-${formatTime(Math.max(0, live.durationMs - position))}`
-          : formatTime(live.durationMs)
-      if (elapsed.current && elapsed.current.textContent !== time)
-        elapsed.current.textContent = time
-      if (duration.current && duration.current.textContent !== end)
-        duration.current.textContent = end
-      const spoken = `${time} / ${formatTime(live.durationMs)}`
-      if (input.getAttribute('aria-valuetext') !== spoken)
-        input.setAttribute('aria-valuetext', spoken)
+      setClock(position)
       // Extrapolate only within the existing bounded playback clock. Late native
       // updates freeze the display instead of inventing continued playback.
       if (live.status === 'playing' && now - live.receivedAt < 500)
@@ -69,6 +49,7 @@ export function PlaybackTimeline({
 
   function commit(value: number) {
     void nativeCall('player_seek', { positionMs: value }).catch(onError)
+    setClock(value)
     setDrag(null)
   }
 
@@ -76,13 +57,8 @@ export function PlaybackTimeline({
     <div
       className={`playback-timeline playback-timeline-${layout} text-xs tabular-nums text-muted-foreground`}
     >
-      {labelsVisible && (
-        <span ref={elapsed} className="timeline-elapsed">
-          {formatTime(position)}
-        </span>
-      )}
+      {labelsVisible && <span className="timeline-elapsed">{formatTime(position)}</span>}
       <PlayerSlider
-        ref={slider}
         aria-label="播放进度"
         min={0}
         max={Math.max(1, progress.durationMs)}
@@ -103,59 +79,46 @@ export function PlaybackTimeline({
         }
         onPointerLeave={() => setHover(null)}
         onFocus={() => setFocused(true)}
-        onChange={(event) => setDrag(Number(event.target.value))}
-        onPointerUp={(event) => {
-          if (drag !== null) commit(Number(event.currentTarget.value))
-        }}
+        onValueChange={(value) => setDrag(Number(value))}
+        onValueCommitted={(value) => commit(Number(value))}
         onPointerCancel={() => setDrag(null)}
         onBlur={() => {
           setDrag(null)
           setFocused(false)
         }}
-        onKeyDown={(event) => {
-          const delta =
-            event.key === 'ArrowLeft' || event.key === 'ArrowDown'
-              ? -1000
-              : event.key === 'ArrowRight' || event.key === 'ArrowUp'
-                ? 1000
-                : event.key === 'PageDown'
-                  ? -10_000
-                  : event.key === 'PageUp'
-                    ? 10_000
-                    : null
-          if (delta === null && event.key !== 'Home' && event.key !== 'End') return
-          event.preventDefault()
-          setDrag(
-            event.key === 'Home'
-              ? 0
-              : event.key === 'End'
-                ? progress.durationMs
-                : Math.max(
-                    0,
-                    Math.min(progress.durationMs, Number(event.currentTarget.value) + (delta ?? 0))
-                  )
-          )
-        }}
-        onKeyUp={(event) => {
-          if (
-            [
-              'ArrowLeft',
-              'ArrowRight',
-              'ArrowUp',
-              'ArrowDown',
-              'Home',
-              'End',
-              'PageUp',
-              'PageDown'
-            ].includes(event.key) &&
-            drag !== null
-          )
-            commit(Number(event.currentTarget.value))
+        thumbProps={{
+          onKeyDown: (event) => {
+            const delta =
+              event.key === 'ArrowLeft' || event.key === 'ArrowDown'
+                ? -1000
+                : event.key === 'ArrowRight' || event.key === 'ArrowUp'
+                  ? 1000
+                  : event.key === 'PageDown'
+                    ? -10_000
+                    : event.key === 'PageUp'
+                      ? 10_000
+                      : null
+            if (delta === null && event.key !== 'Home' && event.key !== 'End') return
+            event.preventDefault()
+            const next =
+              event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? progress.durationMs
+                  : Math.max(
+                      0,
+                      Math.min(
+                        progress.durationMs,
+                        Number(event.currentTarget.value) + (delta ?? 0)
+                      )
+                    )
+            commit(next)
+          }
         }}
         className="timeline-slider"
       />
       {labelsVisible && (
-        <span ref={duration} className="timeline-duration">
+        <span className="timeline-duration">
           {layout === 'below'
             ? `-${formatTime(Math.max(0, progress.durationMs - position))}`
             : formatTime(progress.durationMs)}

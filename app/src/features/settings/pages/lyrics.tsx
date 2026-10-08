@@ -1,3 +1,4 @@
+import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { defaultBackgroundSpeed, useLyricsSettings } from '@/features/lyrics/use-lyrics-settings'
@@ -48,15 +49,14 @@ export function LyricsPage() {
         <SettingsCard title="背景流速" description="设为 0 停止流动，遵循系统减少动态效果设置。">
           <div className="flex w-60 flex-col gap-2">
             <div className="flex items-center gap-3">
-              <input
-                type="range"
-                className="music-range min-w-0 flex-1"
+              <Slider
+                className="min-w-0 flex-1"
                 aria-label="背景流速"
                 min={0}
                 max={4}
                 step={0.1}
                 value={backgroundSpeed}
-                onChange={(event) => setBackgroundSpeed(Number(event.target.value))}
+                onValueChange={(value) => setBackgroundSpeed(Number(value))}
               />
               <output className="w-8 text-right text-sm tabular-nums" aria-label="当前背景流速">
                 {backgroundSpeed.toFixed(1)}

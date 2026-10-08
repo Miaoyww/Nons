@@ -42,6 +42,7 @@ function volumeControl({ failure, desktop = true } = {}) {
     },
     'lucide-react': {},
     '@/components/music/action-button': {},
+    '@/components/ui/slider': { Slider: 'slider' },
     '@/components/music/cover': {}
   }
   const source = readFileSync(
@@ -66,7 +67,7 @@ function volumeControl({ failure, desktop = true } = {}) {
   const tree = render()
   function findVolume(node) {
     if (!node || typeof node !== 'object') return
-    if (node.type === 'input' && node.props['aria-label'] === '音量') return node.props
+    if (node.type === 'slider' && node.props['aria-label'] === '音量') return node.props
     for (const child of [node.props?.children].flat()) {
       const match = findVolume(child)
       if (match) return match
@@ -87,7 +88,7 @@ function volumeControl({ failure, desktop = true } = {}) {
 
 test('mute button restores the volume selected before muting', () => {
   const control = volumeControl()
-  control.input.onChange({ target: { value: '0.35' } })
+  control.input.onValueChange(0.35)
   let button = control.render().props.children[0].props
   assert.equal(button['aria-label'], '静音')
   button.onClick()
@@ -101,7 +102,7 @@ test('mute button restores the volume selected before muting', () => {
 test('volume changes reach native playback before pointer/key release, including mute', () => {
   const control = volumeControl()
   for (const value of [0.5, 0.25, 0, 1]) {
-    control.input.onChange({ target: { value: String(value) } })
+    control.input.onValueChange(value)
     assert.equal(control.localVolume, value)
     const call = control.calls.at(-1)
     assert.equal(call?.command, 'player_volume')
@@ -113,7 +114,7 @@ test('volume changes reach native playback before pointer/key release, including
 test('native volume failures reach the playback error handler', async () => {
   const failure = new Error('playback unavailable')
   const control = volumeControl({ failure })
-  control.input.onChange({ target: { value: '0.3' } })
+  control.input.onValueChange(0.3)
   await Promise.resolve()
   assert.deepEqual(control.errors, [failure])
 })

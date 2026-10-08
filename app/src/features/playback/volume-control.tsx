@@ -1,5 +1,6 @@
+import { Slider } from '@/components/ui/slider'
 import { Volume1, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { nativeCall, usePlayer } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
@@ -86,8 +87,8 @@ export function VolumeControl({ onError }: { onError: (error: unknown) => void }
       </ActionButton>
       <div className="volume-card-slot">
         <div className="volume-card glass-surface">
-          <input
-            type="range"
+          <Slider
+            orientation="vertical"
             aria-label="音量"
             aria-orientation="vertical"
             min={0}
@@ -95,9 +96,8 @@ export function VolumeControl({ onError }: { onError: (error: unknown) => void }
             step={0.01}
             value={volume}
             disabled={!isTauri()}
-            onChange={(event) => changeVolume(Number(event.target.value))}
-            style={{ '--volume-progress': `${volume * 100}%` } as CSSProperties}
-            className="music-range volume-range"
+            onValueChange={(value) => changeVolume(Number(value))}
+            className="volume-range"
           />
           <output id="playback-volume-value" className="volume-percentage tabular-nums">
             {Math.round(volume * 100)}%
