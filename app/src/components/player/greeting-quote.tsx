@@ -17,6 +17,6 @@ export function GreetingQuote() {
   return <p className="discover-quote">
     <span className="invisible" aria-hidden="true">{text}</span>
     <span className="sr-only">{text}</span>
-    {quote ? <TypingAnimation key={quote} duration={35} className="discover-quote-typing" aria-hidden="true">{quote}</TypingAnimation> : <span className="discover-quote-typing" aria-hidden="true">{text}</span>}
+    {quote ? <TypingAnimation key={quote} duration={85} className="discover-quote-typing" aria-hidden="true">{quote}</TypingAnimation> : <span className="discover-quote-typing" aria-hidden="true">{text}</span>}
   </p>;
 }
