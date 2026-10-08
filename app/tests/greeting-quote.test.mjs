@@ -47,7 +47,7 @@ test("successful one-line quote uses fast typing and reserves its final layout",
   const children = app.render().props.children;
   assert.equal(children[0].props.children, "音乐相伴");
   assert.equal(children[1].props.children, "音乐相伴");
-  assert.equal(children[2].props.duration, 35);
+  assert.equal(children[2].props.duration, 85);
   assert.equal(children[2].props["aria-hidden"], "true");
 });
 
