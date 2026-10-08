@@ -110,10 +110,10 @@ impl MediaControls {
             .SetPlaybackStatus(status)
             .map_err(|e| e.to_string())?;
         controls
-            .SetIsNextEnabled(state.index.is_some_and(|i| i + 1 < state.queue.len()))
+            .SetIsNextEnabled(state.following(true).is_some())
             .map_err(|e| e.to_string())?;
         controls
-            .SetIsPreviousEnabled(state.index.is_some_and(|i| i > 0) || state.position_ms > 3000)
+            .SetIsPreviousEnabled(state.previous().is_some())
             .map_err(|e| e.to_string())?;
         if let Some(track) = state.current() {
             if self.last_key.as_deref() != Some(&track.key) {

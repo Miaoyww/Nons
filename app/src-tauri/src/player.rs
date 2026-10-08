@@ -409,9 +409,22 @@ impl Actor {
             }
             Command::Jump(index) => self.load(index, true)?,
             Command::Repeat | Command::Shuffle => {
+                // Match the streaming callback's lock order. If it has already
+                // handed over a URI, reload that entry rather than losing the
+                // StreamStart metadata while changing the future play order.
+                let transitioning = {
+                    let mut prepared = self.prepared.lock().map_err(|_| "预加载状态不可用")?;
+                    *prepared = None;
+                    self.armed.lock().map_err(|_| "预加载状态不可用")?.take()
+                };
                 if matches!(command, Command::Shuffle) {
                     self.state.shuffle = !self.state.shuffle;
-                    self.state.reset_shuffle_order(self.state.index);
+                    self.state.reset_shuffle_order(
+                        transitioning
+                            .as_ref()
+                            .map(|next| next.index)
+                            .or(self.state.index),
+                    );
                 } else {
                     self.state.repeat_mode = match self.state.repeat_mode {
                         RepeatMode::Off => RepeatMode::All,
@@ -422,10 +435,11 @@ impl Actor {
                 if let Some(job) = self.next_job.take() {
                     job.abort();
                 }
-                *self.prepared.lock().map_err(|_| "预加载状态不可用")? = None;
-                *self.armed.lock().map_err(|_| "预加载状态不可用")? = None;
                 self.next_attempt = None;
                 self.next_attempts = 0;
+                if let Some(next) = transitioning {
+                    self.load(next.index, self.desired_playing)?;
+                }
                 self.publish();
             }
             Command::Next => {

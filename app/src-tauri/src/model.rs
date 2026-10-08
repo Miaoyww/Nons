@@ -205,6 +205,13 @@ impl PlayerSnapshot {
             return Err("播放列表已变化，请重新选择歌曲".into());
         }
         let removed_current = self.index == Some(index);
+        let shuffle_replacement = (removed_current && self.shuffle)
+            .then(|| {
+                self.following(true)
+                    .filter(|i| *i != index)
+                    .or_else(|| self.previous().filter(|i| *i != index))
+            })
+            .flatten();
         self.queue.remove(index);
         self.shuffle_order.retain(|i| *i != index);
         for entry in &mut self.shuffle_order {
@@ -215,6 +222,12 @@ impl PlayerSnapshot {
         self.index = self.index.and_then(|current| {
             if self.queue.is_empty() {
                 None
+            } else if let Some(replacement) = shuffle_replacement {
+                Some(if replacement > index {
+                    replacement - 1
+                } else {
+                    replacement
+                })
             } else if current > index {
                 Some(current - 1)
             } else {
@@ -367,6 +380,27 @@ mod tests {
         state.repeat_mode = RepeatMode::All;
         assert_eq!(state.following(false), Some(0));
         assert_eq!(state.previous(), Some(0));
+    }
+
+    #[test]
+    fn removing_current_in_shuffle_uses_play_order_instead_of_list_position() {
+        let mut state = PlayerSnapshot {
+            shuffle: true,
+            queue: (0..4).map(track).collect(),
+            index: Some(1),
+            shuffle_order: vec![1, 3, 0, 2],
+            ..Default::default()
+        };
+        state.remove_track(1, "1").unwrap();
+        assert_eq!(state.current().unwrap().key, "3");
+        assert_eq!(state.following(true), Some(0));
+        state.index = Some(1);
+        state.remove_track(1, "2").unwrap();
+        assert_eq!(
+            state.current().unwrap().key,
+            "0",
+            "last shuffled entry falls back to previous"
+        );
     }
     fn track(id: u64) -> Track {
         Track {
