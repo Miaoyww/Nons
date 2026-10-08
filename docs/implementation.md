@@ -19,6 +19,12 @@ pnpm tauri dev
 
 `pnpm tauri dev` 自动为子进程配置项目内 GStreamer 链接库、DLL 和插件路径，并启动 Vite。`pnpm dev` 只启动 WebUI 预览，无需与桌面命令同时运行。也可以在仓库根目录使用 `native.ps1 -Task dev`。
 
+## 格式化与验收
+
+在仓库根目录执行 `pnpm --dir app verify`，按顺序完成格式化、前端测试、生产构建和最终格式检查。Rust 或其他功能仍需补充对应验收；这条命令不替代原生编译与播放验证。单独执行 `pnpm --dir app format` 可格式化代码，`pnpm --dir app format:check` 只检查格式。
+
+Prettier 使用仓库根目录的配置，覆盖应用、插件、共享包、脚本及文档中支持的格式；Rust 使用 rustfmt，覆盖应用与两个插件后端。生成物、锁文件、第三方源码和 Git 忽略的文件由忽略规则排除。
+
 ## Windows 发布打包
 
 在 `app` 目录执行 `pnpm tauri build`。首次构建先运行 `python scripts/bootstrap-gstreamer.py`，已引导的旧工作区也需重跑以补齐 `gstreamer_plugins_libs`。构建脚本使用已有 MSVC `dumpbin` 递归收集 DLL 依赖，生成 `.local/gstreamer-bundle/root`；Windows 专用 Tauri 配置将核心 DLL 放在安装目录的 EXE 旁，音频插件与扫描器位于 `runtime/`。同一布局也复制到 Cargo 输出目录，因此 `target/release/Nons.exe` 可直接启动；分发便携版时必须携带整个运行时，不能只复制 EXE。
@@ -99,7 +105,6 @@ python scripts/create-audio-fixtures.py
 
 AMLL 当前依赖标注 AGPL-3.0-only，项目现有许可证为 GPL-3.0；发布前必须落实相应组合分发许可、源码和 notices。GStreamer 开发运行时含 GPL/restricted 插件，最终随包插件清单需按实际需要和许可核对。
 
-
 ## 音乐库移植与验证（2026-10-07）
 
 - 参考本地 YesPlayMusic `src/views/library.vue`、`CoverRow.vue` 和 `TrackList.vue`，将 Vue 布局适配到 React，并复用现有 AnimateUI 按钮/对话框及 shadcn Select。MV、云盘和自动签到不纳入产品范围。MIT 原始许可证见 `notices/YesPlayMusic-LICENSE.txt`，应用关于页面同时包含署名与完整许可。
@@ -117,7 +122,6 @@ AMLL 当前依赖标注 AGPL-3.0-only，项目现有许可证为 GPL-3.0；发�
 - 标题栏和播放胶囊共用小面积背景模糊；曲库内容可滚动到标题栏和播放栏背后，底部保留滚动留白。没有增加逐帧渲染任务；未测量本次模糊效果的 GPU/内存成本。
 - Windows x64：前端构建、11 项前端测试、17 项原生单元测试和 WAV 无缝衔接通过。HTTP 定位集成测试存在间歇失败：首次两项读取资源失败，单独串行复跑两项通过，再运行完整串行测试时其中一项 seek 失败；本次未修改网络源或该测试。
 - 模拟曲库浏览器验证：键盘聚焦展开、音质菜单保持展开、音量卡片、静音/恢复到 80% 与歌名打开全屏入口通过。模拟检查不等于实际音频、账号音质权限或跨平台验收。
-
 
 ## 在线无缝预读的读取恢复（2026-10-07）
 

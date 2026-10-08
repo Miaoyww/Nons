@@ -10,7 +10,12 @@
     "dev": "pnpm plugins:build && vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "node ../scripts/tauri.mjs"
+    "tauri": "node ../scripts/tauri.mjs",
+    "format:prettier": "prettier --write .. --ignore-unknown --ignore-path ../.gitignore --ignore-path ../.prettierignore",
+    "format:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path ../plugins/netease-island/backend/Cargo.toml && cargo fmt --manifest-path ../plugins/runtime-fixture/backend/Cargo.toml",
+    "format": "pnpm format:prettier && pnpm format:rust",
+    "format:check": "prettier --check .. --ignore-unknown --ignore-path ../.gitignore --ignore-path ../.prettierignore && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo fmt --manifest-path ../plugins/netease-island/backend/Cargo.toml -- --check && cargo fmt --manifest-path ../plugins/runtime-fixture/backend/Cargo.toml -- --check",
+    "verify": "pnpm format && pnpm test && pnpm build && pnpm format:check"
   },
   "dependencies": {
     "@applemusic-like-lyrics/core": "^0.6.0",
@@ -41,6 +46,7 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
     "jsdom": "^30.1.2",
+    "prettier": "3.9.9",
     "typescript": "~6.0.3",
     "vite": "^8.0.16"
   }
