@@ -23,11 +23,27 @@ export function usePlaybackShortcuts(onError: (cause: unknown) => void) {
   useEffect(() => {
     setShortcutDispatcher((name) => action.current(name));
     void initializeShortcuts().catch(onError);
+    let spacePressed = false;
     const keydown = (event: KeyboardEvent) => {
       if (!isTauri() || !isPlaybackSpace(event)) return;
-      event.preventDefault(); action.current("toggle");
+      event.preventDefault(); event.stopImmediatePropagation();
+      spacePressed = true;
+      if (!event.repeat) action.current("toggle");
     };
-    window.addEventListener("keydown", keydown);
-    return () => { window.removeEventListener("keydown", keydown); setShortcutDispatcher(() => {}); };
+    const keyup = (event: KeyboardEvent) => {
+      if (event.code !== "Space" || !spacePressed) return;
+      spacePressed = false;
+      event.preventDefault(); event.stopImmediatePropagation();
+    };
+    const blur = () => { spacePressed = false; };
+    window.addEventListener("keydown", keydown, true);
+    window.addEventListener("keyup", keyup, true);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", keydown, true);
+      window.removeEventListener("keyup", keyup, true);
+      window.removeEventListener("blur", blur);
+      setShortcutDispatcher(() => {});
+    };
   }, [onError]);
 }

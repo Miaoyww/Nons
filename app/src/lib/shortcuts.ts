@@ -74,9 +74,9 @@ export async function saveShortcuts(next: ShortcutSettings, persist = true) {
 }
 
 export function isPlaybackSpace(event: KeyboardEvent) {
-  if (event.code !== "Space" || event.repeat || event.isComposing || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
+  if (event.code !== "Space" || event.isComposing || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
   // A global Space binding already receives the foreground key press.
   if (registered.some((binding) => binding.toLowerCase() === "space")) return false;
   const target = event.target;
-  return !(target instanceof Element && target.closest('input, textarea, select, button, a, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="combobox"], [role="menu"], [role="slider"], [role="checkbox"], [role="radio"], [role="switch"]'));
+  return !(target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="slider"], [role="spinbutton"], [data-shortcut-recorder]'));
 }

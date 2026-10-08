@@ -18,7 +18,7 @@ function session(saved) {
       async unregister(keys) { for (const key of keys) registered.delete(key); },
     },
   });
-  return { ...exports, registered, values, document: dom.window.document };
+  return { ...exports, registered, values, document: dom.window.document, window: dom.window };
 }
 function config(app, bindings, enabled = true) { return { enabled, bindings: { ...app.getShortcutStatus().settings.bindings, ...bindings } }; }
 
@@ -48,13 +48,13 @@ test("registration failure removes partial bindings and restores previous shortc
   assert.deepEqual([...app.registered.keys()], ["Ctrl+Alt+P"]);
 });
 
-test("space excludes editing, interactive controls, modifiers, composition and repeat; global Space avoids duplicate dispatch", async () => {
+test("space excludes editing, modifiers and composition; focused buttons allow playback", async () => {
   const app = session();
   const event = { code: "Space", target: app.document.querySelector("main") };
   assert.equal(app.isPlaybackSpace(event), true);
-  for (const selector of ["input", "button", "span"]) assert.equal(app.isPlaybackSpace({ ...event, target: app.document.querySelector(selector) }), false);
-  for (const key of ["repeat", "isComposing", "defaultPrevented", "ctrlKey", "altKey", "metaKey", "shiftKey"]) assert.equal(app.isPlaybackSpace({ ...event, [key]: true }), false);
-  await app.saveShortcuts(config(app, { toggle: "Space" })); assert.equal(app.isPlaybackSpace(event), false);
+  for (const selector of ["input", "span"]) assert.equal(app.isPlaybackSpace({ ...event, target: app.document.querySelector(selector) }), false);
+  for (const key of ["isComposing", "defaultPrevented", "ctrlKey", "altKey", "metaKey", "shiftKey"]) assert.equal(app.isPlaybackSpace({ ...event, [key]: true }), false);
+  assert.equal(app.isPlaybackSpace({ ...event, target: app.document.querySelector("button") }), true);
 });
 
 test("invalid saved preferences fall back to blank defaults", () => {
@@ -66,6 +66,7 @@ test("invalid saved preferences fall back to blank defaults", () => {
 
 function playbackHarness() {
   const calls = [], likes = [], effects = [], refs = [];
+  const app = session();
   let cursor = 0, dispatch;
   const state = { index: 0, queue: [{ source: { kind: "netease", id: 7 } }], status: "playing", volume: 0.98 };
   const account = { profile: {}, likesReady: true, likedIds: new Set(), toggleLike: async (id) => { likes.push(id); } };
@@ -75,15 +76,15 @@ function playbackHarness() {
     "@tauri-apps/api/core": { isTauri: () => true },
     "@/components/player/account": { useAccount: () => account },
     "@/lib/player": { usePlayer: () => state, nativeCall: async (command, args) => { calls.push({ command, args }); } },
-    "@/lib/shortcuts": { initializeShortcuts: async () => {}, isPlaybackSpace: () => false, setShortcutDispatcher: (fn) => { dispatch = fn; } },
+    "@/lib/shortcuts": { initializeShortcuts: async () => {}, isPlaybackSpace: app.isPlaybackSpace, setShortcutDispatcher: (fn) => { dispatch = fn; } },
   };
   const source = readFileSync(new URL("../src/hooks/use-playback-shortcuts.ts", import.meta.url), "utf8");
   runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
-    exports, require: (name) => modules[name], window: { addEventListener() {}, removeEventListener() {} },
+    exports, require: (name) => modules[name], window: app.window,
   });
   const render = () => { cursor = 0; exports.usePlaybackShortcuts(() => {}); effects.splice(0).forEach((fn) => fn()); };
   render();
-  return { calls, likes, state, account, render, dispatch: (name) => dispatch(name) };
+  return { calls, likes, state, account, render, window: app.window, document: app.document, dispatch: (name) => dispatch(name) };
 }
 
 test("all six playback actions reuse playback commands, clamp volume and favorite only eligible unliked tracks", () => {
@@ -100,4 +101,20 @@ test("all six playback actions reuse playback commands, clamp volume and favorit
   app.state.queue = [{ source: { kind: "local" } }]; app.render(); app.dispatch("like"); assert.deepEqual(app.likes, [7]);
   app.state.index = null; app.render(); const count = app.calls.length;
   app.dispatch("toggle"); app.dispatch("previous"); app.dispatch("next"); assert.equal(app.calls.length, count);
+});
+
+
+test("Space after clicking a button controls playback and prevents button handlers on both keydown and keyup", () => {
+  const app = playbackHarness();
+  const button = app.document.querySelector("button"); button.click(); button.focus();
+  let activations = 0;
+  for (const type of ["keydown", "keyup"]) button.addEventListener(type, () => activations++);
+  for (const [type, repeat] of [["keydown", false], ["keydown", true], ["keyup", false]]) {
+    const event = new app.window.KeyboardEvent(type, { code: "Space", key: " ", repeat, bubbles: true, cancelable: true });
+    button.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true, `${type} should prevent the button default action`);
+  }
+  assert.equal(activations, 0);
+  assert.equal(app.calls.length, 1);
+  assert.equal(app.calls[0].args.action, "pause");
 });
