@@ -19,12 +19,21 @@ pub struct Collection {
     pub creator_id: u64,
     pub liked: bool,
     pub play_count: Option<u64>,
+    pub published_at: Option<u64>,
+    pub artists: Vec<crate::model::MusicCredit>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionPage {
     pub items: Vec<Collection>,
     pub more: bool,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityDetail {
+    pub item: Collection,
+    pub description: Option<String>,
+    pub album_count: Option<u64>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -222,6 +231,87 @@ impl Netease {
         }
     }
 
+    pub async fn music_entity_detail(&self, kind: &str, id: u64) -> AppResult<EntityDetail> {
+        if id == 0 {
+            return Err("音乐 ID 无效".into());
+        }
+        let query = self.query()?.param("id", &id.to_string());
+        let body = match kind {
+            "artist" => checked(self.client.artist_detail(&query)).await?,
+            "album" => checked(self.client.album(&query)).await?,
+            _ => return Err("音乐详情类型无效".into()),
+        };
+        let value = if kind == "artist" {
+            body.pointer("/data/artist")
+        } else {
+            body.get("album")
+        }
+        .ok_or("音乐详情缺失")?;
+        let mut item = collection(value, kind).ok_or("音乐详情 ID 缺失")?;
+        if kind == "artist" {
+            item.cover = value
+                .get("avatar")
+                .or_else(|| value.get("cover"))
+                .and_then(Value::as_str)
+                .unwrap_or(&item.cover)
+                .into();
+            item.track_count = value.get("musicSize").and_then(Value::as_u64).unwrap_or(0);
+        }
+        Ok(EntityDetail {
+            item,
+            description: collection_description(value).or_else(|| {
+                value
+                    .get("briefDesc")
+                    .and_then(Value::as_str)
+                    .map(|v| v.chars().take(16_000).collect())
+            }),
+            album_count: value.get("albumSize").and_then(Value::as_u64),
+        })
+    }
+
+    pub async fn artist_albums(&self, id: u64, offset: u32) -> AppResult<CollectionPage> {
+        if id == 0 || offset > 100_000 {
+            return Err("专辑分页参数无效".into());
+        }
+        let query = self
+            .query()?
+            .param("id", &id.to_string())
+            .param("limit", "30")
+            .param("offset", &offset.to_string());
+        let body = checked(self.client.artist_album(&query)).await?;
+        let items = array(&body, "hotAlbums")
+            .iter()
+            .filter_map(|v| collection(v, "album"))
+            .collect();
+        Ok(CollectionPage {
+            items,
+            more: body.get("more").and_then(Value::as_bool).unwrap_or(false),
+        })
+    }
+
+    pub async fn artist_tracks(&self, id: u64, offset: u32) -> AppResult<TrackPage> {
+        if id == 0 || offset > 100_000 {
+            return Err("歌曲分页参数无效".into());
+        }
+        let query = self
+            .query()?
+            .param("id", &id.to_string())
+            .param("limit", "100")
+            .param("offset", &offset.to_string())
+            .param("order", "hot");
+        let body = checked(self.client.artist_songs(&query)).await?;
+        let songs = array(&body, "songs");
+        Ok(TrackPage {
+            description: None,
+            tracks: songs.iter().filter_map(track_from_json).collect(),
+            total: body
+                .get("total")
+                .and_then(Value::as_u64)
+                .unwrap_or(songs.len() as u64) as usize,
+            more: body.get("more").and_then(Value::as_bool).unwrap_or(false),
+        })
+    }
+
     pub async fn library_history(&self, week: bool, offset: u32) -> AppResult<TrackPage> {
         if offset > 100_000 {
             return Err("听歌记录分页参数无效".into());
@@ -310,7 +400,24 @@ pub(super) fn collection(value: &Value, kind: &str) -> Option<Collection> {
             .unwrap_or_default()
             .into(),
         subtitle,
-        track_count: value.get("trackCount").and_then(Value::as_u64).unwrap_or(0),
+        track_count: value
+            .get("trackCount")
+            .or_else(|| value.get("size"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        published_at: value
+            .get("publishTime")
+            .and_then(Value::as_u64)
+            .filter(|v| *v > 0),
+        artists: array(value, "artists")
+            .iter()
+            .filter_map(|v| {
+                Some(crate::model::MusicCredit {
+                    name: v.get("name")?.as_str()?.into(),
+                    id: v.get("id").and_then(Value::as_u64).filter(|id| *id > 0),
+                })
+            })
+            .collect(),
         creator_id: creator.get("userId").and_then(Value::as_u64).unwrap_or(0),
         liked: value.get("specialType").and_then(Value::as_u64) == Some(5),
         play_count: value
@@ -440,5 +547,20 @@ mod tests {
         assert_eq!(album.subtitle, "Singer");
         assert_eq!(album.cover, "https://example.com/a.jpg");
         assert!(collection(&json!({"id":1,"type":"VIDEO"}), "playlist").is_none());
+    }
+
+    #[test]
+    fn album_cards_keep_release_date_song_count_and_artist_ids() {
+        let album = collection(
+            &json!({"id":2,"size":11,"publishTime":1684771200000u64,
+            "artists":[{"id":9,"name":"A"},{"id":0,"name":"B"}]}),
+            "album",
+        )
+        .unwrap();
+        assert_eq!(album.track_count, 11);
+        assert_eq!(album.published_at, Some(1684771200000));
+        assert_eq!(album.artists[0].id, Some(9));
+        assert_eq!(album.artists[1].id, None);
+        assert_eq!(album.play_count, None);
     }
 }

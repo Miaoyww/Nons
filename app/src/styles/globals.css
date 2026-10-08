@@ -632,3 +632,25 @@
 @container (max-width: 560px) { .discover-shortcuts { grid-template-columns: 1fr; } .discover-fm { gap: 12px; padding: 14px; } .discover-fm-cover { width: 104px; } .discover-fm-controls { gap: 4px; } .discover-fm-play { width: 48px; height: 48px; } .discover-more { gap: 12px; } .discover-tabs { gap: 8px; } .discover-tabs button { padding-inline: 14px; } .discover-playlist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; } }
 @media (hover: none) { .library-cover-play { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .library-cover-open img, .library-cover-play { transition: none; } .library-cover-art:is(:hover, :focus-within) img { transform: none; } .library-cover-play { transform: none; } }
+
+/* Music credits keep each structured artist independently navigable. */
+.music-entity-link { cursor: pointer; border-radius: 3px; text-align: inherit; color: inherit; }
+.music-entity-link:hover { color: var(--library-primary); text-decoration: underline; text-underline-offset: 3px; }
+.music-entity-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.music-credit-separator { opacity: 0.6; }
+.album-card .library-cover-title { padding: 0; width: 100%; }
+.artist-page { container-type: inline-size; }
+.artist-page .library-detail-cover { border-radius: 50%; }
+.artist-releases { margin-block: 48px 40px; }
+.artist-release-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.artist-release { display: flex; align-items: center; gap: 24px; padding: 8px; margin: -8px; border-radius: 16px; cursor: pointer; transition: background-color 150ms; }
+.artist-release:hover { background: var(--muted); }
+.artist-release:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.artist-release-cover { width: clamp(100px, 12vw, 152px); aspect-ratio: 1; flex-shrink: 0; }
+.artist-page .library-tab { cursor: pointer; padding: 8px 16px; border-radius: 8px; }
+.artist-page .library-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@container (max-width: 680px) {
+  .artist-release-grid { grid-template-columns: 1fr; }
+  .artist-release { gap: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .artist-release { transition: none; } }

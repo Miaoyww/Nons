@@ -1,3 +1,4 @@
+import { TrackArtists, TrackAlbum } from "./music-links";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { CalendarDays, ChevronDown, ChevronRight, Disc3, LayoutGrid, ListFilter, Pause, Play, Radio, RefreshCw, SkipForward, Sparkles, Tags, ThumbsDown, UserRound } from "lucide-react";
@@ -98,7 +99,7 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
   }
   return <article className="discover-fm">
     <Cover cover={track?.cover} className="discover-fm-cover" />
-    <div className="discover-fm-info"><h2 title={track?.title}>{track?.title ?? "你的下一首心动"}</h2><p><UserRound aria-hidden="true" /><span>{track?.artist ?? "随你的音乐口味探索"}</span></p><p><Disc3 aria-hidden="true" /><span>{track?.album ?? "私人 FM"}</span></p>
+    <div className="discover-fm-info"><h2 title={track?.title}>{track?.title ?? "你的下一首心动"}</h2><p><UserRound aria-hidden="true" /><span>{track ? <TrackArtists track={track} /> : "随你的音乐口味探索"}</span></p><p><Disc3 aria-hidden="true" /><span>{track ? <TrackAlbum track={track} /> : "私人 FM"}</span></p>
       {error && <div role="alert" className="text-xs text-destructive">{error}<ActionButton variant="ghost" size="sm" onClick={() => setRevision((v) => v + 1)}>重试</ActionButton></div>}
       <div className="discover-fm-bottom"><div className="discover-fm-controls"><ActionButton variant="ghost" size="icon-lg" aria-label="不喜欢这首歌" disabled={busy || !track} onClick={() => void next(true)}><ThumbsDown aria-hidden="true" /></ActionButton><ActionButton className="discover-fm-play" size="icon-lg" aria-label={playing ? "暂停私人 FM" : "播放私人 FM"} disabled={busy || !track} onClick={() => void play()}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</ActionButton><ActionButton variant="ghost" size="icon-lg" aria-label="下一首私人 FM" disabled={busy || !track} onClick={() => void next()}><SkipForward aria-hidden="true" /></ActionButton></div><span className="discover-fm-label"><Radio aria-hidden="true" />私人 FM</span></div>
       {profile && !track && !error && <p role="status" className="mt-2 text-sm text-muted-foreground">{busy ? "正在读取私人 FM…" : <>暂时没有推荐歌曲。<ActionButton variant="ghost" size="sm" onClick={() => setRevision((v) => v + 1)}>重试</ActionButton></>}</p>}

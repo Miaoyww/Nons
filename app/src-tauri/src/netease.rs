@@ -1,7 +1,7 @@
 #[path = "netease_library.rs"]
 mod library;
 #[allow(unused_imports)] // Read-only examples include this module without Tauri command types.
-pub use library::{Collection, CollectionPage, LibrarySummary, TrackPage};
+pub use library::{Collection, CollectionPage, EntityDetail, LibrarySummary, TrackPage};
 #[path = "netease_discovery.rs"]
 mod discovery;
 pub use discovery::PlaylistCategory;
@@ -465,6 +465,19 @@ fn track_from_json(song: &Value) -> Option<Track> {
         key: format!("netease:{id}"),
         title: song.get("name")?.as_str()?.into(),
         aliases: song_aliases(song),
+        artists: artists
+            .iter()
+            .filter_map(|v| {
+                Some(crate::model::MusicCredit {
+                    name: v.get("name")?.as_str()?.into(),
+                    id: v.get("id").and_then(Value::as_u64).filter(|id| *id > 0),
+                })
+            })
+            .collect(),
+        album_id: album
+            .and_then(|v| v.get("id"))
+            .and_then(Value::as_u64)
+            .filter(|id| *id > 0),
         artist: if artist.is_empty() {
             "未知艺术家".into()
         } else {
@@ -494,6 +507,17 @@ fn track_from_json(song: &Value) -> Option<Track> {
 mod tests {
     use super::{account_profile, qr_key, song_aliases, song_information_from_json, Track};
     use serde_json::json;
+
+    #[test]
+    fn song_navigation_keeps_structured_ids_without_splitting_artist_names() {
+        let track = super::track_from_json(&json!({"id":1,"name":"Song",
+            "ar":[{"id":9,"name":"AC/DC"},{"id":10,"name":"B"}],"al":{"id":20,"name":"Album"}}))
+        .unwrap();
+        assert_eq!(track.artists.len(), 2);
+        assert_eq!(track.artists[0].name, "AC/DC");
+        assert_eq!(track.artists[1].id, Some(10));
+        assert_eq!(track.album_id, Some(20));
+    }
 
     #[test]
     fn song_information_keeps_multiple_artist_ids_and_missing_fields_distinct() {

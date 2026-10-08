@@ -571,6 +571,8 @@ mod tests {
             key: "ncm:1".into(),
             title: "晴天".into(),
             aliases: vec![],
+            artists: vec![],
+            album_id: None,
             artist: "周杰伦 / 杨瑞代".into(),
             album: "叶惠美".into(),
             duration_ms: 269000,

@@ -27,6 +27,28 @@ function harness() {
 }
 const summary = { likedPlaylist: { id: 1, kind: "playlist" }, likedTracks: [], likedError: null };
 
+test("artist and album reads coalesce while preserving entity, type and page boundaries", async () => {
+  const { player, requests } = harness();
+  for (const [command, args] of [
+    ["music_entity_detail", { kind: "artist", id: 1 }],
+    ["music_entity_detail", { kind: "album", id: 1 }],
+    ["artist_tracks", { id: 1, offset: 0 }],
+    ["artist_tracks", { id: 1, offset: 100 }],
+    ["artist_albums", { id: 1, offset: 0 }],
+    ["artist_albums", { id: 2, offset: 0 }],
+    ["artist_albums", { id: 1, offset: 30 }],
+  ]) {
+    const before = requests.length;
+    const first = player.nativeCall(command, args);
+    const duplicate = player.nativeCall(command, args);
+    assert.equal(requests.length, before + 1);
+    requests.at(-1).resolve({ items: [], more: false });
+    assert.equal(await first, await duplicate);
+    await player.nativeCall(command, args);
+    assert.equal(requests.length, before + 1);
+  }
+});
+
 test("discovery reads coalesce and keep category, order and page results separate", async () => {
   const { player, requests } = harness();
   const args = { section: "square", category: "日语", order: "hot", offset: 0 };

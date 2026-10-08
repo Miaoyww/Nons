@@ -29,7 +29,7 @@ function lyricControl({ failure, desktop = true } = {}) {
         return failure ? Promise.reject(failure) : Promise.resolve();
       },
     },
-    "./action-button": {}, "./cover": {}, "./album-background": {}, "./now-playing-controls": {}, "./now-playing-menu": {},
+    "./music-links": {}, "./action-button": {}, "./cover": {}, "./album-background": {}, "./now-playing-controls": {}, "./now-playing-menu": {},
   };
   const source = readFileSync(new URL("../src/components/player/lyrics-view.tsx", import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, {

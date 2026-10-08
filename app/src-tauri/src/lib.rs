@@ -289,6 +289,29 @@ async fn library_tracks(
 }
 
 #[tauri::command]
+async fn music_entity_detail(
+    kind: String,
+    id: u64,
+    backend: State<'_, Backend>,
+) -> AppResult<netease::EntityDetail> {
+    backend.netease.music_entity_detail(&kind, id).await
+}
+#[tauri::command]
+async fn artist_albums(
+    id: u64,
+    offset: u32,
+    backend: State<'_, Backend>,
+) -> AppResult<CollectionPage> {
+    backend.netease.artist_albums(id, offset).await
+}
+#[tauri::command]
+async fn artist_tracks(id: u64, offset: u32, backend: State<'_, Backend>) -> AppResult<TrackPage> {
+    let mut page = backend.netease.artist_tracks(id, offset).await?;
+    save_library_tracks(&mut page.tracks, &backend)?;
+    Ok(page)
+}
+
+#[tauri::command]
 async fn library_history(
     week: bool,
     offset: u32,
@@ -684,6 +707,9 @@ pub fn run() {
             discovery_tracks,
             discovery_dislike,
             library_tracks,
+            music_entity_detail,
+            artist_albums,
+            artist_tracks,
             library_history,
             play_library_collection,
             create_library_playlist,

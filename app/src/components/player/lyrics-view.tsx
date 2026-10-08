@@ -1,3 +1,4 @@
+import { TrackArtists } from "./music-links";
 import { LyricPlayer, type LyricPlayerRef } from "@applemusic-like-lyrics/react";
 import type { LyricLine } from "@applemusic-like-lyrics/core";
 import "@applemusic-like-lyrics/core/style.css";
@@ -151,7 +152,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
     <div className={`now-playing-layout relative min-h-0 flex-1 ${showLyrics ? "has-lyrics" : ""}`}>
     <div className="now-playing-details flex min-h-0 min-w-0 flex-col justify-center gap-5 overflow-y-auto">
       <div className="now-playing-cover-slot"><Cover cover={track?.cover} className="now-playing-cover aspect-square rounded-xl shadow-2xl" /></div>
-      <div className="flex shrink-0 items-start justify-between gap-4"><div className="min-w-0"><h1 className="truncate text-xl font-semibold tracking-tight">{track?.title ?? "让音乐开始"}</h1><p className="mt-1 truncate text-muted-foreground">{track?.artist ?? "选择一首喜欢的音乐"}</p></div><NowPlayingMenu disabled={!track} source={source} /></div>
+      <div className="flex shrink-0 items-start justify-between gap-4"><div className="min-w-0"><h1 className="truncate text-xl font-semibold tracking-tight">{track?.title ?? "让音乐开始"}</h1><p className="mt-1 truncate text-muted-foreground">{track ? <TrackArtists track={track} /> : "选择一首喜欢的音乐"}</p></div><NowPlayingMenu disabled={!track} source={source} /></div>
       <NowPlayingControls onQueue={onQueue} onError={(cause) => setError(errorText(cause))} />
       {track?.source.kind === "local" && <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">匹配在线歌词</summary><form className="mt-3 space-y-2" onSubmit={(event) => {
         event.preventDefault(); const id = Number(binding);

@@ -4,8 +4,10 @@ import { useSyncExternalStore } from "react";
 import { cachedCommands, coverCache, invalidateNativeCache, requestCache, requestKey } from "./runtime-cache";
 
 export type TrackSource = { kind: "netease"; id: number } | { kind: "local"; path: string; neteaseId: number | null };
+export interface MusicCredit { name: string; id?: number | null }
 export interface Track {
   key: string; title: string; aliases?: string[]; artist: string; album: string;
+  artists?: MusicCredit[]; albumId?: number | null;
   durationMs: number; cover: string; source: TrackSource;
 }
 export type PlaybackStatus = "stopped" | "loading" | "playing" | "paused" | "buffering" | "error";

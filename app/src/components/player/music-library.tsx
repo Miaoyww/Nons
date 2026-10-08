@@ -1,3 +1,5 @@
+import { TrackArtists } from "./music-links";
+import { AlbumCard } from "./album-card";
 import { PlaylistCard } from "./playlist-card";
 import { CollectionHeader } from "./collection-header";
 import { SongContextMenu } from "./song-actions";
@@ -80,7 +82,7 @@ function LyricExcerpt({ track }: { track?: Track }) {
 }
 
 function CollectionCards({ items, busy, onOpen, onPlay }: { items: MusicCollection[]; busy: boolean; onOpen: (item: MusicCollection) => void; onPlay: (item: MusicCollection) => void }) {
-  return <div className="library-cover-grid">{items.map((item) => <PlaylistCard key={`${item.kind}:${item.id}`} item={item} busy={busy} onOpen={onOpen} onPlay={onPlay} />)}</div>;
+  return <div className={items[0]?.kind === "album" ? "discover-playlist-grid" : "library-cover-grid"}>{items.map((item) => item.kind === "album" ? <AlbumCard key={`${item.kind}:${item.id}`} item={item} busy={busy} onOpen={onOpen} onPlay={onPlay} /> : <PlaylistCard key={`${item.kind}:${item.id}`} item={item} busy={busy} onOpen={onOpen} onPlay={onPlay} />)}</div>;
 }
 
 export default function MusicLibrary({ onError, onNotice }: { onError: (cause: unknown) => void; onNotice: (message: string) => void }) {
@@ -181,7 +183,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
           {!profile && !accountLoading ? <div className="library-empty"><p>登录网易云音乐，找回你喜欢的旋律。</p><LoginDialog /></div>
             : summaryError || summary?.likedError ? <div role="alert" className="library-empty text-destructive"><p>{summaryError ?? summary?.likedError}</p>{retry}</div>
             : summaryBusy ? <div role="status" className="library-song-grid">{Array.from({ length: 12 }, (_, index) => <div key={index} className="library-song-skeleton"><span /><div><span /><span /></div></div>)}</div>
-            : summary?.likedTracks.length ? <div className="library-song-grid">{summary.likedTracks.map((track) => <SongContextMenu key={track.key} track={track} busy={playing} onPlay={() => { if (liked) void playCollection(liked, track.key); }} removeLabel="从歌单删除" onRemove={liked && liked.creatorId === profile?.userId ? () => removeFromPlaylist(liked, track) : undefined} render={<button className="library-song" data-current={track.key === currentKey} disabled={playing} onClick={() => { if (liked) void playCollection(liked, track.key); }} aria-label={`播放 ${track.title}`} title={`${track.title} · ${track.artist}`} />}><Cover cover={track.cover} className="size-10" /><div className="min-w-0"><p className="truncate font-semibold"><TrackTitle track={track} /></p><p className="truncate text-xs opacity-75">{track.artist}</p></div></SongContextMenu>)}</div>
+            : summary?.likedTracks.length ? <div className="library-song-grid">{summary.likedTracks.map((track) => <SongContextMenu key={track.key} track={track} busy={playing} onPlay={() => { if (liked) void playCollection(liked, track.key); }} removeLabel="从歌单删除" onRemove={liked && liked.creatorId === profile?.userId ? () => removeFromPlaylist(liked, track) : undefined} render={<div role="group" onClick={(event) => { if (!playing && liked && !(event.target as HTMLElement).closest("button")) void playCollection(liked, track.key); }} onKeyDown={(event) => { if (!playing && liked && event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); void playCollection(liked, track.key); } }} className="library-song" data-current={track.key === currentKey} title={`${track.title} · ${track.artist}`} />}><button type="button" disabled={playing} aria-label={`播放 ${track.title}`} onClick={() => { if (liked) void playCollection(liked, track.key); }}><Cover cover={track.cover} className="size-10" /></button><div className="min-w-0"><button type="button" className="block max-w-full truncate text-left font-semibold" disabled={playing} onClick={() => { if (liked) void playCollection(liked, track.key); }}><TrackTitle track={track} /></button><p className="truncate text-xs opacity-75"><TrackArtists track={track} /></p></div></SongContextMenu>)}</div>
             : <p className="library-empty text-muted-foreground">喜欢的歌曲会出现在这里。</p>}
         </div>
       </div>

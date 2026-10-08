@@ -1,3 +1,4 @@
+import { TrackArtists } from "./music-links";
 import { Popover } from "@base-ui/react/popover";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowRight, ListMusic, Play } from "lucide-react";
@@ -11,9 +12,9 @@ import { QueueControls } from "./queue-controls";
 import { TrackTitle, trackDisplayTitle } from "./track-title";
 
 export const QueueTrackCard = memo(function QueueTrackCard({ track, current, onPlay, onRemove }: { track: Track; current: boolean; onPlay: () => void; onRemove: () => Promise<unknown> }) {
-  return <SongContextMenu track={track} onPlay={onPlay} onRemove={onRemove} render={<button type="button" className="queue-track-card" data-current={current} aria-current={current ? "true" : undefined} aria-label={`${current ? "当前播放：" : "播放："}${trackDisplayTitle(track)}，${track.artist}`} disabled={!isTauri()} onClick={onPlay} />}>
-    <span className="queue-track-cover"><Cover cover={track.cover} className="size-11 shrink-0 rounded-lg" /><span className="queue-track-cover-play"><Play aria-hidden="true" /></span></span>
-    <span className="min-w-0 flex-1 text-left"><span className="block truncate font-medium" title={trackDisplayTitle(track)}><TrackTitle track={track} /></span><span className="mt-1 block truncate text-sm text-muted-foreground" title={track.artist}>{track.artist}</span></span>
+  return <SongContextMenu track={track} onPlay={onPlay} onRemove={onRemove} render={<div role="group" onClick={(event) => { if (isTauri() && !(event.target as HTMLElement).closest("button")) onPlay(); }} onKeyDown={(event) => { if (isTauri() && event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); onPlay(); } }} className="queue-track-card" data-current={current} aria-current={current ? "true" : undefined} aria-label={`${current ? "当前播放：" : "播放："}${trackDisplayTitle(track)}，${track.artist}`} />}>
+    <button type="button" disabled={!isTauri()} aria-label={`播放 ${track.title}`} onClick={onPlay} className="queue-track-cover"><Cover cover={track.cover} className="size-11 shrink-0 rounded-lg" /><span className="queue-track-cover-play"><Play aria-hidden="true" /></span></button>
+    <span className="min-w-0 flex-1 text-left"><button type="button" disabled={!isTauri()} onClick={onPlay} className="block w-full truncate text-left font-medium" title={trackDisplayTitle(track)}><TrackTitle track={track} /></button><span className="mt-1 block truncate text-sm text-muted-foreground" title={track.artist}><TrackArtists track={track} /></span></span>
     <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{formatTime(track.durationMs)}</span>
   </SongContextMenu>;
 });

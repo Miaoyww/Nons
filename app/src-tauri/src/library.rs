@@ -151,6 +151,8 @@ fn read_track(
     let netease_id = store.track(&key).ok().and_then(|t| t.netease_id());
     let track = Track {
         aliases: Vec::new(),
+        artists: Vec::new(),
+        album_id: None,
         key: key.clone(),
         title: tag
             .and_then(|t| t.title())
