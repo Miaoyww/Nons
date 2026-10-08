@@ -449,8 +449,9 @@
 .glass-surface {
   background: color-mix(in oklch, var(--background) 60%, transparent);
   border: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
-  backdrop-filter: blur(24px);
+  /* Keep the standard property last so production optimization preserves it. */
   -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
   box-shadow: 0 12px 40px rgb(0 0 0 / 14%);
 }
 .music-workspace { padding-bottom: 0; }
