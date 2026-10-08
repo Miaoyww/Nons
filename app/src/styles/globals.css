@@ -454,7 +454,7 @@
   box-shadow: 0 12px 40px rgb(0 0 0 / 14%);
 }
 .music-workspace { padding-bottom: 0; }
-.floating-playback { position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; justify-content: flex-end; gap: 12px; width: min(440px, calc(100% - 32px)); pointer-events: none; }
+.floating-playback { position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; justify-content: center; gap: 12px; width: min(440px, calc(100% - 32px)); pointer-events: none; }
 .playback-capsule { position: relative; z-index: 1; isolation: isolate; display: flex; align-items: center; gap: 12px; width: 440px; max-width: min(648px, calc(100vw - 32px)); flex-shrink: 0; padding: 10px 16px; border-radius: 20px; pointer-events: auto; transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1), padding 260ms, gap 260ms, background-color 160ms; }
 .playback-capsule:is(:has(.capsule-main:is(:hover, :focus-within)), :has(.capsule-main [data-slot="select-trigger"][aria-expanded="true"])) { width: 648px; }
 .capsule-main { display: flex; flex: 1; align-items: center; min-width: 0; gap: 0; transition: gap 260ms; }
