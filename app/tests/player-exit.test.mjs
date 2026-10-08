@@ -21,8 +21,9 @@ function find(node, type) {
   if (node.type === type) return node;
   for (const child of [node.props?.children].flat()) { const match = find(child, type); if (match) return match; }
 }
-function harness() {
+function harness(initialMode = "collapsible") {
   let phase;
+  let barMode = initialMode;
   const App = load("../src/App.tsx", {
     react: { useState(initial) { phase ??= initial; return [phase, (next) => { phase = typeof next === "function" ? next(phase) : next; }]; } },
     "motion/react": { MotionConfig: "MotionConfig" },
@@ -38,6 +39,8 @@ function harness() {
     "@tauri-apps/api/core": { isTauri: () => false }, "@tauri-apps/plugin-dialog": {}, "lucide-react": {},
     "@tauri-apps/api/event": {}, "@/components/settings/folder-manager": { FolderManager: "FolderManager" }, "@/lib/runtime-cache": {},
     "motion/react": { AnimatePresence: "AnimatePresence" },
+    "@/hooks/use-playback-bar-mode": { usePlaybackBarMode: () => [barMode, () => {}] },
+    "./persistent-playback-bar": { PersistentPlaybackBar: "PersistentPlaybackBar" },
     "@/hooks/use-playback-shortcuts": { usePlaybackShortcuts() {} },
     "@/lib/player": { usePlayer: () => ({ index: null, queue: [] }) },
     "./action-button": { ActionButton: "ActionButton" }, "./playback-bar": { PlaybackBar: "PlaybackBar" },
@@ -50,9 +53,9 @@ function harness() {
   function render() {
     const props = find(App(), "MusicWorkspace").props;
     const workspace = MusicWorkspace(props);
-    return { ...props, bar: find(workspace, "PlaybackBar"), exitComplete: find(workspace, "AnimatePresence").props.onExitComplete };
+    return { ...props, bar: find(workspace, "PlaybackBar") ?? find(workspace, "PersistentPlaybackBar"), exitComplete: find(workspace, "AnimatePresence").props.onExitComplete };
   }
-  return { render };
+  return { render, setMode: (mode) => { barMode = mode; } };
 }
 
 test("playback bar waits for the actual fullscreen exit completion", () => {
@@ -77,4 +80,22 @@ test("a delayed exit callback cannot show the bar after reopening fullscreen", (
   closing.exitComplete();
   assert.equal(render().nowPlaying, true);
   assert.equal(render().bar, undefined);
+});
+
+
+test("persistent and hidden modes respect fullscreen exit ownership and live settings", () => {
+  const app = harness("persistent");
+  assert.equal(app.render().bar.type, "PersistentPlaybackBar");
+  app.render().onNowPlayingChange(true);
+  assert.equal(app.render().bar, undefined);
+  app.render().onNowPlayingChange(false);
+  const closing = app.render();
+  assert.equal(closing.bar, undefined);
+  app.setMode("off");
+  closing.exitComplete();
+  assert.equal(app.render().bar, undefined);
+  app.setMode("collapsible");
+  assert.equal(app.render().bar.type, "PlaybackBar");
+  app.setMode("persistent");
+  assert.equal(app.render().bar.type, "PersistentPlaybackBar");
 });

@@ -710,6 +710,10 @@
 .local-result-section + .local-result-section { margin-top: 36px; }
 @media (max-width: 850px) { .local-search-results { gap: 16px; } .local-search-nav { width: 112px; } .local-search-nav button { padding-inline: 8px; } }
 
+.music-workspace[data-playback-bar="persistent"] .music-page { --music-page-bottom: 144px; }
+.music-workspace[data-playback-bar="persistent"] #music-content > .relative.overflow-auto { padding-bottom: 144px; }
+.music-workspace[data-playback-bar="off"] .music-page { --music-page-bottom: 32px; }
+.music-workspace[data-playback-bar="off"] #music-content > .relative.overflow-auto { padding-bottom: 32px; }
 /* Persistent player shares the existing glass and fullscreen transport. */
 .persistent-playback { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 20; width: min(1120px, calc(100% - 64px)); }
 .persistent-playback-surface { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 24px; padding: 16px 20px; border-radius: 20px; }

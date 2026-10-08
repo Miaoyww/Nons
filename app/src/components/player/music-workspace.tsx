@@ -10,6 +10,8 @@ import { AnimatePresence } from "motion/react";
 import { connectPlayer, errorText, nativeCall, usePlayer } from "@/lib/player";
 import { ActionButton } from "./action-button";
 import { PlaybackBar } from "./playback-bar";
+import { PersistentPlaybackBar } from "./persistent-playback-bar";
+import { usePlaybackBarMode } from "@/hooks/use-playback-bar-mode";
 import type { PlaybackNoticeMessage } from "./playback-notice";
 import { useMusicNavigation } from "./music-navigation";
 import { QualitySelect } from "./music-options";
@@ -28,6 +30,7 @@ interface ImportReport { imported: number; skipped: number; errors: string[] }
 
 export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, onPlayerExitComplete }: { nowPlaying: boolean; playerVisible: boolean; onNowPlayingChange: (value: boolean) => void; onPlayerExitComplete: () => void }) {
   const state = usePlayer();
+  const [barMode] = usePlaybackBarMode();
   const { page, navigate } = useMusicNavigation();
   const view = page.view;
   const previousPage = useRef(page);
@@ -98,7 +101,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
     finally { setImporting(false); }
   }
 
-  return <CollectionActionsProvider onError={onError} onNotice={showNotice}><SongActionsProvider onError={onError} onNotice={showNotice}><div className="music-workspace flex min-h-0 flex-1 flex-col">
+  return <CollectionActionsProvider onError={onError} onNotice={showNotice}><SongActionsProvider onError={onError} onNotice={showNotice}><div className="music-workspace flex min-h-0 flex-1 flex-col" data-playback-bar={barMode}>
     <Suspense fallback={<div role="status" className="m-auto">正在加载播放器…</div>}>
       <AnimatePresence onExitComplete={onPlayerExitComplete}>
         {nowPlaying && <LyricsView key="now-playing" onQueue={openQueue} />}
@@ -111,6 +114,6 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
         {(view === "artist" || view === "album") && page.collection ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐详情…</p>}>{view === "artist" ? <ArtistPage key={page.collection.id} collection={page.collection} onError={onError} onNotice={showNotice} /> : <AlbumPage key={page.collection.id} collection={page.collection} onError={onError} onNotice={showNotice} />}</Suspense> : view === "plugin" ? <PluginPageHost path={page.query} /> : view === "queue" ? <QueuePage key={queueVisit} onError={onError} /> : view === "search" ? <Suspense fallback={<p role="status" className="m-auto">正在加载搜索页…</p>}><SearchPage key={page.query} onError={onError} onNotice={showNotice} /></Suspense> : view === "discover" ? <Suspense fallback={<p role="status" className="m-auto">正在加载发现页…</p>}><Discovery onError={onError} onNotice={showNotice} /></Suspense> : view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} onNotice={showNotice} /></Suspense> : <Suspense fallback={<p role="status" className="m-auto">正在加载本地音乐…</p>}><LocalPage refresh={refresh} importing={importing} onImport={() => void importMusic(false)} onError={onError} onNotice={showNotice} /></Suspense>}
       </main>
     </div>
-    {!playerVisible && <PlaybackBar notice={notice} qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={openQueue} onError={onError} />}
+    {!playerVisible && (barMode === "persistent" ? <PersistentPlaybackBar notice={notice} onLyrics={() => onNowPlayingChange(true)} onQueue={openQueue} onError={onError} /> : barMode === "collapsible" ? <PlaybackBar notice={notice} qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={openQueue} onError={onError} /> : null)}
   </div></SongActionsProvider></CollectionActionsProvider>;
 }

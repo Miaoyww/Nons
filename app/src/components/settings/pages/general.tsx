@@ -3,6 +3,8 @@ import type { Theme } from "@/hooks/use-theme";
 import { SettingsCard } from "../settings-card";
 import { FontPicker } from "../font-picker";
 import { useFontSettings } from "@/hooks/use-font-settings";
+import { usePlaybackBarMode, type PlaybackBarMode } from "@/hooks/use-playback-bar-mode";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 const themes = [
   { value: "light", label: "浅色", icon: Sun },
@@ -12,6 +14,7 @@ const themes = [
 
 export function GeneralPage({ theme, onThemeChange }: { theme: Theme; onThemeChange: (theme: Theme) => void }) {
   const { fonts, setFont } = useFontSettings();
+  const [barMode, setBarMode] = usePlaybackBarMode();
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -30,6 +33,13 @@ export function GeneralPage({ theme, onThemeChange }: { theme: Theme; onThemeCha
             </label>
           ))}
         </div>
+      </SettingsCard>
+      <SettingsCard title="播放栏" description="选择底部播放栏的显示方式。关闭后仍可使用全屏播放器与快捷键。">
+        <ToggleGroup aria-label="播放栏显示方式" value={[barMode]} onValueChange={(values) => { if (values[0]) setBarMode(values[0] as PlaybackBarMode); }}>
+          <ToggleGroupItem value="collapsible">折叠式</ToggleGroupItem>
+          <ToggleGroupItem value="persistent">常驻式</ToggleGroupItem>
+          <ToggleGroupItem value="off">关闭</ToggleGroupItem>
+        </ToggleGroup>
       </SettingsCard>
       <SettingsCard title="应用字体" description="选择已安装字体，缺失字符使用系统后备字体。">
         <FontPicker label="应用字体" value={fonts.app} onChange={(family) => setFont("app", family)} defaultLabel="应用默认字体" />

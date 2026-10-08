@@ -1,0 +1,20 @@
+import { useSyncExternalStore } from "react";
+
+export type PlaybackBarMode = "collapsible" | "persistent" | "off";
+const storageKey = "nons-playback-bar-mode";
+const listeners = new Set<() => void>();
+let mode: PlaybackBarMode = "collapsible";
+function isMode(value: unknown): value is PlaybackBarMode {
+  return value === "collapsible" || value === "persistent" || value === "off";
+}
+try { const saved = localStorage.getItem(storageKey); if (isMode(saved)) mode = saved; } catch { /* Storage is optional. */ }
+const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
+function setMode(value: PlaybackBarMode) {
+  if (!isMode(value) || value === mode) return;
+  mode = value;
+  try { localStorage.setItem(storageKey, value); } catch { /* Keep the current session usable. */ }
+  listeners.forEach((notify) => notify());
+}
+export function usePlaybackBarMode() {
+  return [useSyncExternalStore(subscribe, () => mode), setMode] as const;
+}
