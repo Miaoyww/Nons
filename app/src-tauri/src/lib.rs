@@ -374,6 +374,51 @@ async fn create_library_playlist(
 }
 
 #[tauri::command]
+async fn append_library_collection(
+    kind: String,
+    id: u64,
+    backend: State<'_, Backend>,
+) -> AppResult<bool> {
+    let mut page = backend.netease.library_queue(&kind, id).await?;
+    if page.tracks.is_empty() {
+        return Err("这个收藏还没有可播放的歌曲".into());
+    }
+    save_library_tracks(&mut page.tracks, &backend)?;
+    backend.player.send(Command::PlayNext(page.tracks))?;
+    Ok(page.more)
+}
+
+#[tauri::command]
+async fn add_playlist_song(
+    playlist_id: u64,
+    song_id: u64,
+    backend: State<'_, Backend>,
+) -> AppResult<()> {
+    backend
+        .netease
+        .add_playlist_song(playlist_id, song_id)
+        .await
+}
+
+#[tauri::command]
+async fn update_library_playlist(
+    id: u64,
+    name: String,
+    description: String,
+    backend: State<'_, Backend>,
+) -> AppResult<()> {
+    backend
+        .netease
+        .update_library_playlist(id, &name, &description)
+        .await
+}
+
+#[tauri::command]
+async fn delete_library_playlist(id: u64, backend: State<'_, Backend>) -> AppResult<()> {
+    backend.netease.delete_library_playlist(id).await
+}
+
+#[tauri::command]
 async fn local_music(
     keyword: String,
     offset: u32,
@@ -720,6 +765,10 @@ pub fn run() {
             library_history,
             play_library_collection,
             create_library_playlist,
+            append_library_collection,
+            add_playlist_song,
+            update_library_playlist,
+            delete_library_playlist,
             local_music,
             import_music,
             local_cache_status,

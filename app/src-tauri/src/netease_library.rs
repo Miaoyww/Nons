@@ -53,6 +53,109 @@ pub struct LibrarySummary {
 }
 
 impl Netease {
+    async fn owned_playlist(&self, id: u64) -> AppResult<Value> {
+        if id == 0 {
+            return Err("歌单 ID 无效".into());
+        }
+        let profile = self.library_account().await?;
+        let body = checked(
+            self.client
+                .playlist_detail(&self.query()?.param("id", &id.to_string())),
+        )
+        .await?;
+        let playlist = body.get("playlist").ok_or("歌单详情缺失")?;
+        if playlist.pointer("/creator/userId").and_then(Value::as_u64) != Some(profile.user_id) {
+            return Err("只能编辑自己创建的歌单".into());
+        }
+        Ok(playlist.clone())
+    }
+
+    pub async fn add_playlist_song(&self, playlist_id: u64, song_id: u64) -> AppResult<()> {
+        if song_id == 0 {
+            return Err("歌曲 ID 无效".into());
+        }
+        let playlist = self.owned_playlist(playlist_id).await?;
+        if playlist.get("specialType").and_then(Value::as_u64) == Some(5) {
+            return self.set_song_liked(song_id, true).await;
+        }
+        checked(
+            self.client.playlist_tracks(
+                &self
+                    .query()?
+                    .param("op", "add")
+                    .param("pid", &playlist_id.to_string())
+                    .param("tracks", &song_id.to_string()),
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn update_library_playlist(
+        &self,
+        id: u64,
+        name: &str,
+        description: &str,
+    ) -> AppResult<()> {
+        if name.trim().is_empty() || name.chars().count() > 40 || description.chars().count() > 1000
+        {
+            return Err("歌单名称须为 1–40 个字符，简介最多 1000 个字符".into());
+        }
+        let playlist = self.owned_playlist(id).await?;
+        if playlist.get("specialType").and_then(Value::as_u64) == Some(5) {
+            return Err("不能编辑我喜欢的音乐的信息".into());
+        }
+        // The SDK batch endpoint interpolates JSON strings; escape user text and preserve tags.
+        let escape = |text: &str| -> AppResult<String> {
+            let encoded = serde_json::to_string(text).map_err(|e| e.to_string())?;
+            Ok(encoded[1..encoded.len() - 1].to_string())
+        };
+        let tags = array(&playlist, "tags")
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join(";");
+        let body = checked(
+            self.client.playlist_update(
+                &self
+                    .query()?
+                    .param("id", &id.to_string())
+                    .param("name", &escape(name.trim())?)
+                    .param("desc", &escape(description)?)
+                    .param("tags", &escape(&tags)?),
+            ),
+        )
+        .await?;
+        for key in [
+            "/api/playlist/desc/update",
+            "/api/playlist/tags/update",
+            "/api/playlist/update/name",
+        ] {
+            if body
+                .get(key)
+                .and_then(|v| v.get("code"))
+                .and_then(Value::as_u64)
+                != Some(200)
+            {
+                return Err("部分歌单信息未能保存，请刷新后重试".into());
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn delete_library_playlist(&self, id: u64) -> AppResult<()> {
+        let playlist = self.owned_playlist(id).await?;
+        if playlist.get("specialType").and_then(Value::as_u64) == Some(5) {
+            return Err("不能删除我喜欢的音乐".into());
+        }
+        checked(
+            self.client
+                .playlist_delete(&self.query()?.param("id", &id.to_string())),
+        )
+        .await?;
+        Ok(())
+    }
+
     async fn library_account(&self) -> AppResult<AccountProfile> {
         self.profile()
             .await?

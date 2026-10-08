@@ -1,3 +1,4 @@
+import { CollectionContextMenu } from "./collection-actions";
 import { Play } from "lucide-react";
 import { ActionButton } from "./action-button";
 import { Cover } from "./cover";
@@ -10,7 +11,7 @@ export function formatPlayCount(value: number) {
 }
 
 export function PlaylistCard({ item, busy, showPlayCount = true, onOpen, onPlay }: { item: MusicCollection; busy: boolean; showPlayCount?: boolean; onOpen: (item: MusicCollection) => void; onPlay: (item: MusicCollection) => void }) {
-  return <article className="library-cover-card">
+  return <CollectionContextMenu item={item} busy={busy} render={<article className="library-cover-card" />}>
     <div className="library-cover-art" data-round={item.kind === "artist"}>
       <button className="library-cover-open" onClick={() => onOpen(item)} aria-label={`打开 ${item.name}`}><Cover cover={item.cover} className="aspect-square w-full" /></button>
       {showPlayCount && item.playCount != null && <span className="playlist-play-count" aria-label={`${item.playCount} 次播放`}><Play aria-hidden="true" />{formatPlayCount(item.playCount)}</span>}
@@ -18,5 +19,5 @@ export function PlaylistCard({ item, busy, showPlayCount = true, onOpen, onPlay 
     </div>
     <button className="library-cover-title" onClick={() => onOpen(item)} title={item.name}>{item.name}</button>
     {item.subtitle && <p className="library-cover-subtitle" title={item.subtitle}>{item.kind === "playlist" ? "by " : ""}{item.subtitle}</p>}
-  </article>;
+  </CollectionContextMenu>;
 }

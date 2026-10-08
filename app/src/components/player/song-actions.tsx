@@ -1,5 +1,6 @@
+import { PlaylistPicker } from "./playlist-picker";
 import { ContextMenu } from "@base-ui/react/context-menu";
-import { ChevronRight, Copy, Heart, Info, ListPlus, Play, Share2, Trash2 } from "lucide-react";
+import { ChevronRight, Copy, FolderPlus, Heart, Info, ListPlus, Play, Share2, Trash2 } from "lucide-react";
 import { createContext, useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { nativeCall, formatTime, errorText, type Track } from "@/lib/player";
@@ -15,10 +16,11 @@ export function songLink(track: Track) {
 export function songCopyName(track: Track) { return `${track.title} - ${track.artist}`; }
 
 const SongActionsContext = createContext<{
-  details: (track: Track) => void; run: (operation: () => void | Promise<unknown>, notice?: string) => void; copy: (text: string) => void;
+  collect: (track: Track) => void; details: (track: Track) => void; run: (operation: () => void | Promise<unknown>, notice?: string) => void; copy: (text: string) => void;
 } | null>(null);
 
 export function SongActionsProvider({ children, onError, onNotice }: { children: ReactNode; onError: (error: unknown) => void; onNotice: (message: string) => void }) {
+  const [collectTrack, setCollectTrack] = useState<Track>();
   const [track, setTrack] = useState<Track>();
   const [information, setInformation] = useState<SongInformation>();
   const [busy, setBusy] = useState(false);
@@ -59,8 +61,9 @@ export function SongActionsProvider({ children, onError, onNotice }: { children:
     const [label, value] = fields[index];
     return <div className="song-information-field" key={label}><label htmlFor={`song-information-${index}`}>{label}</label><div><input id={`song-information-${index}`} readOnly value={value || "未知"} /><ActionButton variant="ghost" size="icon-sm" aria-label={`复制${label}`} disabled={!value} onClick={() => void copy(value)}><Copy aria-hidden="true" /></ActionButton></div></div>;
   }
-  return <SongActionsContext.Provider value={{ details: (value) => { setRetry(0); setTrack(value); }, run, copy: (text) => { void copy(text); } }}>
+  return <SongActionsContext.Provider value={{ collect: setCollectTrack, details: (value) => { setRetry(0); setTrack(value); }, run, copy: (text) => { void copy(text); } }}>
     {children}
+    <PlaylistPicker track={collectTrack} onClose={() => setCollectTrack(undefined)} onNotice={onNotice} />
     <Dialog open={!!track} onOpenChange={(open) => { if (!open) setTrack(undefined); }}>
       <DialogPopup className="song-information-dialog">
         <DialogTitle>歌曲详情复制</DialogTitle><DialogDescription>查看歌曲信息，点击复制按钮复制单项或全部信息。</DialogDescription>
@@ -93,18 +96,19 @@ export function SongContextMenu({ track, render, children, onPlay, busy = false,
   return <ContextMenu.Root>
     <ContextMenu.Trigger render={render} tabIndex={0}>{children}</ContextMenu.Trigger>
     <ContextMenu.Portal><ContextMenu.Positioner className="z-[70]" sideOffset={4}><ContextMenu.Popup className="song-context-menu" aria-label={`${track.title} 的歌曲菜单`}>
-      <ContextMenu.Item disabled={unavailable} onClick={() => actions.run(onPlay)}><Play aria-hidden="true" />播放</ContextMenu.Item>
-      <ContextMenu.Item disabled={unavailable} onClick={() => actions.run(() => nativeCall("append_queue", { keys: [track.key] }), `已将「${track.title}」设为下一首播放。`)}><ListPlus aria-hidden="true" />下一首播放</ContextMenu.Item>
-      <ContextMenu.Separator />
-      <ContextMenu.Item disabled={unavailable || id === undefined || !profile || !likesReady || pendingLikes.has(id)} onClick={() => { if (id !== undefined) actions.run(() => toggleLike(id)); }}><Heart aria-hidden="true" />{liked ? "取消收藏" : "收藏"}</ContextMenu.Item>
+      {!unavailable && <ContextMenu.Item onClick={() => actions.run(onPlay)}><Play aria-hidden="true" />播放</ContextMenu.Item>}
+      {!unavailable && <ContextMenu.Item onClick={() => actions.run(() => nativeCall("append_queue", { keys: [track.key] }), `已将「${track.title}」设为下一首播放。`)}><ListPlus aria-hidden="true" />下一首播放</ContextMenu.Item>}
+      {!unavailable && id !== undefined && profile && likesReady && !pendingLikes.has(id) && <ContextMenu.Item onClick={() => { if (id !== undefined) actions.run(() => toggleLike(id)); }}><Heart aria-hidden="true" />{liked ? "取消收藏" : "收藏"}</ContextMenu.Item>}
+      {!unavailable && <ContextMenu.Separator />}
+      {!unavailable && profile && songLink(track) && <ContextMenu.Item onClick={() => actions.collect(track)}><FolderPlus aria-hidden="true" />收藏到歌单</ContextMenu.Item>}
       <ContextMenu.SubmenuRoot><ContextMenu.SubmenuTrigger><Share2 aria-hidden="true" />分享<ChevronRight className="ml-auto" aria-hidden="true" /></ContextMenu.SubmenuTrigger>
         <ContextMenu.Portal><ContextMenu.Positioner className="z-[71]" sideOffset={4}><ContextMenu.Popup className="song-context-menu">
-          <ContextMenu.Item disabled={!songLink(track)} onClick={() => actions.copy(songLink(track))}><Copy aria-hidden="true" />复制歌曲链接</ContextMenu.Item>
+          {songLink(track) && <ContextMenu.Item onClick={() => actions.copy(songLink(track))}><Copy aria-hidden="true" />复制歌曲链接</ContextMenu.Item>}
           <ContextMenu.Item onClick={() => actions.copy(songCopyName(track))}><Copy aria-hidden="true" />复制歌曲名称</ContextMenu.Item>
           <ContextMenu.Item onClick={() => actions.details(track)}><Info aria-hidden="true" />更多信息</ContextMenu.Item>
         </ContextMenu.Popup></ContextMenu.Positioner></ContextMenu.Portal>
       </ContextMenu.SubmenuRoot>
-      <ContextMenu.Item className="song-menu-remove" disabled={unavailable || !onRemove} onClick={() => { if (onRemove) actions.run(onRemove, "已移除歌曲。"); }}><Trash2 aria-hidden="true" />{removeLabel}</ContextMenu.Item>
+      {onRemove && !unavailable && <ContextMenu.Item className="song-menu-remove" onClick={() => { if (onRemove) actions.run(onRemove, "已移除歌曲。"); }}><Trash2 aria-hidden="true" />{removeLabel}</ContextMenu.Item>}
     </ContextMenu.Popup></ContextMenu.Positioner></ContextMenu.Portal>
   </ContextMenu.Root>;
 }

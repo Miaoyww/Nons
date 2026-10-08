@@ -1,3 +1,4 @@
+import { CollectionActionsProvider } from "./collection-actions";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -114,7 +115,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
     void nativeCall("append_queue", { keys: [track.key] }).then(() => showNotice(`已将「${track.title}」设为下一首播放。`)).catch(onError);
   }, [onError, showNotice]);
 
-  return <SongActionsProvider onError={onError} onNotice={showNotice}><div className="music-workspace flex min-h-0 flex-1 flex-col">
+  return <CollectionActionsProvider onError={onError} onNotice={showNotice}><SongActionsProvider onError={onError} onNotice={showNotice}><div className="music-workspace flex min-h-0 flex-1 flex-col">
     <Suspense fallback={<div role="status" className="m-auto">正在加载播放器…</div>}>
       <AnimatePresence onExitComplete={onPlayerExitComplete}>
         {nowPlaying && <LyricsView key="now-playing" onQueue={openQueue} />}
@@ -137,5 +138,5 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
       </main>
     </div>
     {!playerVisible && <PlaybackBar notice={notice} qualityControl={<QualitySelect />} onLyrics={() => onNowPlayingChange(true)} onQueue={openQueue} onError={onError} />}
-  </div></SongActionsProvider>;
+  </div></SongActionsProvider></CollectionActionsProvider>;
 }

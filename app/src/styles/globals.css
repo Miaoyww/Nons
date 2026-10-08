@@ -664,3 +664,17 @@
   .artist-release { gap: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .artist-release { transition: none; } }
+
+/* Playlist destination dialog shares the music workspace theme. */
+.playlist-picker { width: 660px; max-width: calc(100vw - 32px); border-radius: 20px; gap: 16px; padding: 32px; }
+.playlist-picker-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-right: 12px; }
+.playlist-picker-tools { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.playlist-picker-search { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border-radius: 10px; background: var(--muted); color: var(--muted-foreground); }
+.playlist-picker-search:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
+.playlist-picker-search input { width: 140px; min-width: 0; outline: none; color: var(--foreground); background: transparent; font-size: 14px; }
+.playlist-picker-list { height: min(480px, 55vh); overflow: auto; overscroll-behavior: contain; border-radius: 12px; }
+.playlist-picker-row { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; cursor: pointer; }
+.playlist-picker-row:hover, .playlist-picker-row:focus-visible { background: var(--muted); }
+.playlist-picker-row:focus-visible, .playlist-picker-list:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.playlist-picker-row:disabled { opacity: .5; cursor: wait; }
+@media (max-width: 560px) { .playlist-picker { padding: 24px; } .playlist-picker-header { flex-wrap: wrap; gap: 16px; } .playlist-picker-tools { width: 100%; } .playlist-picker-search { flex: 1; } .playlist-picker-search input { width: 100%; } }

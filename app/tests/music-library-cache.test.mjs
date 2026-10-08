@@ -231,3 +231,24 @@ test("source settings invalidate cached and in-flight lyrics only after a succes
     requests.at(-1).resolve({ source: "netease" }); await updated;
   }
 });
+
+for (const command of ["add_playlist_song", "update_library_playlist", "delete_library_playlist"]) {
+  test(`${command} invalidates playlist reads after success and preserves them on failure`, async () => {
+    const { player, requests } = harness();
+    const reads = ["music_library", "library_collections", "library_tracks", ...(command === "add_playlist_song" ? ["liked_song_ids"] : ["discovery_playlists"])];
+    for (const read of reads) {
+      const pending = player.nativeCall(read); requests.at(-1).resolve({ marker: "old" }); await pending;
+    }
+    const failed = player.nativeCall(command, { id: 1 });
+    const rejection = assert.rejects(failed, /offline/); requests.at(-1).reject(new Error("offline")); await rejection;
+    const before = requests.length;
+    for (const read of reads) assert.equal((await player.nativeCall(read)).marker, "old");
+    assert.equal(requests.length, before);
+    const write = player.nativeCall(command, { id: 1 }); requests.at(-1).resolve(); await write;
+    for (const read of reads) {
+      const count = requests.length;
+      const pending = player.nativeCall(read); assert.equal(requests.length, count + 1);
+      requests.at(-1).resolve({ marker: "new" }); await pending;
+    }
+  });
+}

@@ -1,3 +1,4 @@
+import { useCollectionActions } from "./collection-actions";
 import { TrackArtists } from "./music-links";
 import { AlbumCard } from "./album-card";
 import { PlaylistCard } from "./playlist-card";
@@ -6,13 +7,13 @@ import { SongContextMenu } from "./song-actions";
 import { TrackTitle } from "./track-title";
 // Layout and interaction adapted from YesPlayMusic src/views/library.vue.
 // Copyright (c) 2020-2023 qier222, MIT. See notices/YesPlayMusic-LICENSE.txt.
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { Heart, Play, Plus, RefreshCw, UserRound } from "lucide-react";
+import { Heart, Play, RefreshCw, UserRound } from "lucide-react";
 import { errorText, nativeCall, usePlayer, type Track } from "@/lib/player";
 import { getLibraryCollections, getLibraryHistory, getLibraryTracks, getMusicLibrary, peekMusicLibrary, invalidateMusicLibrary, playLibraryCollection,
   type CollectionTracks, type LibrarySummary, type LibraryTab, type PlaylistFilter } from "@/lib/music-library";
-import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/animate-ui/components/base/dialog";
+import { CreatePlaylist } from "./create-playlist";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ActionButton } from "./action-button";
 import { useAccount } from "./account";
@@ -28,35 +29,6 @@ import { loadLyrics } from "@/lib/load-lyrics";
 const filters = [{ value: "all", label: "全部歌单" }, { value: "mine", label: "创建的歌单" }, { value: "liked", label: "收藏的歌单" }];
 const tabs = [{ value: "playlist", label: "歌单" }, { value: "album", label: "专辑" }, { value: "artist", label: "艺人" }, { value: "history", label: "听歌记录" }] as const;
 
-function CreatePlaylist({ onCreated }: { onCreated: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [privatePlaylist, setPrivatePlaylist] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  async function create(event: FormEvent) {
-    event.preventDefault();
-    if (busy || !name.trim()) return;
-    setBusy(true); setError(undefined);
-    try {
-      await nativeCall("create_library_playlist", { name: name.trim(), private: privatePlaylist });
-      setOpen(false); setName(""); onCreated();
-    } catch (cause) { setError(errorText(cause)); }
-    finally { setBusy(false); }
-  }
-  return <Dialog open={open} onOpenChange={(value) => { if (!busy) { setOpen(value); setError(undefined); } }}>
-    <DialogTrigger render={<ActionButton variant="ghost" size="sm" />}><Plus aria-hidden="true" />新建歌单</DialogTrigger>
-    <DialogPopup className="max-w-sm">
-      <DialogTitle>新建歌单</DialogTitle><DialogDescription>把喜欢的音乐整理成一个歌单。</DialogDescription>
-      <form onSubmit={(event) => void create(event)} className="mt-4 flex flex-col gap-4">
-        <label className="flex flex-col gap-2 text-sm">歌单名称<input autoFocus className="music-input w-full" maxLength={40} value={name} onChange={(event) => setName(event.target.value)} required disabled={busy} /></label>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={privatePlaylist} onChange={(event) => setPrivatePlaylist(event.target.checked)} disabled={busy} />设为私密歌单</label>
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <div className="flex justify-end gap-2"><DialogClose render={<ActionButton variant="outline" disabled={busy} />}>取消</DialogClose><ActionButton type="submit" disabled={busy || !name.trim()}>{busy ? "正在创建…" : "创建"}</ActionButton></div>
-      </form>
-    </DialogPopup>
-  </Dialog>;
-}
 
 function LyricExcerpt({ track }: { track?: Track }) {
   const { sources } = useLyricSources();
@@ -87,6 +59,7 @@ function CollectionCards({ items, busy, onOpen, onPlay }: { items: MusicCollecti
 
 export default function MusicLibrary({ onError, onNotice }: { onError: (cause: unknown) => void; onNotice: (message: string) => void }) {
   const { profile, loading: accountLoading, error: accountError, likesRevision, reloadLikes } = useAccount();
+  const { revision: collectionRevision } = useCollectionActions();
   const { page, navigate } = useMusicNavigation();
   const player = usePlayer();
   const currentKey = player.index !== null ? player.queue[player.index]?.key : undefined;
@@ -111,7 +84,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
       .catch((cause) => { if (!disposed) setSummaryError(errorText(cause)); })
       .finally(() => { if (!disposed) setSummaryBusy(false); });
     return () => { disposed = true; };
-  }, [profile, refresh, likesRevision]);
+  }, [profile, refresh, likesRevision, collectionRevision]);
 
   const listLoader = useCallback(async (offset: number) => {
     if (tab === "history") {
@@ -120,7 +93,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
     }
     const value = await getLibraryCollections(tab, offset, filter);
     return { items: value.items, more: value.more };
-  }, [profile, tab, filter, week, refresh, showingDetail]);
+  }, [profile, tab, filter, week, refresh, showingDetail, collectionRevision]);
   const list = usePagedList<Track | MusicCollection>(listLoader, tab === "history" ? 100 : 30, !!profile && isTauri() && !showingDetail);
   const collections = { items: list.items as MusicCollection[], more: list.more };
   const history = { tracks: list.items as Track[], more: list.more };
@@ -128,7 +101,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
   const detailLoader = useCallback(async (offset: number) => {
     const value = await getLibraryTracks(collection!, offset, profile!.userId);
     return { items: value.tracks, more: value.more, metadata: value };
-  }, [collection, profile, refresh, showingDetail, likesRevision]);
+  }, [collection, profile, refresh, showingDetail, likesRevision, collectionRevision]);
   const detailList = usePagedList<Track, CollectionTracks>(detailLoader, 100, !!collection && !!profile && showingDetail && isTauri());
   const detail = { ...detailList.metadata, tracks: detailList.items, total: detailList.metadata?.total ?? 0, more: detailList.more };
   const detailBusy = detailList.busy;

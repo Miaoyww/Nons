@@ -43,7 +43,8 @@ function harness() {
     "@/plugins/host": { PluginPageHost: "PluginPageHost" },
     "./music-navigation": { useMusicNavigation: () => ({ page: { view: "local", query: "" } }) },
     "./infinite-load": {}, "@/lib/use-paged-list": { usePagedList: () => ({ items: [], more: false, busy: false }) },
-    "./music-options": { QualitySelect: "QualitySelect" }, "./track-list": {}, "./queue-page": { QueuePage: "QueuePage" }, "./song-actions": { SongActionsProvider: "SongActionsProvider" },
+    "./music-options": { QualitySelect: "QualitySelect" }, "./track-list": {}, "./queue-page": { QueuePage: "QueuePage" }, "./collection-actions": { CollectionActionsProvider: "collection-actions" },
+    "./song-actions": { SongActionsProvider: "SongActionsProvider" },
   }).MusicWorkspace;
   function render() {
     const props = find(App(), "MusicWorkspace").props;
