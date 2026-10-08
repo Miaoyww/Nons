@@ -80,27 +80,31 @@ backend／frontend 可独立省略，但至少有一个入口。UI 贡献必须�
 
 WIT Host 的 `call(operation, args-json)` 返回 JSON 或业务错误，身份来自 Store，Guest 不能指定另一个 pluginId。当前操作：
 
-| 操作                     | 权限             | 行为                                                      |
-| ------------------------ | ---------------- | --------------------------------------------------------- |
-| `music.get-song`         | `music:metadata` | `{id}` 查询宿主网易云歌曲信息，返回 PluginSong            |
-| `events.emit`            | 活跃加载实例     | `{event,payload}` 发布自己的事件                          |
-| `storage.get/set/delete` | `storage`        | 操作自身的 JSON 键值空间                                  |
-| `player.read`            | `player:read`    | 读取经过裁剪的播放状态，不提供本地文件路径                |
-| `player.control`         | `player:control` | pause、resume、next、previous、stop，进入既有播放命令队列 |
+| 操作                     | 权限                               | 行为                                                                                            |
+| ------------------------ | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `music.get-song`         | `music:metadata`                   | `{id}` 查询宿主网易云歌曲信息，返回 PluginSong                                                  |
+| `events.emit`            | 活跃加载实例                       | `{event,payload}` 发布自己的事件                                                                |
+| `storage.get/set/delete` | `storage`                          | 操作自身的 JSON 键值空间                                                                        |
+| `player.read`            | `player:read`                      | 读取经过裁剪的播放状态，不提供本地文件路径                                                      |
+| `player.control`         | `player:control`                   | pause、resume、next、previous、stop，进入既有播放命令队列                                       |
+| `player.play-song`       | `player:control`、`music:metadata` | `{id,mode: "now" 或 "next"}` 使用宿主有界歌曲缓存，立即播放替换队列，下一首播放插入当前曲目之后 |
 
 公开 React API：
 
-| API                        | 返回／用途                                                        |
-| -------------------------- | ----------------------------------------------------------------- |
-| `usePluginBackend()`       | `call<T>(method, args?)`；自动绑定身份与加载代次                  |
-| `usePluginEvent<T>(event)` | 当前事件最新 payload；订阅随组件卸载清理                          |
-| `usePluginStorage()`       | 异步 get／set／delete；缺失值为 null                              |
-| `usePluginNavigate()`      | 在当前插件命名空间内导航，参数为 `/child` 等相对插件根路径        |
-| `usePluginRoute()`         | 当前插件的 pathname 和 search                                     |
-| `usePlayer()`              | 原播放状态和进度；读取需 player:read，control 还需 player:control |
-| `useTheme()`               | 原主题偏好 light／dark／system；实际颜色使用宿主 CSS tokens       |
-| `useCoverSource()`         | 复用宿主封面缓存和失败回退                                        |
-| `Button`                   | 宿主已有 Button；不打包另一份 UI 实现                             |
+| API                        | 返回／用途                                                                                                 |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `usePluginBackend()`       | `call<T>(method, args?)`；自动绑定身份与加载代次                                                           |
+| `usePluginEvent<T>(event)` | 当前事件最新 payload；订阅随组件卸载清理                                                                   |
+| `usePluginStorage()`       | 异步 get／set／delete；缺失值为 null                                                                       |
+| `usePluginNavigate()`      | 在当前插件命名空间内导航，参数为 `/child` 等相对插件根路径                                                 |
+| `usePluginRoute()`         | 当前插件的 pathname 和 search                                                                              |
+| `usePlayer()`              | 原播放状态和进度；读取需 player:read，control 还需 player:control                                          |
+| `useTheme()`               | 原主题偏好 light／dark／system；实际颜色使用宿主 CSS tokens                                                |
+| `useCoverSource()`         | 复用宿主封面缓存和失败回退                                                                                 |
+| `Button`                   | 宿主已有 Button；不打包另一份 UI 实现                                                                      |
+| `SongArtists`              | `{song}` 复用宿主 ArtistLinks，按结构化艺术家 ID 跳转宿主艺术家页，需 ui                                   |
+| `SongLikeButton`           | `{song,onError}` 复用宿主收藏按钮和账号状态，收藏至我喜欢的音乐，需 ui；未登录、收藏状态未就绪及提交中禁用 |
+| `useSongPlayback()`        | `(id,mode) => Promise<void>`，使用 scoped Host Capability，需 player:control 和 music:metadata             |
 
 SDK 不要求手写 pluginId。所有 SDK 请求经过 `nativeCall` 和 scoped IPC；禁用／reload 后即使 Promise 晚返回，SDK 也拒绝旧结果。事件内部命名为 `plugin:<id>:<event>`，共用 Tauri transport，但 SDK 只读取自身 Scope。订阅在实例卸载时删除；每实例只保留有界的最新事件，不承诺持久历史或初始化之前的事件重放。
 
@@ -123,7 +127,7 @@ Host 仅观察新变化，不在启动时读取旧内容；没有已加载且授
 
 允许精确域名 `music.163.com`、`y.music.163.com`、`m.music.163.com`、`163cn.tv`，拒绝账号密码及非默认端口。官方短链使用禁止自动跳转的独立 client，每一步校验域名，最多 3 次跳转，总期限 3 秒；支持 HTTP redirect，不执行网页脚本。Guest 仅收到歌曲候选 URL，不能访问任意 HTTP。
 
-Guest 查询歌曲失败时不产生预览，保留实例以等待后续复制。成功时发出 Song DTO；React 插件自行绘制封面、标题、歌手和关闭操作。新歌曲替换旧预览；同歌曲 30 秒内去重；8 秒后收起，鼠标悬停或键盘聚焦暂停倒计时，Escape／关闭按钮可收起。没有播放或队列写操作，也不申请 player:control。
+Guest 查询歌曲失败时不产生预览，保留实例以等待后续复制。成功时发出包含结构化艺术家信息的 Song DTO；React 插件绘制封面、标题、可点击歌手、关闭与操作区域。新歌曲替换旧预览；同歌曲 30 秒内去重；8 秒后收起，鼠标悬停或键盘聚焦暂停倒计时，Escape／关闭按钮可收起。1.1.0 新增 player:control 权限，立即播放替换队列，下一首播放使用既有 PlayNext 命令；收藏复用宿主账号与写入缓存失效规则，成功与失败均提供反馈。切换歌曲时重建操作状态，旧请求不覆盖新提示。已安装的 1.0.0 需重新安装新版并确认新增权限。
 
 ## 新 view／page 插件
 

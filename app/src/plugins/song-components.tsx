@@ -1,0 +1,26 @@
+import { ArtistLinks } from '@/components/music/music-links'
+import { CurrentTrackLike } from '@/features/playback/current-track-like'
+import type { Track } from '@/lib/player'
+import { useScope, checkScope } from './scope'
+import type { PluginSong } from './types'
+
+export function SongArtists({ song }: { song: PluginSong }) {
+  useScope('ui')
+  return <ArtistLinks artists={song.artists} name={song.artist} />
+}
+
+export function SongLikeButton({
+  song,
+  onError
+}: {
+  song: PluginSong
+  onError: (error: unknown) => void
+}) {
+  const scope = useScope('ui')
+  const track: Track = { ...song, source: { kind: 'netease', id: song.id } }
+  return (
+    <span onClickCapture={() => checkScope(scope, 'ui')}>
+      <CurrentTrackLike track={track} showLabel onError={onError} />
+    </span>
+  )
+}

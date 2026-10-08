@@ -33,6 +33,9 @@ impl SongService {
         self.generation.fetch_add(1, Ordering::SeqCst);
     }
     pub async fn song(&self, id: u64) -> AppResult<Value> {
+        Ok(song_value(id, &self.track(id).await?))
+    }
+    async fn track(&self, id: u64) -> AppResult<Track> {
         // A bounded serial fetch also coalesces duplicate concurrent requests.
         let generation = self.generation.load(Ordering::SeqCst);
         let mut cache = self.cache.lock().await;
@@ -44,7 +47,7 @@ impl SongService {
             return Err("账号状态已变化".into());
         }
         if let Some((_, _, track)) = cache.get(&id) {
-            return Ok(song_value(id, track));
+            return Ok(track.clone());
         }
         let track = tokio::time::timeout(Duration::from_secs(3), self.netease.song(id))
             .await
@@ -66,8 +69,8 @@ impl SongService {
         if serde_json::to_vec(&value).map_err(|e| e.to_string())?.len() > MAX_JSON {
             return Err("歌曲信息过大".into());
         }
-        cache.insert(id, (generation, Instant::now(), track));
-        Ok(value)
+        cache.insert(id, (generation, Instant::now(), track.clone()));
+        Ok(track)
     }
     pub async fn clear(&self) {
         self.invalidate();
@@ -75,7 +78,7 @@ impl SongService {
     }
 }
 fn song_value(id: u64, track: &Track) -> Value {
-    json!({"id":id,"key":track.key,"title":track.title,"artist":track.artist,"album":track.album,"durationMs":track.duration_ms,"cover":track.cover})
+    json!({"id":id,"key":track.key,"title":track.title,"artist":track.artist,"artists":track.artists,"album":track.album,"durationMs":track.duration_ms,"cover":track.cover})
 }
 
 #[derive(Clone)]
@@ -168,6 +171,30 @@ impl Context {
                 self.check(Some("player:read"))?;
                 let state = self.player.snapshot()?;
                 json!({"status":state.status,"positionMs":state.position_ms,"durationMs":state.duration_ms,"volume":state.volume,"track":state.current().map(|t| json!({"title":t.title,"artist":t.artist,"album":t.album,"durationMs":t.duration_ms,"cover":if t.cover.starts_with("http") { &t.cover } else { "" }}))})
+            }
+            "player.play-song" => {
+                self.check(Some("player:control"))?;
+                self.check(Some("music:metadata"))?;
+                let next = match text(&args, "mode")? {
+                    "now" => false,
+                    "next" => true,
+                    _ => return Err("不支持的播放方式".into()),
+                };
+                let track = self
+                    .songs
+                    .track(
+                        args.get("id")
+                            .and_then(Value::as_u64)
+                            .ok_or("缺少歌曲 ID")?,
+                    )
+                    .await?;
+                self.check(Some("player:control"))?;
+                self.player.send(if next {
+                    Command::PlayNext(vec![track])
+                } else {
+                    Command::Queue(vec![track], 0)
+                })?;
+                Value::Null
             }
             "player.control" => {
                 self.check(Some("player:control"))?;

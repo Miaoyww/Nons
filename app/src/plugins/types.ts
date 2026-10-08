@@ -24,6 +24,7 @@ export interface PluginSong {
   key: string
   title: string
   artist: string
+  artists?: { id?: number | null; name: string }[]
   album: string
   durationMs: number
   cover: string

@@ -7,6 +7,15 @@ import { checkScope, useScope, type Scope } from './scope'
 import { pluginPath, resolvePluginPath } from './types'
 export { Button } from '@/components/ui/button'
 export type { PluginSong } from './types'
+export { SongArtists, SongLikeButton } from './song-components'
+
+export function useSongPlayback() {
+  const scope = useScope('player:control')
+  return useCallback(
+    (id: number, mode: 'now' | 'next') => hostCall<void>(scope, 'player.play-song', { id, mode }),
+    [scope]
+  )
+}
 
 async function hostCall<T>(scope: Scope, operation: string, args: unknown): Promise<T> {
   checkScope(scope)

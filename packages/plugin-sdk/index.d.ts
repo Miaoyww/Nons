@@ -4,6 +4,7 @@ export interface PluginSong {
   key: string
   title: string
   artist: string
+  artists?: { id?: number | null; name: string }[]
   album: string
   durationMs: number
   cover: string
@@ -12,6 +13,9 @@ export function usePluginBackend(): {
   call<T = unknown>(method: string, args?: unknown): Promise<T>
 }
 export function usePluginEvent<T = unknown>(event: string): T | undefined
+export function useSongPlayback(): (id: number, mode: 'now' | 'next') => Promise<void>
+export const SongArtists: ComponentType<{ song: PluginSong }>
+export const SongLikeButton: ComponentType<{ song: PluginSong; onError: (error: unknown) => void }>
 export function usePluginStorage(): {
   get<T = unknown>(key: string): Promise<T | null>
   set(key: string, value: unknown): Promise<void>

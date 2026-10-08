@@ -118,9 +118,46 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
   try {
     const scopeModule = load('../src/plugins/scope.tsx', { react: React })
     const calls = []
+    const navigations = []
+    const likes = []
+    const Button = ({ children, variant: _variant, size: _size, ...props }) =>
+      React.createElement('button', props, children)
+    const artistLinks = load('../src/components/music/music-links.tsx', {
+      react: React,
+      'react/jsx-runtime': jsx,
+      '@/features/local/use-local-preferences': {},
+      '@/lib/player': {},
+      '@/features/workspace/music-navigation': {
+        useMusicNavigation: () => ({ navigate: (...args) => navigations.push(args) })
+      }
+    })
+    const likeButton = load('../src/features/playback/current-track-like.tsx', {
+      'react/jsx-runtime': jsx,
+      'lucide-react': { Heart: () => React.createElement('svg') },
+      '@tauri-apps/api/core': { isTauri: () => true },
+      '@/components/ui/button': { Button },
+      '@/features/account/account': {
+        useAccount: () => ({
+          profile: {},
+          likedIds: new Set(),
+          likesReady: true,
+          pendingLikes: new Set(),
+          toggleLike: async (id) => {
+            likes.push(id)
+          }
+        })
+      }
+    })
+    const songComponents = load('../src/plugins/song-components.tsx', {
+      'react/jsx-runtime': jsx,
+      './scope': scopeModule,
+      '@/components/music/music-links': artistLinks,
+      '@/features/playback/current-track-like': likeButton
+    })
     let finish
     const sdk = load('../src/plugins/sdk.ts', {
       react: React,
+      './song-components': songComponents,
       './scope': scopeModule,
       './types': routing,
       '@/lib/player': {
@@ -134,10 +171,7 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
       '@/features/settings/use-theme': {},
       '@/components/music/use-cover-source': { useCoverSource: () => undefined },
       '@/features/workspace/music-navigation': {},
-      '@/components/ui/button': {
-        Button: ({ children, variant: _variant, size: _size, ...props }) =>
-          React.createElement('button', props, children)
-      }
+      '@/components/ui/button': { Button }
     })
     globalThis.__NONS_PLUGIN_HOST__ = { react: React, jsx, sdk }
     await buildFrontend(
@@ -149,7 +183,11 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
     for (const [name, object, exports] of [
       ['react', 'react', 'useEffect,useRef,useState'],
       ['jsx-runtime', 'jsx', 'jsx,jsxs,Fragment'],
-      ['sdk', 'sdk', 'Button,useCoverSource,usePluginEvent']
+      [
+        'sdk',
+        'sdk',
+        'Button,SongArtists,SongLikeButton,useSongPlayback,useCoverSource,usePluginEvent'
+      ]
     ]) {
       await writeFile(
         join(directory, '_host', `${name}.mjs`),
@@ -158,7 +196,10 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
     }
     const { DynamicIsland } = await import(pathToFileURL(join(directory, 'ui.mjs')))
     const scope = {
-      descriptor: { generation: 7, manifest: { id: 'sample', permissions: ['ui', 'storage'] } },
+      descriptor: {
+        generation: 7,
+        manifest: { id: 'sample', permissions: ['ui', 'storage', 'player:control'] }
+      },
       active: true,
       events: new Map(),
       listeners: new Set()
@@ -185,21 +226,61 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
         id: 1,
         title: '歌曲一',
         artist: '歌手甲',
+        artists: [{ id: 123, name: '歌手甲' }],
         album: '专辑',
         cover: ''
       })
       scope.listeners.forEach((notify) => notify())
     })
     assert.match(document.body.textContent, /歌曲一/)
+    assert.match(document.body.textContent, /立即播放/)
+    assert.match(document.body.textContent, /下一首播放/)
+    assert.match(document.body.textContent, /收藏/)
+    await React.act(async () => {
+      document.querySelector('.music-entity-link').click()
+      document.querySelector('[aria-label="收藏歌曲"]').click()
+    })
+    assert.equal(navigations[0][0], 'artist')
+    assert.equal(navigations[0][2].id, 123)
+    assert.deepEqual(likes, [1])
     assert.equal(pendingTimers.size, 1)
     await React.act(async () => {
-      document.querySelector('button').focus()
+      document.querySelector('[aria-label="关闭歌曲预览"]').focus()
     })
     assert.equal(pendingTimers.size, 0, 'keyboard focus pauses dismissal')
     await React.act(async () => {
-      document.querySelector('button').click()
+      document.querySelector('[aria-label="关闭歌曲预览"]').click()
     })
     assert.equal(document.querySelector('[role=status]'), null)
+    await React.act(async () => {
+      scope.events.set('song-detected', { id: 2, title: '歌曲二', artist: '歌手乙', cover: '' })
+      scope.listeners.forEach((notify) => notify())
+    })
+    const next = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent === '下一首播放'
+    )
+    await React.act(async () => {
+      next.click()
+      next.click()
+    })
+    assert.equal(calls.length, 1, 'repeated clicks submit one queue operation')
+    assert.equal(calls[0][1].operation, 'player.play-song')
+    assert.deepEqual(JSON.parse(calls[0][1].args), { id: 2, mode: 'next' })
+    await React.act(async () => {
+      finish('null')
+    })
+    assert.match(document.body.textContent, /已加入下一首播放/)
+    await React.act(async () => {
+      ;[...document.querySelectorAll('button')].find((b) => b.textContent === '立即播放').click()
+    })
+    assert.deepEqual(JSON.parse(calls[1][1].args), { id: 2, mode: 'now' })
+    await React.act(async () => {
+      finish('null')
+    })
+    assert.match(document.body.textContent, /已开始播放/)
+    await React.act(async () => {
+      document.querySelector('[aria-label="关闭歌曲预览"]').click()
+    })
     const read = storage.get('key')
     assert.equal(calls[0][1].id, 'sample')
     assert.equal(calls[0][1].generation, 7)

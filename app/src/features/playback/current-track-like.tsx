@@ -6,10 +6,12 @@ import { useAccount } from '@/features/account/account'
 
 export function CurrentTrackLike({
   track,
-  onError
+  onError,
+  showLabel = false
 }: {
   track?: Track
   onError: (error: unknown) => void
+  showLabel?: boolean
 }) {
   const { profile, likedIds, likesReady, pendingLikes, toggleLike } = useAccount()
   const songId = track?.source.kind === 'netease' ? track.source.id : undefined
@@ -18,9 +20,17 @@ export function CurrentTrackLike({
   return (
     <Button
       variant="ghost"
-      size="icon-sm"
+      size={showLabel ? 'sm' : 'icon-sm'}
       className="playback-like"
-      aria-label={liked ? '取消收藏当前歌曲' : '收藏当前歌曲'}
+      aria-label={
+        showLabel
+          ? liked
+            ? '取消收藏歌曲'
+            : '收藏歌曲'
+          : liked
+            ? '取消收藏当前歌曲'
+            : '收藏当前歌曲'
+      }
       aria-pressed={liked}
       aria-busy={likePending}
       title={
@@ -42,6 +52,7 @@ export function CurrentTrackLike({
       }}
     >
       <Heart aria-hidden="true" />
+      {showLabel && (likePending ? '处理中…' : liked ? '已收藏' : '收藏')}
     </Button>
   )
 }
