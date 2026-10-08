@@ -127,17 +127,18 @@ function loadKeys() {
   return exports;
 }
 
-test("recording accepts physical two/three-key chords, rejects single and four-key chords and normalizes aliases", () => {
+test("recording accepts physical two/three/four-key chords, rejects single and five-key chords and normalizes aliases", () => {
   const keys = loadKeys();
   const event = { code: "KeyP", ctrlKey: true };
   assert.equal(keys.captureShortcut(event).binding, "Ctrl+P");
   assert.equal(keys.captureShortcut({ ...event, shiftKey: true }).binding, "Ctrl+Shift+P");
   assert.equal(keys.captureShortcut({ code: "Digit1", metaKey: true }).binding, "Super+1");
   assert.equal(keys.captureShortcut({ code: "KeyP" }).binding, undefined);
-  assert.match(keys.captureShortcut({ ...event, shiftKey: true, altKey: true }).error, /最多三个键/);
+  assert.equal(keys.captureShortcut({ ...event, shiftKey: true, altKey: true }).binding, "Ctrl+Alt+Shift+P");
+  assert.match(keys.captureShortcut({ ...event, shiftKey: true, altKey: true, metaKey: true }).error, /最多四个键/);
   assert.equal(keys.captureShortcut({ ...event, code: "ControlLeft" }).binding, undefined);
   assert.equal(keys.normalizeShortcut(" Shift + control + p "), "Ctrl+Shift+P");
-  for (const value of ["P", "Space", "Ctrl+Alt+Shift+P", "Ctrl+Ctrl+P", "Ctrl+Alt", "Ctrl+bogus"]) assert.equal(keys.normalizeShortcut(value), undefined);
+  for (const value of ["P", "Space", "Ctrl+Alt+Shift+Super+P", "Ctrl+Ctrl+P", "Ctrl+Alt", "Ctrl+bogus"]) assert.equal(keys.normalizeShortcut(value), undefined);
 });
 
 test("invalid legacy bindings are cleared, invalid save is rejected, and recording suspends global bindings then restores", async () => {
@@ -146,7 +147,7 @@ test("invalid legacy bindings are cleared, invalid save is rejected, and recordi
   await app.initializeShortcuts(); // The mock reserves Ctrl+Alt+N, so startup exposes the conflict.
   await app.saveShortcuts(config(app, { next: "", toggle: "Ctrl+P" }));
   const saved = app.values.get("nons-shortcut-settings");
-  assert.equal(await app.saveShortcuts(config(app, { previous: "Ctrl+Alt+Shift+P" })), false);
+  assert.equal(await app.saveShortcuts(config(app, { previous: "Ctrl+Alt+Shift+Super+P" })), false);
   assert.equal(app.values.get("nons-shortcut-settings"), saved);
   await app.setShortcutRecording(true); assert.equal(app.registered.size, 0);
   await app.setShortcutRecording(false); assert.deepEqual([...app.registered.keys()], ["Ctrl+P"]);

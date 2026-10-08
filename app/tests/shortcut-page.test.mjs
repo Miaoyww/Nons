@@ -16,7 +16,7 @@ function load(path, modules = {}) {
   return exports;
 }
 
-test("shortcut page hides disabled bindings, records valid chords with Kbd, exposes validation and clears bindings", async () => {
+test("shortcut page hides disabled bindings, automatically saves four-key chords and clears bindings without a save button", async () => {
   const dom = new JSDOM('<div id="root"></div>');
   globalThis.window = dom.window; globalThis.document = dom.window.document;
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -24,6 +24,7 @@ test("shortcut page hides disabled bindings, records valid chords with Kbd, expo
   const actions = [["toggle", "播放/暂停音乐"], ["previous", "上一首"], ["next", "下一首"], ["like", "收藏此音乐"], ["volumeUp", "音量加"], ["volumeDown", "音量减"]];
   let status = { settings: { enabled: false, bindings: Object.fromEntries(actions.map(([name]) => [name, ""])) }, busy: false };
   const listeners = new Set(), pauses = [];
+  let failNextSave = false;
   const page = load("../src/components/settings/pages/shortcuts.tsx", {
     react: React, "react/jsx-runtime": jsxRuntime,
     "@tauri-apps/api/core": { isTauri: () => true },
@@ -35,7 +36,7 @@ test("shortcut page hides disabled bindings, records valid chords with Kbd, expo
       shortcutActions: actions, getShortcutStatus: () => status,
       subscribeShortcuts: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
       setShortcutRecording: async (value) => { pauses.push(value); return true; },
-      saveShortcuts: async (settings) => { status = { ...status, settings }; listeners.forEach((fn) => fn()); return true; },
+      saveShortcuts: async (settings) => { if (failNextSave) { failNextSave = false; status = { ...status, error: "快捷键已被占用" }; listeners.forEach((fn) => fn()); return false; } status = { ...status, error: undefined, settings }; listeners.forEach((fn) => fn()); return true; },
     },
     "../settings-card": { SettingsCard: ({ title, children }) => React.createElement("div", {}, title, children) },
   }).ShortcutsPage;
@@ -51,16 +52,21 @@ test("shortcut page hides disabled bindings, records valid chords with Kbd, expo
     const recorder = document.querySelector('[aria-label="播放/暂停音乐全局快捷键"]');
     await click(recorder); assert.equal(document.activeElement, recorder);
     await press(recorder, "KeyP"); assert.match(document.querySelector('[role="alert"]').textContent, /组合键/);
-    await press(recorder, "KeyP", { ctrlKey: true, altKey: true, shiftKey: true }); assert.match(document.querySelector('[role="alert"]').textContent, /最多三个键/);
-    await press(recorder, "KeyP", { ctrlKey: true, shiftKey: true });
-    assert.deepEqual([...recorder.querySelectorAll("kbd")].map((kbd) => kbd.textContent), ["Ctrl", "Shift", "P"]);
-    const save = [...document.querySelectorAll("button")].find((button) => button.textContent === "保存快捷键");
-    await click(save); assert.equal(status.settings.bindings.toggle, "Ctrl+Shift+P");
+    await press(recorder, "KeyP", { ctrlKey: true, altKey: true, shiftKey: true, metaKey: true }); assert.match(document.querySelector('[role="alert"]').textContent, /最多四个键/);
+    await press(recorder, "KeyP", { ctrlKey: true, altKey: true, shiftKey: true });
+    assert.deepEqual([...recorder.querySelectorAll("kbd")].map((kbd) => kbd.textContent), ["Ctrl", "Alt", "Shift", "P"]);
+    assert.ok(![...document.querySelectorAll("button")].some((button) => button.textContent === "保存快捷键"));
+    assert.equal(status.settings.bindings.toggle, "Ctrl+Alt+Shift+P");
+    failNextSave = true;
+    await click(recorder); await press(recorder, "KeyQ", { ctrlKey: true, altKey: true, shiftKey: true });
+    assert.equal(status.settings.bindings.toggle, "Ctrl+Alt+Shift+P");
+    assert.match(document.querySelector('[role="alert"]').textContent, /占用/);
+    assert.deepEqual([...recorder.querySelectorAll("kbd")].map((kbd) => kbd.textContent), ["Ctrl", "Alt", "Shift", "P"]);
     const previous = document.querySelector('[aria-label="上一首全局快捷键"]');
-    await click(previous); await press(previous, "KeyP", { ctrlKey: true, shiftKey: true });
+    await click(previous); await press(previous, "KeyP", { ctrlKey: true, altKey: true, shiftKey: true });
     assert.match(document.querySelector('[role="alert"]').textContent, /其他操作/);
     await press(previous, "Escape");
-    await click(document.querySelector('[aria-label="清除播放/暂停音乐绑定"]')); await click(save);
+    await click(document.querySelector('[aria-label="清除播放/暂停音乐绑定"]'));
     assert.equal(status.settings.bindings.toggle, "");
     await click(document.querySelector('[role="switch"]')); assert.equal(document.querySelectorAll("[data-shortcut-recorder]").length, 0);
     assert.ok(pauses.includes(true) && pauses.includes(false));

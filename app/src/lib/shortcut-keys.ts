@@ -11,7 +11,7 @@ function mainKey(value: string) {
 export function normalizeShortcut(value: string): string | undefined {
   if (!value.trim()) return "";
   const keys = value.split("+").map((part) => part.trim());
-  if (keys.length < 2 || keys.length > 3) return;
+  if (keys.length < 2 || keys.length > 4) return;
   const key = mainKey(keys[keys.length - 1]);
   const modifiers = keys.slice(0, -1).map((part) => aliases[part.toLowerCase()]);
   if (!key || modifiers.some((part) => !part) || new Set(modifiers).size !== modifiers.length) return;
@@ -21,7 +21,7 @@ export function captureShortcut(event: Pick<KeyboardEvent, "code" | "ctrlKey" | 
   if (event.isComposing || /^(Control|Alt|Shift|Meta)(Left|Right)$/.test(event.code)) return {};
   const modifiers = [event.ctrlKey && "Ctrl", event.altKey && "Alt", event.shiftKey && "Shift", event.metaKey && "Super"].filter(Boolean);
   if (!modifiers.length) return { error: "请按组合键，至少包含一个修饰键。" };
-  if (modifiers.length > 2) return { error: "最多三个键：一个或两个修饰键，加一个普通键。" };
+  if (modifiers.length > 3) return { error: "最多四个键：一至三个修饰键，加一个普通键。" };
   const key = mainKey(event.code);
   if (!key) return { error: "不支持此按键，请换一个组合键。" };
   return { binding: [...modifiers, key].join("+") };

@@ -67,7 +67,7 @@ export async function saveShortcuts(next: ShortcutSettings, persist = true) {
   try {
     for (const [action, label] of shortcutActions) {
       const binding = normalizeShortcut(cleaned.bindings[action]);
-      if (binding === undefined) throw new Error(`${label}只能绑定二至三个键的组合键。`);
+      if (binding === undefined) throw new Error(`${label}只能绑定二至四个键的组合键。`);
       cleaned.bindings[action] = binding;
     }
     const values = Object.values(cleaned.bindings).filter(Boolean).map((value) => value.toLowerCase());
