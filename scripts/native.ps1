@@ -1,4 +1,4 @@
-param([ValidateSet('check','test','dev','build','clippy','probe')][string]$Task = 'dev', [string[]]$ExtraArgs = @(), [ValidateSet('network_probe','media_probe','qr_probe','library_probe')][string]$Example = 'network_probe')
+param([ValidateSet('check','test','dev','build','clippy','probe')][string]$Task = 'dev', [string[]]$ExtraArgs = @(), [ValidateSet('network_probe','media_probe','qr_probe','library_probe','search_probe')][string]$Example = 'network_probe')
 $ErrorActionPreference = 'Stop'
 $nonsRoot = Split-Path $PSScriptRoot -Parent
 $nonsGst = Join-Path $nonsRoot '.local\gstreamer'

@@ -21,6 +21,7 @@ import { InfiniteLoad } from "./infinite-load";
 import { usePagedList } from "@/lib/use-paged-list";
 import { PluginPageHost } from "@/plugins/host";
 
+const SearchPage = lazy(() => import("./search-page"));
 const ArtistPage = lazy(() => import("./artist-page"));
 const AlbumPage = lazy(() => import("./album-page"));
 const Discovery = lazy(() => import("./discovery"));
@@ -88,13 +89,11 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
   }, [onError]);
 
   const loader = useCallback(async (offset: number) => {
-    const target = page.view === "local" ? "local" : "search";
-    const values = await nativeCall<Track[]>(target === "local" ? "local_music" : "search_music", { keyword: page.query, offset });
-    return { items: values, more: values.length === (target === "local" ? 100 : 50) };
+    const values = await nativeCall<Track[]>("local_music", { keyword: page.query, offset });
+    return { items: values, more: values.length === 100 };
   }, [page, refresh]);
-  const { items: tracks, more: hasMore, busy, error: loadError, loadMore } = usePagedList(loader, view === "local" ? 100 : 50,
-    isTauri() && (view === "local" || (view === "search" && !!page.query.trim())));
-  const appliedKeyword = page.query;
+  const { items: tracks, more: hasMore, busy, error: loadError, loadMore } = usePagedList(loader, 100,
+    isTauri() && view === "local");
 
   async function importMusic(directory: boolean) {
     setError(undefined); setNotice(undefined);
@@ -127,13 +126,13 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
       <main id="music-content" className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="音乐工作区">
         {!isTauri() && <p role="status" className="border-b border-border bg-muted/50 px-8 py-3 text-sm text-muted-foreground">这是界面预览。播放、搜索和导入功能需要在桌面应用中使用。</p>}
         {(error || state.error || state.mediaError) && <div role="alert" className="flex items-start gap-3 border-b border-border bg-destructive/5 px-8 py-3 text-sm text-destructive"><p className="min-w-0 flex-1">{error ?? state.error ?? state.mediaError}</p>{error && <ActionButton variant="ghost" size="icon-sm" aria-label="关闭提示" onClick={() => setError(undefined)}><X aria-hidden="true" /></ActionButton>}</div>}
-        {(view === "artist" || view === "album") && page.collection ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐详情…</p>}>{view === "artist" ? <ArtistPage key={page.collection.id} collection={page.collection} onError={onError} onNotice={showNotice} /> : <AlbumPage key={page.collection.id} collection={page.collection} onError={onError} onNotice={showNotice} />}</Suspense> : view === "plugin" ? <PluginPageHost path={page.query} /> : view === "queue" ? <QueuePage key={queueVisit} onError={onError} /> : view === "discover" ? <Suspense fallback={<p role="status" className="m-auto">正在加载发现页…</p>}><Discovery onError={onError} onNotice={showNotice} /></Suspense> : view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} onNotice={showNotice} /></Suspense> : <>
-          <header className="flex shrink-0 items-center justify-between gap-6 px-8 pb-6 pt-8"><div><h1 className="text-2xl font-semibold tracking-tight">{view === "local" ? "本地音乐" : view === "search" ? "搜索音乐" : "播放队列"}</h1><p className="mt-2 text-sm text-muted-foreground">{view === "local" ? "熟悉的收藏，随时聆听。" : view === "search" ? "在网易云音乐中寻找下一首。" : `${state.queue.length} 首音乐，按顺序播放。`}</p></div>
+        {(view === "artist" || view === "album") && page.collection ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐详情…</p>}>{view === "artist" ? <ArtistPage key={page.collection.id} collection={page.collection} onError={onError} onNotice={showNotice} /> : <AlbumPage key={page.collection.id} collection={page.collection} onError={onError} onNotice={showNotice} />}</Suspense> : view === "plugin" ? <PluginPageHost path={page.query} /> : view === "queue" ? <QueuePage key={queueVisit} onError={onError} /> : view === "search" ? <Suspense fallback={<p role="status" className="m-auto">正在加载搜索页…</p>}><SearchPage key={page.query} onError={onError} onNotice={showNotice} /></Suspense> : view === "discover" ? <Suspense fallback={<p role="status" className="m-auto">正在加载发现页…</p>}><Discovery onError={onError} onNotice={showNotice} /></Suspense> : view === "library" || view === "collection" ? <Suspense fallback={<p role="status" className="m-auto">正在加载音乐库…</p>}><MusicLibrary onError={onError} onNotice={showNotice} /></Suspense> : <>
+          <header className="flex shrink-0 items-center justify-between gap-6 px-8 pb-6 pt-8"><div><h1 className="text-2xl font-semibold tracking-tight">本地音乐</h1><p className="mt-2 text-sm text-muted-foreground">熟悉的收藏，随时聆听。</p></div>
           </header>
           {view === "local" && <div className="flex items-center justify-between gap-4 px-8 pb-4"><div className="min-w-0"><h2 className="text-base font-semibold">音乐文件夹</h2><p className="mt-1 text-xs text-muted-foreground">添加或移除本地音乐文件夹。已添加的文件夹会自动扫描。</p></div><div className="flex shrink-0 gap-2"><ActionButton variant="ghost" disabled={importing || !isTauri()} onClick={() => void importMusic(false)}><Plus aria-hidden="true" />打开文件</ActionButton><FolderManager /></div></div>}
           <div className="relative isolate min-h-0 flex-1 overflow-auto px-8">
-            {tracks.length > 0 ? <TrackList tracks={tracks} currentKey={current?.key} busy={false} onPlay={play} onAppend={append} /> : <div className="flex min-h-72 flex-col items-center justify-center gap-4 text-center"><Music2 className="size-10 text-muted-foreground/60" aria-hidden="true" /><p className="font-medium">{busy ? "正在查找音乐…" : view === "local" ? "把你的音乐带进来" : view === "search" ? appliedKeyword ? "没有找到匹配的音乐" : "下一首喜欢的音乐，等你发现" : "队列还是空的"}</p><p className="max-w-sm text-sm leading-6 text-muted-foreground">{view === "local" ? "打开音频文件，或导入一个音乐目录。曲库会在下次启动时保留。" : view === "search" ? "在顶部搜索框输入歌曲或艺术家名称开始搜索。" : "从搜索结果或本地曲库，将歌曲加入播放队列。"}</p></div>}
-            {(view === "local" || view === "search") && <InfiniteLoad more={hasMore} busy={busy} error={loadError} onLoad={loadMore} />}
+            {tracks.length > 0 ? <TrackList tracks={tracks} currentKey={current?.key} busy={false} onPlay={play} onAppend={append} /> : <div className="flex min-h-72 flex-col items-center justify-center gap-4 text-center"><Music2 className="size-10 text-muted-foreground/60" aria-hidden="true" /><p className="font-medium">{busy ? "正在查找音乐…" : "把你的音乐带进来"}</p><p className="max-w-sm text-sm leading-6 text-muted-foreground">打开音频文件，或导入一个音乐目录。曲库会在下次启动时保留。</p></div>}
+            {view === "local" && <InfiniteLoad more={hasMore} busy={busy} error={loadError} onLoad={loadMore} />}
           </div>
 
         </>}

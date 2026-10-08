@@ -186,6 +186,27 @@ async fn liked_song_ids(backend: State<'_, Backend>) -> AppResult<Vec<u64>> {
 }
 
 #[tauri::command]
+async fn search_suggestions(
+    keyword: String,
+    backend: State<'_, Backend>,
+) -> AppResult<Vec<String>> {
+    backend.netease.search_suggestions(&keyword).await
+}
+
+#[tauri::command]
+async fn search_collections(
+    keyword: String,
+    kind: String,
+    offset: u32,
+    backend: State<'_, Backend>,
+) -> AppResult<netease::CollectionPage> {
+    backend
+        .netease
+        .search_collections(&keyword, &kind, offset)
+        .await
+}
+
+#[tauri::command]
 async fn set_song_liked(id: u64, liked: bool, backend: State<'_, Backend>) -> AppResult<()> {
     backend.netease.set_song_liked(id, liked).await
 }
@@ -753,6 +774,8 @@ pub fn run() {
             fonts::system_fonts,
             player_snapshot,
             search_music,
+            search_suggestions,
+            search_collections,
             music_library,
             song_information,
             remove_playlist_song,

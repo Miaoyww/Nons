@@ -1,3 +1,4 @@
+import { MusicPage } from "./music-page";
 import { CollectionContextMenu, useCollectionActions } from "./collection-actions";
 import { TrackArtists } from "./music-links";
 import { AlbumCard } from "./album-card";
@@ -106,7 +107,7 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
   const liked = summary?.likedPlaylist;
   const retry = <ActionButton size="sm" variant="ghost" onClick={() => { invalidateMusicLibrary(); setRefresh((value) => value + 1); }}><RefreshCw aria-hidden="true" />重试</ActionButton>;
 
-  return <section className="music-library" aria-label="网易云音乐库">
+  return <MusicPage aria-label="网易云音乐库">
     {showingDetail ? <>
       <CollectionHeader key={`${collection.kind}:${collection.id}`} collection={collection} description={detail.description} total={detail.total || collection.trackCount} busy={playing} disabled={playing || !profile || detailBusy || !detail.tracks.length} onPlay={() => void playCollection(collection)} />
       {!profile ? <div className="library-empty"><p>登录网易云音乐后查看这个收藏。</p><LoginDialog /></div>
@@ -153,5 +154,5 @@ export default function MusicLibrary({ onError, onNotice }: { onError: (cause: u
         : collections.items.length ? <CollectionCards items={collections.items} busy={playing} onOpen={openCollection} onPlay={(item) => void playCollection(item)} /> : <p className="library-empty text-muted-foreground">{tab === "playlist" ? "没有符合筛选条件的歌单。" : `还没有收藏${tab === "album" ? "专辑" : "艺人"}。`}</p>}
       {profile && <InfiniteLoad more={list.more} busy={listBusy} error={list.error} onLoad={list.loadMore} />}
     </>}
-  </section>;
+  </MusicPage>;
 }

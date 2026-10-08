@@ -1,3 +1,4 @@
+import { MusicPage } from "./music-page";
 import { useCallback, useRef, useState, type KeyboardEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { Play, RefreshCw } from "lucide-react";
@@ -47,7 +48,7 @@ export default function ArtistPage({ collection, onError, onNotice }: { collecti
     if (next === undefined) return;
     event.preventDefault(); setTab(next === 0 ? "songs" : "albums"); tabButtons.current[next]?.focus();
   }
-  return <section className="music-library artist-page" aria-label="歌手详情">
+  return <MusicPage className="artist-page" aria-label="歌手详情">
     <header className="library-detail-header">
       <Cover cover={artist.cover} className="library-detail-cover rounded-full" />
       <div className="library-detail-info">
@@ -76,5 +77,5 @@ export default function ArtistPage({ collection, onError, onNotice }: { collecti
       {!albums.items.length && <p role={albums.busy ? "status" : undefined} className="library-empty">{albums.busy ? "正在加载专辑…" : "这里还没有专辑。"}</p>}
       {tab === "albums" && <InfiniteLoad more={albums.more} busy={albums.busy} error={albums.error} onLoad={albums.loadMore} />}
     </div>
-  </section>;
+  </MusicPage>;
 }

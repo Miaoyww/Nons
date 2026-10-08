@@ -4,6 +4,8 @@ mod library;
 pub use library::{Collection, CollectionPage, EntityDetail, LibrarySummary, TrackPage};
 #[path = "netease_discovery.rs"]
 mod discovery;
+#[path = "netease_search.rs"]
+mod search;
 pub use discovery::PlaylistCategory;
 
 use crate::model::{AppResult, Lyrics, ResolvedTrack, Track, TrackSource};

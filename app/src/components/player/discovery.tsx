@@ -1,3 +1,5 @@
+import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/animate-ui/components/base/tabs";
+import { MusicPage } from "./music-page";
 import { CollectionContextMenu } from "./collection-actions";
 import { TrackArtists, TrackAlbum } from "./music-links";
 import { GreetingQuote } from "./greeting-quote";
@@ -153,17 +155,19 @@ export default function Discovery({ onError, onNotice }: { onError: (cause: unkn
   }
   const hour = new Date().getHours();
   const greeting = hour < 6 ? "夜深了" : hour < 12 ? "上午好" : hour < 18 ? "下午好" : "晚上好";
-  return <section className="music-library discovery" aria-label="发现音乐">
+  return <MusicPage className="discovery" aria-label="发现音乐">
     {daily ? <><header className="mb-8"><h1 className="library-heading">每日推荐</h1><p className="mt-2 text-sm text-muted-foreground">根据你的音乐口味，每日更新。</p></header>{!profile ? <div className="library-empty"><p>登录后发现今天为你推荐的音乐。</p><LoginDialog /></div> : <><TrackList tracks={songs.items} busy={playing} currentKey={current?.key} onPlay={(index) => void nativeCall("play_queue", { keys: songs.items.map((t) => t.key), index }).catch(onError)} onAppend={(track) => void nativeCall("append_queue", { keys: [track.key] }).then(() => onNotice(`已将「${track.title}」设为下一首播放。`)).catch(onError)} /><InfiniteLoad more={songs.more} busy={songs.busy} error={songs.error} onLoad={songs.loadMore} /></>}</> : <>
       <header className="discover-greeting"><h1 className="library-heading">{greeting}{profile ? `，${profile.nickname}` : "，音乐相伴"}</h1><GreetingQuote /></header>
       <div className="discover-featured"><div className="discover-shortcuts">
         <CollectionContextMenu name="每日推荐" busy={playing} onPlay={profile ? () => void playDaily(false) : undefined} onNext={profile ? () => void playDaily(true) : undefined} render={<button type="button" className="discover-shortcut" onClick={() => navigate("discover", "daily")} />}><Cover cover={profile?.avatarUrl} className="discover-shortcut-cover" /><span className="discover-shortcut-copy"><span className="discover-shortcut-title"><CalendarDays aria-hidden="true" /><strong>每日推荐</strong></span><span className="discover-shortcut-desc">根据你的音乐口味 · 每日更新</span></span><ChevronRight className="discover-shortcut-arrow" aria-hidden="true" /></CollectionContextMenu>
         <CollectionContextMenu item={radarInfo} busy={playing || !profile} render={<button type="button" className="discover-shortcut" onClick={() => navigate("collection", "", radarInfo)} />}><Cover cover={radarInfo.cover} className="discover-shortcut-cover" /><span className="discover-shortcut-copy"><span className="discover-shortcut-title"><Radio aria-hidden="true" /><strong>私人雷达</strong></span><span className="discover-shortcut-desc">发现你独特的音乐品味</span></span><ChevronRight className="discover-shortcut-arrow" aria-hidden="true" /></CollectionContextMenu>
       </div><PrivateFM onError={onError} /></div>
-      <div className="discover-more"><h2>发现更多</h2><div className="discover-tabs" aria-label="发现分类"><ActionButton variant="secondary" data-active={section === "recommended"} aria-pressed={section === "recommended"} onClick={() => navigate("discover")}><Sparkles aria-hidden="true" />推荐歌单</ActionButton><ActionButton variant="secondary" data-active={section === "square"} aria-pressed={section === "square"} onClick={() => navigate("discover", "square")}><LayoutGrid aria-hidden="true" />歌单广场</ActionButton></div><ActionButton variant="ghost" size="icon" aria-label="刷新歌单" disabled={list.busy} onClick={() => setRevision((v) => v + 1)}><RefreshCw aria-hidden="true" /></ActionButton></div>
+      <Tabs value={section} onValueChange={value => navigate("discover", value === "square" ? "square" : "")} className="gap-0"><div className="discover-more"><h2>发现更多</h2><TabsList className="music-tabs" aria-label="发现分类"><TabsTab value="recommended"><Sparkles aria-hidden="true" />推荐歌单</TabsTab><TabsTab value="square"><LayoutGrid aria-hidden="true" />歌单广场</TabsTab></TabsList><ActionButton variant="ghost" size="icon" aria-label="刷新歌单" disabled={list.busy} onClick={() => setRevision((v) => v + 1)}><RefreshCw aria-hidden="true" /></ActionButton></div>
+      <TabsPanel value={section} transition={{ duration: 0.15 }}>
       {section === "square" && <div className="discover-filters"><CategoryPicker value={category} onChange={setCategory} /><div className="flex gap-2"><ActionButton className="rounded-full" variant={order === "hot" ? "default" : "ghost"} aria-pressed={order === "hot"} onClick={() => setOrder("hot")}>热门</ActionButton><ActionButton className="rounded-full" variant={order === "new" ? "default" : "ghost"} aria-pressed={order === "new"} onClick={() => setOrder("new")}>最新</ActionButton></div></div>}
       {list.busy && !list.items.length ? <div className="discover-playlist-grid" role="status" aria-label="正在加载歌单">{Array.from({ length: 12 }, (_, i) => <div className="library-cover-skeleton" key={i}><span /><span /><span /></div>)}</div> : list.items.length ? <div className="discover-playlist-grid">{list.items.map((item) => <PlaylistCard key={item.id} item={item} busy={playing || !isTauri()} onOpen={(value) => navigate("collection", "", value)} onPlay={(value) => void play(value)} />)}</div> : !list.error && <p className="library-empty text-muted-foreground">{isTauri() ? "暂时没有歌单。" : "在桌面应用中获取推荐歌单与歌单广场。"}</p>}
       <InfiniteLoad more={list.more} busy={list.busy} error={list.error} onLoad={list.loadMore} />
+      </TabsPanel></Tabs>
     </>}
-  </section>;
+  </MusicPage>;
 }

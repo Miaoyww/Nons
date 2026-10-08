@@ -1,3 +1,4 @@
+import { MusicPage } from "./music-page";
 // Independent album detail, adapted from the playlist detail in music-library.tsx.
 // Layout originally adapted from YesPlayMusic src/views/library.vue.
 // Copyright (c) 2020-2023 qier222, MIT. See notices/YesPlayMusic-LICENSE.txt.
@@ -36,7 +37,7 @@ export default function AlbumPage({ collection, onError, onNotice }: { collectio
     catch (cause) { onError(cause); }
     finally { setPlaying(false); }
   }
-  return <section className="music-library" aria-label="专辑详情">
+  return <MusicPage aria-label="专辑详情">
     <header className="library-detail-header">
       <Cover cover={album.cover} className="library-detail-cover rounded-xl" />
       <div className="library-detail-info">
@@ -49,5 +50,5 @@ export default function AlbumPage({ collection, onError, onNotice }: { collectio
     {error && <div role="alert" className="mb-5 flex items-center gap-3 text-sm text-destructive">{error}<ActionButton variant="ghost" size="sm" onClick={() => { invalidateNativeCache(["music_entity_detail"]); setRefresh((value) => value + 1); }}><RefreshCw aria-hidden="true" />重试</ActionButton></div>}
     {(busy || list.busy) && !list.items.length ? <p role="status" className="library-empty">正在加载专辑…</p> : list.items.length ? <TrackList tracks={list.items} currentKey={currentKey} busy={playing} onPlay={(index) => { void nativeCall("play_queue", { keys: list.items.map((track) => track.key), index }).catch(onError); }} onAppend={(track) => { void nativeCall("append_queue", { keys: [track.key] }).then(() => onNotice(`已将「${track.title}」设为下一首播放。`)).catch(onError); }} /> : <p className="library-empty">这里还没有歌曲。</p>}
     <InfiniteLoad more={list.more} busy={list.busy} error={list.error} onLoad={list.loadMore} />
-  </section>;
+  </MusicPage>;
 }
