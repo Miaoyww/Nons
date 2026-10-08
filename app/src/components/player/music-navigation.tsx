@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 export type MusicView = "library" | "discover" | "local" | "search" | "queue" | "collection" | "artist" | "album" | "plugin";
 export interface MusicCollection { id: number; kind: "playlist" | "album" | "artist"; name: string; cover: string; subtitle: string; trackCount: number; creatorId?: number; liked?: boolean; playCount?: number | null; publishedAt?: number | null; artists?: import("@/lib/player").MusicCredit[] }
@@ -10,6 +10,24 @@ const NavigationContext = createContext<{
 
 export function MusicNavigationProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<{ entries: Page[]; index: number }>({ entries: [{ view: "library", query: "" }], index: 0 });
+  useEffect(() => {
+    // Application history is independent of the WebView's document history.
+    // Capture side buttons before card/menu handlers and suppress browser navigation.
+    const sideButton = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type !== "mousedown") return;
+      const delta = event.button === 3 ? -1 : 1;
+      setHistory(previous => {
+        const index = Math.max(0, Math.min(previous.entries.length - 1, previous.index + delta));
+        return index === previous.index ? previous : { ...previous, index };
+      });
+    };
+    const events = ["mousedown", "mouseup", "auxclick"] as const;
+    events.forEach(type => window.addEventListener(type, sideButton, true));
+    return () => { events.forEach(type => window.removeEventListener(type, sideButton, true)); };
+  }, []);
   function navigate(view: MusicView, query = "", collection?: MusicCollection) {
     if (view === "collection" && collection?.kind === "artist") view = "artist";
     if (view === "collection" && collection?.kind === "album") view = "album";
