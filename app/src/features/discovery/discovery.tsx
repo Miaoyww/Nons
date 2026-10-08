@@ -525,7 +525,7 @@ export default function Discovery({
                 <RefreshCw aria-hidden="true" />
               </ActionButton>
             </div>
-            <TabsPanel value={section} transition={{ duration: 0.15 }}>
+            <TabsPanel key={section} value={section} transition={{ duration: 0.15 }}>
               {section === 'square' && (
                 <div className="discover-filters">
                   <CategoryPicker value={category} onChange={setCategory} />

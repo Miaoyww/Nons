@@ -93,6 +93,7 @@ type TabsPanelProps = React.ComponentProps<typeof TabsPrimitive.Panel> & HTMLMot
 function TabsPanel({
   value,
   keepMounted,
+  layout = false,
   transition = { duration: 0.5, ease: 'easeInOut' },
   ...props
 }: TabsPanelProps) {
@@ -103,7 +104,7 @@ function TabsPanel({
         render={
           <motion.div
             data-slot="tabs-panel"
-            layout
+            layout={layout}
             layoutDependency={value}
             initial={{
               opacity: reducedMotion ? 1 : 0,
