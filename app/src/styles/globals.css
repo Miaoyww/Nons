@@ -1106,10 +1106,10 @@
   gap: 2px;
   flex-shrink: 0;
 }
-.capsule-like[aria-pressed='true'] {
+.playback-like[aria-pressed='true'] {
   color: var(--music-accent);
 }
-.capsule-like[aria-pressed='true'] svg {
+.playback-like[aria-pressed='true'] svg {
   fill: currentColor;
 }
 .capsule-navigation {

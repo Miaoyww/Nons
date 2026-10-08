@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Heart, Pause, Play, Repeat, Repeat1 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Pause, Play, Repeat, Repeat1 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { adjacentIndex, nativeCall, statusLabels, usePlayer } from '@/lib/player'
@@ -8,8 +8,7 @@ import { PlaybackNotice, type PlaybackNoticeMessage } from '@/features/playback/
 import { QueuePopover } from '@/features/queue/queue-popover'
 import { VolumeControl } from '@/features/playback/volume-control'
 import { PlaybackTimeline } from '@/features/playback/playback-timeline'
-import { Button } from '@/components/ui/button'
-import { useAccount } from '@/features/account/account'
+import { CurrentTrackLike } from '@/features/playback/current-track-like'
 
 export function PlaybackBar({
   onLyrics,
@@ -26,10 +25,6 @@ export function PlaybackBar({
 }) {
   const state = usePlayer()
   const track = state.index !== null ? state.queue[state.index] : undefined
-  const { profile, likedIds, likesReady, pendingLikes, toggleLike } = useAccount()
-  const songId = track?.source.kind === 'netease' ? track.source.id : undefined
-  const liked = songId !== undefined && likedIds.has(songId)
-  const likePending = songId !== undefined && pendingLikes.has(songId)
   const playing = ['playing', 'buffering', 'loading'].includes(state.status)
   const [preview, setPreview] = useState<'previous' | 'next' | null>(null)
   const looping = state.repeatMode === 'all' || state.repeatMode === 'one'
@@ -122,33 +117,7 @@ export function PlaybackBar({
           </div>
         </div>
         <div className="capsule-options">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="capsule-like"
-            aria-label={liked ? '取消收藏当前歌曲' : '收藏当前歌曲'}
-            aria-pressed={liked}
-            aria-busy={likePending}
-            title={
-              !track
-                ? '选择一首音乐后收藏'
-                : songId === undefined
-                  ? '本地歌曲暂不支持网易云收藏'
-                  : !profile
-                    ? '登录后收藏歌曲'
-                    : !likesReady
-                      ? '正在读取收藏状态'
-                      : liked
-                        ? '取消收藏'
-                        : '收藏'
-            }
-            disabled={!isTauri() || songId === undefined || !profile || !likesReady || likePending}
-            onClick={() => {
-              if (songId !== undefined) void toggleLike(songId).catch(onError)
-            }}
-          >
-            <Heart aria-hidden="true" />
-          </Button>
+          <CurrentTrackLike track={track} onError={onError} />
           <QueuePopover onPage={onQueue} onError={onError} />
         </div>
         <VolumeControl onError={onError} />

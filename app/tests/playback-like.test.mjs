@@ -11,7 +11,8 @@ function harness({
   ready = true,
   liked = false,
   pending = false,
-  failure
+  failure,
+  bar = 'collapsible'
 } = {}) {
   const calls = [],
     errors = []
@@ -43,15 +44,23 @@ function harness({
     '@/features/account/account': { useAccount: () => account },
     '@/components/music/track-title': { trackDisplayTitle: (track) => track.title }
   }
-  const exports = {}
-  const { outputText } = ts.transpileModule(
-    readFileSync(new URL('../src/features/playback/playback-bar.tsx', import.meta.url), 'utf8'),
-    { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }
-  )
-  runInNewContext(outputText, { exports, require: (name) => modules[name] ?? {} })
+  function load(file) {
+    const exports = {}
+    const { outputText } = ts.transpileModule(
+      readFileSync(new URL(`../src/features/playback/${file}.tsx`, import.meta.url), 'utf8'),
+      { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }
+    )
+    runInNewContext(outputText, { exports, require: (name) => modules[name] ?? {} })
+    return exports
+  }
+  const like = load('current-track-like')
+  modules['@/features/playback/current-track-like'] = like
+  modules['@/features/playback/music-options'] = { QualitySelect: 'quality' }
+  const exports = load(bar === 'persistent' ? 'persistent-playback-bar' : 'playback-bar')
   function find(node) {
     if (!node || typeof node !== 'object') return
-    if (node.props?.className === 'capsule-like') return node
+    if (typeof node.type === 'function') return find(node.type(node.props))
+    if (node.props?.className === 'playback-like') return node
     for (const child of [node.props?.children].flat()) {
       const match = find(child)
       if (match) return match
@@ -59,9 +68,19 @@ function harness({
   }
   const render = () =>
     find(
-      exports.PlaybackBar({ onError: (cause) => errors.push(cause), onLyrics() {}, onQueue() {} })
+      (exports.PlaybackBar ?? exports.PersistentPlaybackBar)({
+        onError: (cause) => errors.push(cause),
+        onLyrics() {},
+        onQueue() {}
+      })
     )
-  return { render, calls, errors, account }
+  const renderBar = () =>
+    (exports.PlaybackBar ?? exports.PersistentPlaybackBar)({
+      onError: (cause) => errors.push(cause),
+      onLyrics() {},
+      onQueue() {}
+    })
+  return { render, calls, errors, account, renderBar, like: like.CurrentTrackLike }
 }
 
 test('playback heart toggles the currently playing song and reflects shared account likes', async () => {
@@ -97,4 +116,24 @@ test('failed playback like reaches the visible error handler and keeps the liked
   await Promise.resolve()
   assert.deepEqual(app.errors, [failure])
   assert.equal(app.render().props['aria-pressed'], true)
+})
+
+test('persistent player puts the shared favorite directly after quality and uses the same like state', async () => {
+  const app = harness({ bar: 'persistent' })
+  const surface = app.renderBar().props.children[1]
+  const options = surface.props.children.find(
+    (child) => child.props?.className === 'persistent-options'
+  )
+  assert.equal(options.props.children[0].type, 'quality')
+  assert.equal(options.props.children[1].type, app.like)
+  app.render().props.onClick()
+  await Promise.resolve()
+  assert.deepEqual(app.calls, [7])
+  app.account.likedIds.add(7)
+  assert.equal(app.render().props['aria-pressed'], true)
+  assert.equal(harness({ bar: 'persistent', loggedIn: false }).render().props.disabled, true)
+  assert.equal(
+    harness({ bar: 'persistent', source: { kind: 'local' } }).render().props.disabled,
+    true
+  )
 })

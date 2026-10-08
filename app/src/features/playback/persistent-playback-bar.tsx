@@ -1,3 +1,4 @@
+import { CurrentTrackLike } from '@/features/playback/current-track-like'
 import { statusLabels, usePlayer } from '@/lib/player'
 import { Cover } from '@/components/music/cover'
 import { QualitySelect } from '@/features/playback/music-options'
@@ -50,6 +51,7 @@ export function PersistentPlaybackBar({
         <PlaybackTransport withModes onError={onError} />
         <div className="persistent-options">
           <QualitySelect />
+          <CurrentTrackLike track={track} onError={onError} />
           <VolumeControl onError={onError} />
           <QueuePopover onPage={onQueue} onError={onError} />
         </div>
