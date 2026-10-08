@@ -4,12 +4,13 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
-function harness() {
+function harness(saved = "[]", storageUnavailable = false) {
+  const storage = new Map([["nons-search-history", saved]]);
   const slots = [], effects = [], requests = [], navigations = [], timers = new Map();
   let cursor = 0, timerId = 0, page = { view: "library", query: "" };
   const jsx = (type, props) => ({ type, props });
   const react = {
-    useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => { slots[i] = value; }]; },
+    useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial; return [slots[i], value => { slots[i] = value; }]; },
     useRef() { return slots[cursor++] ??= { current: { focus() {}, blur() {} } }; },
     useEffect(fn, deps) {
       const i = cursor++, old = slots[i];
@@ -19,7 +20,7 @@ function harness() {
     },
   };
   const modules = {
-    react, "react/jsx-runtime": { jsx, jsxs: jsx }, "lucide-react": { Search: "icon" },
+    react, "react/jsx-runtime": { jsx, jsxs: jsx }, "lucide-react": { Search: "icon", History: "history-icon" },
     "@tauri-apps/api/core": { isTauri: () => true },
     "@base-ui/react/combobox": { Combobox: { Root: "combo", Input: "input" } },
     "@/components/ui/button": { Button: "button" },
@@ -30,18 +31,70 @@ function harness() {
   const exports = {};
   runInNewContext(ts.transpileModule(readFileSync(new URL("../src/components/player/music-search.tsx", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText, { exports, require: name => modules[name], window: {
+  }).outputText, { exports, require: name => modules[name], localStorage: {
+    getItem(key) { if (storageUnavailable) throw Error("unavailable"); return storage.get(key); },
+    setItem(key, value) { if (storageUnavailable) throw Error("unavailable"); storage.set(key, value); },
+  }, window: {
     setTimeout(fn, delay) { assert.equal(delay, 250); timers.set(++timerId, fn); return timerId; },
     clearTimeout(id) { timers.delete(id); },
   } });
   const render = () => { cursor = 0; const tree = exports.MusicSearch(); effects.splice(0).forEach(fn => fn()); return tree.props.children; };
   const input = () => render().props.children[0].props.children[1];
-  return { render, input, requests, navigations, changePage(value) { page = value; render(); },
+  return { render, input, requests, navigations, storage, changePage(value) { page = value; render(); },
     type(value) { render().props.onInputValueChange(value); render(); },
     tick() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
   };
 }
 const settle = async () => { await Promise.resolve(); await Promise.resolve(); };
+
+test("empty focused input shows persisted history and selecting it searches again", () => {
+  const h = harness(JSON.stringify(["recent", "older"]));
+  h.render(); assert.equal(h.render().props.open, false);
+  h.input().props.onFocus();
+  assert.equal(h.render().props.open, true);
+  assert.deepEqual([...h.render().props.items], ["recent", "older"]);
+  h.tick(); assert.equal(h.requests.length, 0);
+  h.render().props.onValueChange("older");
+  assert.deepEqual(h.navigations, [["search", "older"]]);
+  h.type(""); h.input().props.onFocus();
+  assert.deepEqual([...h.render().props.items], ["older", "recent"]);
+  h.render().props.onOpenChange(false); assert.equal(h.render().props.open, false);
+  h.input().props.onBlur(); h.render(); h.input().props.onFocus();
+  assert.equal(h.render().props.open, true);
+});
+
+test("submitted history keeps ten unique recent terms and survives remount", () => {
+  const h = harness(); h.render();
+  const submit = value => { h.type(value); h.render().props.children[0].props.onSubmit({ preventDefault() {} }); };
+  submit("   ");
+  for (let i = 0; i < 12; i++) submit(`song ${i}`);
+  submit(" song 5 ");
+  const expected = ["song 5", "song 11", "song 10", "song 9", "song 8", "song 7", "song 6", "song 4", "song 3", "song 2"];
+  assert.deepEqual(JSON.parse(h.storage.get("nons-search-history")), expected);
+  const restored = harness(h.storage.get("nons-search-history")); restored.render();
+  assert.deepEqual([...restored.render().props.items], expected);
+  h.changePage({ view: "local", query: "" }); submit("local song");
+  assert.deepEqual(JSON.parse(h.storage.get("nons-search-history")), expected);
+  h.type(""); h.input().props.onFocus(); assert.equal(h.render().props.open, false);
+});
+
+test("invalid or unavailable storage does not prevent search", () => {
+  for (const saved of ["invalid json", "{}", JSON.stringify([null, 42, "", "  ", "x".repeat(86)])]) {
+    const h = harness(saved); h.render(); h.input().props.onFocus();
+    assert.equal(h.render().props.items.length, 0); assert.equal(h.render().props.open, false);
+  }
+  const h = harness("[]", true); h.render(); h.type("song");
+  h.render().props.children[0].props.onSubmit({ preventDefault() {} });
+  assert.deepEqual(h.navigations, [["search", "song"]]);
+  h.type(""); h.input().props.onFocus();
+  assert.deepEqual([...h.render().props.items], ["song"]);
+});
+
+test("clearing input restores history and discards in-flight suggestions", async () => {
+  const h = harness('["recent"]'); h.render(); h.input().props.onFocus(); h.type("query"); h.tick();
+  h.type(""); h.requests[0].resolve(["late"]); await settle();
+  assert.deepEqual([...h.render().props.items], ["recent"]); assert.equal(h.render().props.open, true);
+});
 
 test("suggestions debounce typing, ignore older responses and display at most five", async () => {
   const h = harness(); h.render(); h.input().props.onFocus(); h.type("first"); h.type("second");
