@@ -2,6 +2,7 @@ import { TrackArtists } from '@/components/music/music-links'
 import { useCallback, useEffect, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { Tabs } from '@base-ui/react/tabs'
+import { Tabs as MusicTabs, TabsList, TabsTab } from '@/components/animate-ui/components/base/tabs'
 import { Disc3, ListMusic, Mic2, Music2, Pencil, Play, Plus, Search, Trash2, X } from 'lucide-react'
 import { nativeCall, errorText, usePlayer, type Track } from '@/lib/player'
 import { localCollection, playLocalEntity, type LocalEntity } from '@/features/local/local-library'
@@ -392,7 +393,8 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
             </ActionButton>
             <FolderManager />
           </div>
-          <Tabs.Root
+          <MusicTabs
+            className="gap-0"
             value={kind}
             onValueChange={(value) => {
               setKind(value as Kind)
@@ -400,14 +402,14 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
             }}
           >
             <div className="local-tabs-row">
-              <Tabs.List className="local-tabs" aria-label="本地音乐分类">
+              <TabsList className="music-tabs" aria-label="本地音乐分类">
                 {categories.map(({ value, label, icon: Icon }) => (
-                  <Tabs.Tab key={value} value={value}>
+                  <TabsTab key={value} value={value}>
                     <Icon aria-hidden="true" />
                     {label}
-                  </Tabs.Tab>
+                  </TabsTab>
                 ))}
-              </Tabs.List>
+              </TabsList>
               <form
                 className="local-search"
                 onSubmit={(event) => {
@@ -510,7 +512,7 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
                 </Tabs.Panel>
               ))
             )}
-          </Tabs.Root>
+          </MusicTabs>
         </>
       )}
       <Dialog

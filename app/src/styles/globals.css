@@ -2244,15 +2244,6 @@
   gap: 20px;
   margin-bottom: 28px;
 }
-.local-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 12px;
-  background: var(--muted);
-}
-.local-tabs button,
 .local-search-nav button {
   display: flex;
   align-items: center;
@@ -2262,17 +2253,14 @@
   color: var(--muted-foreground);
   cursor: pointer;
 }
-.local-tabs button[data-active],
 .local-search-nav button[data-active] {
   color: var(--foreground);
   background: var(--background);
 }
-.local-tabs button:focus-visible,
 .local-search-nav button:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-.local-tabs svg,
 .local-search-nav svg,
 .local-search > svg {
   width: 18px;
