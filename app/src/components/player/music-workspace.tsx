@@ -1,3 +1,4 @@
+import { usePlaybackShortcuts } from "@/hooks/use-playback-shortcuts";
 import { CollectionActionsProvider } from "./collection-actions";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
@@ -49,6 +50,7 @@ export function MusicWorkspace({ nowPlaying, playerVisible, onNowPlayingChange, 
   }, [notice]);
   const [refresh, setRefresh] = useState(0);
   const onError = useCallback((cause: unknown) => setError(errorText(cause)), []);
+  usePlaybackShortcuts(onError);
   const current = state.index !== null ? state.queue[state.index] : undefined;
   const wasPlayerVisible = useRef(playerVisible);
 

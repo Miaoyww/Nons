@@ -661,6 +661,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .register_uri_scheme_protocol("plugin", plugins::protocol)
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             #[cfg(not(feature = "plugin-probe"))]
