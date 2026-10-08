@@ -1,3 +1,4 @@
+import { useLocalPreferences } from "@/hooks/use-local-preferences";
 import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { errorText, nativeCall, type Track } from "@/lib/player";
@@ -7,6 +8,7 @@ import { Heart } from "lucide-react";
 
 export function LyricExcerpt({ tracks, enabled = true }: { tracks?: Track[]; enabled?: boolean }) {
   const { sources } = useLyricSources();
+  const { options: localPreferences } = useLocalPreferences();
   const [lines, setLines] = useState<string[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -46,7 +48,7 @@ export function LyricExcerpt({ tracks, enabled = true }: { tracks?: Track[]; ena
     };
     void load();
     return () => { disposed = true; };
-  }, [tracks?.[0]?.key, tracks?.[1]?.key, sources, enabled]);
+  }, [tracks?.[0]?.key, tracks?.[1]?.key, sources, enabled, localPreferences]);
   if (!enabled) return <Heart className="size-10 opacity-30" aria-hidden="true" />;
   return <p className="library-lyric-excerpt" aria-live="polite" data-error={!!error}>
     {error || (lines.length ? lines.map((line, index) => <span key={index}>{line}<br /></span>) : "正在寻找歌词…")}

@@ -5,6 +5,7 @@ mod fonts;
 mod hitokoto;
 mod library;
 mod local_folders;
+mod local_library;
 mod lyrics;
 mod media;
 mod model;
@@ -540,6 +541,7 @@ async fn track_lyrics(
     skip_qq: bool,
     skip_qrc: Option<bool>,
     skip_local: bool,
+    skip_netease: Option<bool>,
     app: tauri::AppHandle,
     backend: State<'_, Backend>,
 ) -> AppResult<Option<Lyrics>> {
@@ -554,6 +556,7 @@ async fn track_lyrics(
                 qq: skip_qq,
                 qrc: skip_qrc.unwrap_or(false),
                 local: skip_local,
+                netease: skip_netease.unwrap_or(false),
             },
             app,
         )
@@ -699,6 +702,10 @@ pub fn run() {
                 std::fs::write(&fallback, include_bytes!("../icons/128x128.png"))?;
             }
             let store = Arc::new(storage::Store::open(&data.join("nons.sqlite3"))?);
+            if store.setting("localIndexVersion")?.as_deref() != Some("1") {
+                store.rebuild_local_index()?;
+                store.set_setting("localIndexVersion", "1")?;
+            }
             let netease = Arc::new(Netease::new()?);
             let cache = Arc::new(ttml_cache::TtmlCache::new(
                 store.clone(),
@@ -798,6 +805,17 @@ pub fn run() {
             update_library_playlist,
             delete_library_playlist,
             local_music,
+            local_library::local_entities,
+            local_library::local_entity_detail,
+            local_library::local_entity_tracks,
+            local_library::local_track_information,
+            local_library::local_preferences,
+            local_library::set_local_preferences,
+            local_library::create_local_playlist,
+            local_library::rename_local_playlist,
+            local_library::delete_local_playlist,
+            local_library::add_local_playlist_track,
+            local_library::remove_local_playlist_track,
             import_music,
             local_cache_status,
             set_local_cache_options,

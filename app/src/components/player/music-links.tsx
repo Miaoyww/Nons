@@ -1,3 +1,4 @@
+import { useLocalPreferences } from "@/hooks/use-local-preferences";
 import { Fragment, useState, type MouseEvent } from "react";
 import { errorText, nativeCall, type MusicCredit, type Track } from "@/lib/player";
 import { useMusicNavigation } from "./music-navigation";
@@ -26,7 +27,8 @@ export function TrackArtists({ track }: { track: Track }) {
   const { navigate } = useMusicNavigation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const onlineId = track.source.kind === "netease" ? track.source.id : track.source.neteaseId;
+  if (track.source.kind === "local") return <LocalTrackArtists track={track} />;
+  const onlineId = track.source.id;
   if (track.artists?.length || !onlineId) return <ArtistLinks artists={track.artists} name={track.artist} />;
   // Older persisted tracks have names only. Resolve their credits on demand, never per row on mount.
   return <span>{track.artist.split(" / ").map((name, index) => <Fragment key={`${name}:${index}`}>
@@ -47,7 +49,8 @@ export function TrackAlbum({ track }: { track: Track }) {
   const { navigate } = useMusicNavigation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const onlineId = track.source.kind === "netease" ? track.source.id : track.source.neteaseId;
+  if (track.source.kind === "local") return <button type="button" className="music-entity-link" onClick={event => { event.stopPropagation(); navigate("local-album", "", { id: 0, localId: track.key, kind: "album", name: track.album, cover: track.cover, subtitle: track.artist, trackCount: 0 }); }}>{track.album}</button>;
+  const onlineId = track.source.id;
   if (track.albumId || !onlineId) return <AlbumLink id={track.albumId} name={track.album} cover={track.cover} />;
   return <span><button type="button" className="music-entity-link" disabled={busy} title={error ?? track.album} onClick={(event) => {
     event.stopPropagation(); if (busy) return;
@@ -61,4 +64,12 @@ export function TrackAlbum({ track }: { track: Track }) {
 
 export function formatReleaseDate(value?: number | null) {
   return value ? new Date(value).toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" }) : "发行日期未知";
+}
+
+function LocalTrackArtists({ track }: { track: Track }) {
+  const { navigate } = useMusicNavigation(); const { options } = useLocalPreferences();
+  let names = [track.artist];
+  for (const separator of options.artistSeparators) names = names.flatMap(name => name.split(separator));
+  names = [...new Set(names.map(name => name.trim()).filter(Boolean))];
+  return <span className="music-credits">{names.map((name, index) => <Fragment key={name}>{index > 0 && <span className="music-credit-separator"> / </span>}<button type="button" className="music-entity-link" onClick={event => { event.stopPropagation(); navigate("local-artist", "", { id: 0, localId: name, kind: "artist", name, cover: track.cover, subtitle: "", trackCount: 0 }); }}>{name}</button></Fragment>)}</span>;
 }

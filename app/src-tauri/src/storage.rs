@@ -9,7 +9,7 @@ use std::{
 pub const MAX_LYRIC_BYTES: usize = 2 * 1024 * 1024;
 const LYRIC_CACHE_BYTES: i64 = 64 * 1024 * 1024;
 
-pub struct Store(Mutex<Connection>);
+pub struct Store(pub(crate) Mutex<Connection>);
 
 pub struct CachedLyrics {
     pub value: Option<Lyrics>,
@@ -77,6 +77,12 @@ impl Store {
             PRAGMA temp_store=MEMORY;
             CREATE TEMP TABLE runtime_lyrics (key TEXT PRIMARY KEY, value TEXT, expires INTEGER NOT NULL, accessed INTEGER NOT NULL, bytes INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS local_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS local_entities (kind TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, cover TEXT NOT NULL, subtitle TEXT NOT NULL, PRIMARY KEY(kind,id));
+            CREATE TABLE IF NOT EXISTS local_members (key TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY(key,kind,id));
+            CREATE INDEX IF NOT EXISTS local_members_entity ON local_members(kind,id);
+            CREATE TABLE IF NOT EXISTS local_playlists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS local_playlist_tracks (playlist_id INTEGER NOT NULL, key TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(playlist_id,key));
             PRAGMA user_version=1;").map_err(|e| e.to_string())?;
         Ok(Self(Mutex::new(connection)))
     }
@@ -84,6 +90,7 @@ impl Store {
     pub fn save_tracks(&self, tracks: &[Track]) -> AppResult<()> {
         let mut db = self.0.lock().map_err(|_| "曲库锁不可用")?;
         let tx = db.transaction().map_err(|e| e.to_string())?;
+        let options = crate::local_library::options_from_db(&tx)?;
         {
             let mut insert = tx.prepare_cached("INSERT INTO tracks(key,source,title,artist,value) VALUES(?1,?2,?3,?4,?5)
                 ON CONFLICT(key) DO UPDATE SET title=excluded.title,artist=excluded.artist,value=excluded.value").map_err(|e| e.to_string())?;
@@ -102,6 +109,9 @@ impl Store {
                         serde_json::to_string(track).map_err(|e| e.to_string())?
                     ])
                     .map_err(|e| e.to_string())?;
+                if source == "local" {
+                    crate::local_library::index_track(&tx, track, &options)?;
+                }
             }
         }
         tx.commit().map_err(|e| e.to_string())

@@ -4,12 +4,12 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
-function harness(responses) {
+function harness(responses, kind = "netease") {
   const calls = [];
   const exports = {};
   const { outputText } = ts.transpileModule(readFileSync(new URL("../src/lib/load-lyrics.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } });
   runInNewContext(outputText, { exports, require: () => ({ nativeCall: async (_command, args) => { calls.push(args); return responses.shift(); } }) });
-  return { calls, load: (sources = { amll: true, qq: true }, current) => exports.loadLyrics({ key: "netease:1" }, true, sources,
+  return { calls, load: (sources = { amll: true, qq: true }, current) => exports.loadLyrics({ key: `${kind}:1`, source: { kind } }, true, sources,
     (lyrics) => { if (lyrics?.content === "broken") throw new Error("invalid lyrics"); return lyrics?.content; }, current) };
 }
 
@@ -46,4 +46,10 @@ test("invalid QRC tries QQ LRC before disabling QQ and requesting NetEase", asyn
   ]);
   assert.equal((await load()).parsed, "usable");
   assert.deepEqual(calls.map((c) => [c.skipQq, c.skipQrc]), [[false, false], [false, true], [true, true]]);
+});
+
+test("local tracks fall back to sidecar lyrics after online semantic failures", async () => {
+  const { load, calls } = harness([{source: "netease", content: "broken"}, {source: "local", content: "usable"}], "local");
+  assert.equal((await load()).parsed, "usable");
+  assert.deepEqual(calls.map(c => [c.skipNetease, c.skipLocal]), [[false,false],[true,false]]);
 });

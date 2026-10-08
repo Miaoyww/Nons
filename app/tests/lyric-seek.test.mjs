@@ -9,6 +9,7 @@ function lyricControl({ failure, desktop = true } = {}) {
   const errors = [];
   const jsx = (type, props) => ({ type, props });
   const modules = {
+    "@/hooks/use-local-preferences": { useLocalPreferences: () => ({ options: { lyricPriority: "local", artistSeparators: [] } }) },
     "react/jsx-runtime": { jsx, jsxs: jsx },
     react: { useState: (initial) => [initial, () => {}], useEffect() {}, useCallback: (fn) => fn, useMemo: (fn) => fn() },
     "@applemusic-like-lyrics/react": { LyricPlayer: "lyric-player" },

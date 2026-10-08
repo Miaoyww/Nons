@@ -103,7 +103,7 @@ export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean;
         </>}
         </div>
         {!playerMode && <nav aria-label="音乐导航" className="flex shrink-0 items-center gap-1">
-            {([['library', '音乐库'], ['discover', '发现'], ['local', '本地']] as const).map(([view, label]) => <Button key={view} variant={page.view === view || (view === 'library' && page.view === 'collection') || (view === 'discover' && page.view === 'search') ? 'secondary' : 'ghost'} aria-current={page.view === view || (view === 'library' && page.view === 'collection') || (view === 'discover' && page.view === 'search') ? 'page' : undefined} onClick={() => navigate(view)}>{label}</Button>)}
+            {([['library', '音乐库'], ['discover', '发现'], ['local', '本地']] as const).map(([view, label]) => <Button key={view} variant={page.view === view || (view === 'library' && page.view === 'collection') || (view === 'discover' && page.view === 'search') || (view === 'local' && page.view.startsWith('local-')) ? 'secondary' : 'ghost'} aria-current={page.view === view || (view === 'library' && page.view === 'collection') || (view === 'discover' && page.view === 'search') || (view === 'local' && page.view.startsWith('local-')) ? 'page' : undefined} onClick={() => navigate(view)}>{label}</Button>)}
             {plugins.filter((p) => p.loaded).flatMap((plugin) => plugin.manifest.contributes.navigation.map((item) => {
               const target = plugin.manifest.contributes.pages.find((p) => p.id === item.page)!;
               const path = pluginPath(plugin.manifest.id, target.path);
@@ -112,7 +112,7 @@ export function Titlebar({ playerMode = false, onBack }: { playerMode?: boolean;
             }))}
           </nav>}
         <div className="flex h-full min-w-0 items-center justify-end pl-3">
-          {!playerMode && <MusicSearch />}
+          {!playerMode && !page.view.startsWith("local") && <MusicSearch />}
 
         <div className="flex h-full shrink-0 items-center gap-1 pr-1.5">
           <div className={playerMode ? "hidden" : "flex items-center gap-1"}><LoginDialog /><SettingsDialog /></div>

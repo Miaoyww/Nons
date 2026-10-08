@@ -1,3 +1,4 @@
+import { useLocalPreferences } from "@/hooks/use-local-preferences";
 import { TrackArtists } from "./music-links";
 import { LyricPlayer, type LyricPlayerRef } from "@applemusic-like-lyrics/react";
 import type { LyricLine } from "@applemusic-like-lyrics/core";
@@ -98,6 +99,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const [lines, setLines] = useState<LyricLine[]>([]);
   const [source, setSource] = useState<string>();
   const { sources } = useLyricSources();
+  const { options: localPreferences } = useLocalPreferences();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [binding, setBinding] = useState("");
@@ -108,12 +110,16 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const [refresh, setRefresh] = useState<{ key: string; serial: number }>();
   const refreshTrack = () => { if (track) setRefresh((r) => ({ key: track.key, serial: (r?.serial ?? 0) + 1 })); };
   const generation = useRef(0);
+  const appliedSource = useRef<string | undefined>(undefined);
   const apply = useCallback((value: Lyrics | null, duration: number) => {
-    setLines(value ? parseLyrics(value, duration) : []);
+    const parsed = value ? parseLyrics(value, duration) : [];
+    appliedSource.current = value?.source;
+    setLines(parsed);
     setSource(value ? ({ amll: "AMLL DB", qq: "QQ 音乐", netease: "网易云音乐", local: "本地歌词" })[value.source] : undefined);
   }, []);
   useEffect(() => {
     const serial = ++generation.current;
+    appliedSource.current = undefined;
     setLines([]); setSource(undefined); setError(undefined); setLoading(false);
     if (!track || !isTauri()) return;
     setLoading(true);
@@ -125,13 +131,13 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
       if (generation.current === serial && !(cause instanceof EmptyLyricsError)) setError(errorText(cause));
     }).finally(() => { if (generation.current === serial) setLoading(false); });
     return () => { generation.current++; };
-  }, [track?.key, refresh, apply, sources]);
+  }, [track?.key, refresh, apply, sources, localPreferences]);
   useEffect(() => {
     if (!isTauri() || !track) return;
     let disposed = false;
     let stop: (() => void) | undefined;
     void listen<{ key: string; lyrics: Lyrics }>("lyrics-updated", ({ payload }) => {
-      if (!disposed && payload.key === track.key && (payload.lyrics.source !== "amll" || sources.amll) && (payload.lyrics.source !== "qq" || sources.qq)) { try { apply(payload.lyrics, track.durationMs); } catch { /* Retain the last usable lyrics. */ } }
+      if (!disposed && appliedSource.current === payload.lyrics.source && payload.key === track.key && (payload.lyrics.source !== "amll" || sources.amll) && (payload.lyrics.source !== "qq" || sources.qq)) { try { apply(payload.lyrics, track.durationMs); } catch { /* Retain the last usable lyrics. */ } }
     }).then((unlisten) => { if (disposed) unlisten(); else stop = unlisten; }).catch((cause) => setError(errorText(cause)));
     return () => { disposed = true; stop?.(); };
   }, [track?.key, apply, sources]);

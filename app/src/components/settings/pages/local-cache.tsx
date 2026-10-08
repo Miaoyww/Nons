@@ -1,3 +1,5 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useLocalPreferences } from "@/hooks/use-local-preferences";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
@@ -17,6 +19,9 @@ export function LocalCachePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const { options: localPreferences, setOptions: setLocalPreferences } = useLocalPreferences();
+  const [separators, setSeparators] = useState("");
+  useEffect(() => setSeparators(localPreferences.artistSeparators.join("\n")), [localPreferences]);
   const { showCovers, setShowCovers } = useLocalOptions();
   const desktop = isTauri();
   async function reload() {
@@ -41,6 +46,15 @@ export function LocalCachePage() {
     <section aria-labelledby="local-heading" className="flex flex-col gap-8">
       <h3 id="local-heading" className="text-base font-semibold">本地歌曲</h3>
       <SettingsCard title="显示本地歌曲封面" description="显示内嵌封面，关闭可减少图片加载。"><label className="flex items-center gap-2 text-sm"><Switch checked={showCovers} disabled={busy || !desktop} onCheckedChange={(checked) => void perform(() => setShowCovers(checked))} />显示内嵌封面</label></SettingsCard>
+      <SettingsCard title="本地歌曲歌词来源" description="优先来源没有歌词、读取失败或格式不可用时，自动尝试另一来源。在线按已有歌词来源设置获取。">
+        <Select value={localPreferences.lyricPriority} disabled={busy || !desktop} onValueChange={value => { if (value) void perform(() => setLocalPreferences({ ...localPreferences, lyricPriority: value as "local" | "online" })); }}><SelectTrigger aria-label="本地歌曲歌词优先来源"><SelectValue>{localPreferences.lyricPriority === "local" ? "优先本地歌词" : "优先在线歌词"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="local">优先本地歌词</SelectItem><SelectItem value="online">优先在线歌词</SelectItem></SelectContent></Select>
+      </SettingsCard>
+      <SettingsCard title="艺术家分隔符" description="每行输入一个分隔符；留空视为一位艺术家。保存后重新整理艺术家，不修改原始标签。">
+        <form className="flex flex-col gap-2" onSubmit={event => { event.preventDefault(); const artistSeparators = [...new Set(separators.split("\n").map(value => value.trim()).filter(Boolean))]; void perform(() => setLocalPreferences({ ...localPreferences, artistSeparators }), "艺术家分隔符已保存。"); }}>
+          <textarea className="music-input min-h-24" aria-label="艺术家分隔符（每行一个）" value={separators} disabled={busy || !desktop} onChange={event => setSeparators(event.target.value)} />
+          <Button variant="outline" size="sm" disabled={busy || !desktop || separators === localPreferences.artistSeparators.join("\n")}>保存</Button>
+        </form>
+      </SettingsCard>
       <SettingsCard title="音乐文件夹" description="管理音乐文件夹，自动扫描变更。"><FolderManager /></SettingsCard>
     </section>
     <section aria-labelledby="cache-heading" className="flex flex-col gap-8">

@@ -80,9 +80,14 @@ export async function nativeCall<T>(command: string, args?: Record<string, unkno
     update_library_playlist: ["music_library", "library_tracks", "library_collections", "discovery_playlists", "music_entity_detail"],
     delete_library_playlist: ["music_library", "library_tracks", "library_collections", "discovery_playlists"],
     create_library_playlist: ["library_collections", "music_library"],
-    import_music: ["local_music"], add_music_folder: ["local_music"], remove_music_folder: ["local_music"], rescan_music_folders: ["local_music"],
+    import_music: ["local_music", "local_entities", "local_entity_detail", "local_entity_tracks", "local_track_information"], add_music_folder: ["local_music", "local_entities", "local_entity_detail", "local_entity_tracks", "local_track_information"], remove_music_folder: ["local_music", "local_entities", "local_entity_detail", "local_entity_tracks", "local_track_information"], rescan_music_folders: ["local_music", "local_entities", "local_entity_detail", "local_entity_tracks", "local_track_information"],
     bind_local_lyrics: ["track_lyrics", "local_music"], set_lyric_endpoints: ["track_lyrics"],
     set_lyric_sources: ["track_lyrics"],
+    set_local_preferences: ["track_lyrics", "local_entities", "local_entity_detail", "local_entity_tracks"],
+    create_local_playlist: ["local_entities", "local_entity_detail"], rename_local_playlist: ["local_entities", "local_entity_detail"],
+    delete_local_playlist: ["local_entities", "local_entity_detail", "local_entity_tracks"],
+    add_local_playlist_track: ["local_entities", "local_entity_detail", "local_entity_tracks"],
+    remove_local_playlist_track: ["local_entities", "local_entity_detail", "local_entity_tracks"],
     clear_local_cache: ["track_lyrics"], set_local_cache_options: ["track_lyrics"], logout: [...cachedCommands],
   };
   if (affected[command]) invalidateNativeCache(affected[command]);

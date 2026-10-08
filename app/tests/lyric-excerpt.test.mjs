@@ -9,6 +9,7 @@ function harness() {
   let cursor = 0;
   const sources = { amll: true, qq: true };
   const modules = {
+    "@/hooks/use-local-preferences": { useLocalPreferences: () => ({ options: { lyricPriority: "local", artistSeparators: [] } }) },
     react: {
       useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => { slots[i] = value; }]; },
       useEffect(fn, deps) { const i = cursor++, old = slots[i]; if (!old || deps.some((v, j) => v !== old.deps[j])) { old?.cleanup?.(); slots[i] = { deps }; effects.push(() => { slots[i].cleanup = fn(); }); } },

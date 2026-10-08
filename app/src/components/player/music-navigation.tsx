@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-export type MusicView = "library" | "discover" | "local" | "search" | "queue" | "collection" | "artist" | "album" | "plugin";
-export interface MusicCollection { id: number; kind: "playlist" | "album" | "artist"; name: string; cover: string; subtitle: string; trackCount: number; creatorId?: number; liked?: boolean; playCount?: number | null; publishedAt?: number | null; artists?: import("@/lib/player").MusicCredit[] }
+export type MusicView = "library" | "discover" | "local" | "search" | "queue" | "collection" | "artist" | "album" | "plugin" | "local-artist" | "local-album" | "local-playlist";
+export interface MusicCollection { localId?: string; id: number; kind: "playlist" | "album" | "artist"; name: string; cover: string; subtitle: string; trackCount: number; creatorId?: number; liked?: boolean; playCount?: number | null; publishedAt?: number | null; artists?: import("@/lib/player").MusicCredit[] }
 interface Page { view: MusicView; query: string; collection?: MusicCollection }
 const NavigationContext = createContext<{
   page: Page; canBack: boolean; canForward: boolean;
@@ -33,7 +33,7 @@ export function MusicNavigationProvider({ children }: { children: ReactNode }) {
     if (view === "collection" && collection?.kind === "album") view = "album";
     setHistory((previous) => {
       const current = previous.entries[previous.index];
-      if (current.view === view && current.query === query && current.collection?.id === collection?.id && current.collection?.kind === collection?.kind) return previous;
+      if (current.view === view && current.query === query && current.collection?.id === collection?.id && current.collection?.kind === collection?.kind && current.collection?.localId === collection?.localId && current.collection?.name === collection?.name) return previous;
       // Bound history; navigating after going back discards the forward branch.
       const entries = [...previous.entries.slice(0, previous.index + 1), { view, query, collection }].slice(-100);
       return { entries, index: entries.length - 1 };

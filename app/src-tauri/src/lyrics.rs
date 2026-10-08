@@ -54,6 +54,7 @@ pub struct LyricSkips {
     pub qq: bool,
     pub qrc: bool,
     pub local: bool,
+    pub netease: bool,
 }
 
 impl LyricService {
@@ -97,19 +98,58 @@ impl LyricService {
         skips: LyricSkips,
         app: tauri::AppHandle,
     ) -> AppResult<Option<Lyrics>> {
-        if !skips.local {
-            if let TrackSource::Local { path, .. } = &track.source {
-                if let Some(local) = local_lyrics(path).await? {
-                    return Ok(Some(local));
+        let local_path = match &track.source {
+            TrackSource::Local { path, .. } if !skips.local => Some(path.clone()),
+            _ => None,
+        };
+        let preferences = if matches!(track.source, TrackSource::Local { .. }) {
+            Some(crate::local_library::preferences(&self.store)?)
+        } else {
+            None
+        };
+        let prefer_online = preferences
+            .as_ref()
+            .is_some_and(|value| value.lyric_priority == "online");
+        if !prefer_online {
+            if let Some(path) = &local_path {
+                if let Ok(Some(value)) = local_lyrics(path).await {
+                    return Ok(Some(value));
                 }
             }
         }
-        let Some(id) = track.netease_id() else {
-            return Ok(None);
-        };
+        let mut online_track = track;
+        if let Some(options) = preferences {
+            online_track.artist = crate::local_library::split_artists(
+                &online_track.artist,
+                &options.artist_separators,
+            )
+            .join(" / ");
+        }
+        let result = self.get_online(online_track, refresh, skips, app).await;
+        if matches!(result, Ok(Some(_))) {
+            return result;
+        }
+        if prefer_online {
+            if let Some(path) = &local_path {
+                if let Ok(Some(value)) = local_lyrics(path).await {
+                    return Ok(Some(value));
+                }
+            }
+        }
+        result
+    }
+
+    async fn get_online(
+        self: &Arc<Self>,
+        track: Track,
+        refresh: bool,
+        skips: LyricSkips,
+        app: tauri::AppHandle,
+    ) -> AppResult<Option<Lyrics>> {
+        let id = track.netease_id();
         let sources = self.sources()?;
-        let amll_key = format!("amll:{id}");
-        let ncm_key = format!("netease:{id}");
+        let amll_key = format!("amll:{}", id.unwrap_or(0));
+        let ncm_key = format!("netease:{}", id.unwrap_or(0));
         // Metadata belongs in the key: local bindings and corrected tags can change matching.
         let digest = format!(
             "{:x}",
@@ -126,7 +166,7 @@ impl LyricService {
             retries.remove(&qrc_key);
             retries.remove(&lrc_key);
         }
-        if sources.amll && !skips.amll {
+        if let Some(id) = id.filter(|_| sources.amll && !skips.amll) {
             // Disk failure is a cache miss; it must never prevent online fallback.
             if let Some(cached) = self
                 .store
@@ -170,6 +210,9 @@ impl LyricService {
                 return Ok(Some(value));
             }
         }
+        let Some(id) = id.filter(|_| !skips.netease) else {
+            return Ok(None);
+        };
         if !refresh {
             if let Some(cached) = self.store.cached_lyrics(&ncm_key)? {
                 if cached.fresh {

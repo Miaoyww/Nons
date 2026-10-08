@@ -122,7 +122,9 @@ fn read_track(
     let key = format!("local:{:x}", Sha256::digest(path.as_bytes()));
     let metadata = std::fs::metadata(&path).map_err(|e| e.to_string())?;
     let modified = format!("{:?}", metadata.modified().map_err(|e| e.to_string())?);
-    if store.file_unchanged(&key, &modified, metadata.len())? {
+    if store.file_unchanged(&key, &modified, metadata.len())?
+        && store.has_local_information(&key)?
+    {
         if let Ok(track) = store.track(&key) {
             return Ok(track);
         }
@@ -149,6 +151,7 @@ fn read_track(
     }
     // Re-importing a file must preserve a user's explicit lyric binding.
     let netease_id = store.track(&key).ok().and_then(|t| t.netease_id());
+    let information = crate::local_library::information(&tagged, &path);
     let track = Track {
         aliases: Vec::new(),
         artists: Vec::new(),
@@ -179,6 +182,7 @@ fn read_track(
         cover,
         source: TrackSource::Local { path, netease_id },
     };
+    store.save_local_information(&key, &information)?;
     store.save_tracks(std::slice::from_ref(&track))?;
     store.save_file_stat(&key, &modified, metadata.len())?;
     Ok(track)
