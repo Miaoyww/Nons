@@ -428,12 +428,16 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
           {list.items.length > 0 ? (
             <TrackList
               tracks={list.items}
+              key={`${collection.kind}:${collection.localId ?? collection.id}`}
+              searchable
+              sortable
+              hasMore={list.more}
               busy={!isTauri()}
               currentKey={player.index === null ? undefined : player.queue[player.index]?.key}
-              onPlay={(index) => {
+              onPlay={(index, tracks) => {
                 const start = index >= 1000 ? index : 0
                 void nativeCall('play_queue', {
-                  keys: list.items.slice(start, start + 1000).map((t) => t.key),
+                  keys: tracks.slice(start, start + 1000).map((t) => t.key),
                   index: index - start
                 }).catch(onError)
               }}

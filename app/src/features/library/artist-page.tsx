@@ -214,7 +214,9 @@ export default function ArtistPage({
       >
         {songs.items.length ? (
           <TrackList
+            key={`${collection.kind}:${collection.id}`}
             tracks={songs.items}
+            sortable
             searchable
             hasMore={songs.more}
             currentKey={currentKey}

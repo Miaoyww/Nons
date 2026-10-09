@@ -253,7 +253,9 @@ export default function MusicLibrary({
             </p>
           ) : detail.tracks.length ? (
             <TrackList
+              key={`${collection.kind}:${collection.id}`}
               tracks={detail.tracks}
+              sortable
               searchable
               hasMore={detail.more}
               currentKey={currentKey}

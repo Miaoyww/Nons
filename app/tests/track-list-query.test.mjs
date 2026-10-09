@@ -53,6 +53,29 @@ async function harness(run) {
       }
     },
     '@/components/music/infinite-load': { scrollParent: () => null },
+    '@/components/ui/select': {
+      Select: ({ value, onValueChange, children }) =>
+        React.createElement(
+          'div',
+          {},
+          React.createElement(
+            'select',
+            {
+              'aria-label': 'test sort',
+              value,
+              onChange: (event) => onValueChange(event.target.value)
+            },
+            ['default', 'title', 'artist', 'album', 'duration'].map((value) =>
+              React.createElement('option', { key: value, value }, value)
+            )
+          ),
+          children
+        ),
+      SelectContent: () => null,
+      SelectItem: () => null,
+      SelectTrigger: () => null,
+      SelectValue: () => null
+    },
     '@/components/ui/input': { Input: (props) => React.createElement('input', props) },
     '@/components/music/music-links': { TrackAlbum: ({ track }) => track.album },
     '@/components/music/action-button': {
@@ -160,5 +183,50 @@ test('filtered duplicate rows retain original removal indices', async () => {
     await search('Alpha')
     menus.at(-1).onRemove()
     assert.equal(removes.at(-1)[1], 2)
+  })
+})
+
+test('sorting preserves stable ties, filtered playback order and source indices', async () => {
+  await harness(async ({ render, plays, removes, menus, tracks, search }) => {
+    await render({ sortable: true })
+    const sort = async (value) => {
+      const element = document.querySelector('select')
+      const key = Object.keys(element).find((key) => key.startsWith('__reactProps'))
+      await act(async () => element[key].onChange({ target: { value } }))
+    }
+    await sort('duration')
+    await act(async () => document.querySelector('.track-cover').click())
+    assert.deepEqual(
+      plays.at(-1)[1].map((track) => track.key),
+      ['b', 'a', 'a']
+    )
+    assert.deepEqual(
+      tracks.map((track) => track.key),
+      ['a', 'b', 'a'],
+      'cached input order is unchanged'
+    )
+    menus.at(-1).onRemove()
+    assert.equal(removes.at(-1)[1], 2)
+    await act(async () => document.querySelector('[aria-label="切换为降序"]').click())
+    await act(async () => document.querySelectorAll('.track-cover')[2].click())
+    assert.equal(plays.at(-1)[0], 2)
+    assert.deepEqual(
+      plays.at(-1)[1].map((track) => track.key),
+      ['a', 'a', 'b']
+    )
+    await sort('album')
+    await search('Beta')
+    await act(async () => document.querySelector('.track-cover').click())
+    assert.deepEqual(
+      plays.at(-1)[1].map((track) => track.key),
+      ['b']
+    )
+    await search('')
+    await sort('default')
+    await act(async () => document.querySelector('.track-cover').click())
+    assert.deepEqual(
+      plays.at(-1)[1].map((track) => track.key),
+      ['a', 'b', 'a']
+    )
   })
 })

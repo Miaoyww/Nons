@@ -107,7 +107,9 @@ export default function AlbumPage({
         </p>
       ) : list.items.length ? (
         <TrackList
+          key={`${collection.kind}:${collection.id}`}
           tracks={list.items}
+          sortable
           searchable
           hasMore={list.more}
           currentKey={currentKey}

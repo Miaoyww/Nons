@@ -1,8 +1,15 @@
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { TrackAlbum } from '@/components/music/music-links'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { scrollParent } from '@/components/music/infinite-load'
-import { Heart, ListPlus, Play, Search } from 'lucide-react'
+import { Heart, ListPlus, Play, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { errorText, formatTime, type Track } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
@@ -12,6 +19,14 @@ import { SongContextMenu } from '@/components/music/song-actions'
 import { TrackIdentity } from '@/components/music/track-identity'
 import type { ReactNode } from 'react'
 import { useInterfaceDensity } from '@/features/settings/use-interface-density'
+
+const sortLabels: Record<string, string> = {
+  default: '默认排序',
+  title: '歌名',
+  artist: '艺术家',
+  album: '专辑',
+  duration: '时长'
+}
 
 interface Props {
   tracks: Track[]
@@ -29,6 +44,7 @@ interface Props {
     className?: string
     render: (track: Track, index: number) => ReactNode
   }[]
+  sortable?: boolean
   searchable?: boolean
   hasMore?: boolean
   showDuration?: boolean
@@ -46,14 +62,17 @@ export const TrackList = memo(function TrackList({
   onRemove,
   removeLabel,
   extraColumns = [],
+  sortable = false,
   searchable = false,
   hasMore = false,
   showDuration = true
 }: Props) {
+  const [sort, setSort] = useState('default')
+  const [descending, setDescending] = useState(false)
   const [query, setQuery] = useState('')
   const entries = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase()
-    return tracks
+    const result = tracks
       .map((track, index) => ({ track, index }))
       .filter(
         ({ track }) =>
@@ -63,7 +82,21 @@ export const TrackList = memo(function TrackList({
             value.toLocaleLowerCase().includes(keyword)
           )
       )
-  }, [tracks, query, searchable])
+    if (sortable && sort !== 'default') {
+      const collator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
+      result.sort((a, b) => {
+        const compare =
+          sort === 'duration'
+            ? a.track.durationMs - b.track.durationMs
+            : collator.compare(
+                a.track[sort as 'title' | 'artist' | 'album'],
+                b.track[sort as 'title' | 'artist' | 'album']
+              )
+        return (descending ? -compare : compare) || a.index - b.index
+      })
+    }
+    return result
+  }, [tracks, query, searchable, sortable, sort, descending])
   const visibleTracks = useMemo(() => entries.map(({ track }) => track), [entries])
   const [cardMode] = useInterfaceDensity()
   const { profile, likedIds, likesReady, likesError, pendingLikes, reloadLikes, toggleLike } =
@@ -101,10 +134,8 @@ export const TrackList = memo(function TrackList({
   }, [])
   useLayoutEffect(() => {
     if (locateRequest === undefined || currentIndex === undefined || currentIndex < 0) return
-    virtualizer.scrollToIndex(
-      entries.findIndex((entry) => entry.index === currentIndex),
-      { align: 'center' }
-    )
+    const visibleIndex = entries.findIndex((entry) => entry.index === currentIndex)
+    if (visibleIndex >= 0) virtualizer.scrollToIndex(visibleIndex, { align: 'center' })
   }, [locateRequest, scrollMargin, virtualizer])
   const showLikes = tracks.some((track) => track.source.kind === 'netease')
   const columns =
@@ -161,8 +192,64 @@ export const TrackList = memo(function TrackList({
             <th className="w-12 py-3 text-center" scope="col">
               序号
             </th>
-            <th className="py-3" scope="col">
-              歌曲
+            <th
+              className="py-3"
+              scope="col"
+              aria-sort={
+                sortable && sort !== 'default'
+                  ? descending
+                    ? 'descending'
+                    : 'ascending'
+                  : undefined
+              }
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                歌曲
+                {sortable && (
+                  <>
+                    <Select
+                      value={sort}
+                      onValueChange={(value) => {
+                        if (value) {
+                          setSort(value)
+                          setDescending(false)
+                        }
+                      }}
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        aria-label="歌曲排序"
+                        className="border-0 bg-transparent px-2 shadow-none"
+                      >
+                        <ArrowUpDown aria-hidden="true" className="size-3.5" />
+                        <SelectValue>{sortLabels[sort]}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        {Object.entries(sortLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {sort !== 'default' && (
+                      <ActionButton
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={descending ? '切换为升序' : '切换为降序'}
+                        title={descending ? '降序' : '升序'}
+                        onClick={() => setDescending((value) => !value)}
+                      >
+                        {descending ? (
+                          <ArrowDown aria-hidden="true" />
+                        ) : (
+                          <ArrowUp aria-hidden="true" />
+                        )}
+                      </ActionButton>
+                    )}
+                  </>
+                )}
+              </div>
             </th>
             <th className="w-[22%] py-3" scope="col">
               专辑
