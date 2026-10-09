@@ -24,7 +24,7 @@ export function QueuePage({ onError }: { onError: (error: unknown) => void }) {
   const currentIndex = matches.findIndex(({ index }) => index === state.index)
   return (
     <>
-      <header className="flex flex-wrap shrink-0 items-center justify-between gap-4 px-8 pb-6 pt-8">
+      <header className="queue-page-header flex flex-wrap shrink-0 items-center justify-between gap-4 px-8 pb-6 pt-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">播放列表</h1>
           <p className="mt-2 text-sm text-muted-foreground">{state.queue.length} 首歌</p>

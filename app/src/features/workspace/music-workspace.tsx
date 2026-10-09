@@ -19,6 +19,7 @@ import { QualitySelect } from '@/features/playback/music-options'
 import { SongActionsProvider } from '@/components/music/song-actions'
 import { QueuePage } from '@/features/queue/queue-page'
 import { PluginPageHost } from '@/plugins/host'
+import { useInterfaceDensity } from '@/features/settings/use-interface-density'
 
 const LocalPage = lazy(() => import('@/features/local/local-page'))
 const SearchPage = lazy(() => import('@/features/search/search-page'))
@@ -46,6 +47,7 @@ export function MusicWorkspace({
 }) {
   const state = usePlayer()
   const [barMode] = usePlaybackBarMode()
+  const [density] = useInterfaceDensity()
   const { page, navigate } = useMusicNavigation()
   const view = page.view
   const previousPage = useRef(page)
@@ -179,7 +181,11 @@ export function MusicWorkspace({
   return (
     <CollectionActionsProvider onError={onError} onNotice={showNotice}>
       <SongActionsProvider onError={onError} onNotice={showNotice}>
-        <div className="music-workspace flex min-h-0 flex-1 flex-col" data-playback-bar={barMode}>
+        <div
+          className="music-workspace flex min-h-0 flex-1 flex-col"
+          data-playback-bar={barMode}
+          data-density={density}
+        >
           <Suspense
             fallback={
               <div role="status" className="m-auto">

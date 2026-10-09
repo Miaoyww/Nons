@@ -10,7 +10,7 @@ import { useAccount } from '@/features/account/account'
 import { SongContextMenu } from '@/components/music/song-actions'
 import { TrackIdentity } from '@/components/music/track-identity'
 import type { ReactNode } from 'react'
-import { useSongCardMode } from '@/features/settings/use-song-card-mode'
+import { useInterfaceDensity } from '@/features/settings/use-interface-density'
 
 interface Props {
   tracks: Track[]
@@ -45,7 +45,7 @@ export const TrackList = memo(function TrackList({
   extraColumns = [],
   showDuration = true
 }: Props) {
-  const [cardMode] = useSongCardMode()
+  const [cardMode] = useInterfaceDensity()
   const { profile, likedIds, likesReady, likesError, pendingLikes, reloadLikes, toggleLike } =
     useAccount()
   const [likeError, setLikeError] = useState<string>()

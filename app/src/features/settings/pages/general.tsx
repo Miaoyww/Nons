@@ -5,7 +5,10 @@ import { FontPicker } from '@/features/settings/font-picker'
 import { useFontSettings } from '@/features/settings/use-font-settings'
 import { usePlaybackBarMode, type PlaybackBarMode } from '@/features/playback/use-playback-bar-mode'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { useSongCardMode, type SongCardMode } from '@/features/settings/use-song-card-mode'
+import {
+  useInterfaceDensity,
+  type InterfaceDensity
+} from '@/features/settings/use-interface-density'
 
 const themes = [
   { value: 'light', label: '浅色', icon: Sun },
@@ -22,7 +25,7 @@ export function GeneralPage({
 }) {
   const { fonts, setFont } = useFontSettings()
   const [barMode, setBarMode] = usePlaybackBarMode()
-  const [songCardMode, setSongCardMode] = useSongCardMode()
+  const [density, setDensity] = useInterfaceDensity()
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -66,14 +69,14 @@ export function GeneralPage({
         </ToggleGroup>
       </SettingsCard>
       <SettingsCard
-        title="歌曲卡片样式"
-        description="应用于歌曲列表和歌曲信息。紧凑式缩小封面与行间距，封面、歌名和艺术家仍一起显示在左侧。"
+        title="界面密度"
+        description="统一调整音乐页面的留白、详情封面、标题与歌曲行高。紧凑式显示更多内容，封面、歌名和艺术家仍一起放在左侧。"
       >
         <ToggleGroup
-          aria-label="歌曲卡片样式"
-          value={[songCardMode]}
+          aria-label="界面密度"
+          value={[density]}
           onValueChange={(values) => {
-            if (values[0]) setSongCardMode(values[0] as SongCardMode)
+            if (values[0]) setDensity(values[0] as InterfaceDensity)
           }}
         >
           <ToggleGroupItem value="standard">标准式</ToggleGroupItem>

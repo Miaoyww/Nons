@@ -69,6 +69,9 @@ function harness(initialMode = 'collapsible') {
     '@/lib/runtime-cache': {},
     'motion/react': { AnimatePresence: 'AnimatePresence' },
     '@/features/playback/use-playback-bar-mode': { usePlaybackBarMode: () => [barMode, () => {}] },
+    '@/features/settings/use-interface-density': {
+      useInterfaceDensity: () => ['standard', () => {}]
+    },
     '@/features/playback/persistent-playback-bar': {
       PersistentPlaybackBar: 'PersistentPlaybackBar'
     },

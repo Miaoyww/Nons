@@ -3,7 +3,10 @@ import type { Track } from '@/lib/player'
 import { Cover } from './cover'
 import { TrackArtists } from './music-links'
 import { TrackTitle, trackDisplayTitle } from './track-title'
-import { useSongCardMode, type SongCardMode } from '@/features/settings/use-song-card-mode'
+import {
+  useInterfaceDensity,
+  type InterfaceDensity
+} from '@/features/settings/use-interface-density'
 
 export function TrackIdentity({
   track,
@@ -14,9 +17,9 @@ export function TrackIdentity({
   track: Track
   cover?: ReactNode
   showSource?: boolean
-  mode?: SongCardMode
+  mode?: InterfaceDensity
 }) {
-  const [preferredMode] = useSongCardMode()
+  const [preferredMode] = useInterfaceDensity()
   const displayMode = mode ?? preferredMode
   return (
     <div className="track-identity flex min-w-0 items-center" data-mode={displayMode}>

@@ -1,14 +1,14 @@
 import { useSyncExternalStore } from 'react'
 
-export type SongCardMode = 'standard' | 'compact'
-const storageKey = 'nons-song-card-mode'
+export type InterfaceDensity = 'standard' | 'compact'
+const storageKey = 'nons-interface-density'
 const listeners = new Set<() => void>()
-let mode: SongCardMode = 'standard'
-function isMode(value: unknown): value is SongCardMode {
+let mode: InterfaceDensity = 'standard'
+function isMode(value: unknown): value is InterfaceDensity {
   return value === 'standard' || value === 'compact'
 }
 try {
-  const saved = localStorage.getItem(storageKey)
+  const saved = localStorage.getItem(storageKey) ?? localStorage.getItem('nons-song-card-mode')
   if (isMode(saved)) mode = saved
 } catch {
   /* Storage is optional. */
@@ -19,7 +19,7 @@ const subscribe = (listener: () => void) => {
     listeners.delete(listener)
   }
 }
-function setMode(value: SongCardMode) {
+function setMode(value: InterfaceDensity) {
   if (!isMode(value) || value === mode) return
   mode = value
   try {
@@ -29,6 +29,6 @@ function setMode(value: SongCardMode) {
   }
   listeners.forEach((notify) => notify())
 }
-export function useSongCardMode() {
+export function useInterfaceDensity() {
   return [useSyncExternalStore(subscribe, () => mode), setMode] as const
 }
