@@ -68,7 +68,7 @@ function CollectionCards({
   onPlay: (item: MusicCollection) => void
 }) {
   return (
-    <div className={items[0]?.kind === 'album' ? 'discover-playlist-grid' : 'library-cover-grid'}>
+    <div className={items[0]?.kind === 'artist' ? 'library-cover-grid' : 'discover-playlist-grid'}>
       {items.map((item) =>
         item.kind === 'album' ? (
           <AlbumCard
@@ -536,7 +536,10 @@ export default function MusicLibrary({
               登录后查看收藏的歌单、专辑和艺人。
             </p>
           ) : listBusy && !list.items.length ? (
-            <div role="status" className="library-cover-grid">
+            <div
+              role="status"
+              className={tab === 'playlist' ? 'discover-playlist-grid' : 'library-cover-grid'}
+            >
               {Array.from({ length: 5 }, (_, index) => (
                 <div className="library-cover-skeleton" key={index}>
                   <span />
