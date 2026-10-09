@@ -10,7 +10,7 @@ import wave
 
 ROOT = Path(__file__).resolve().parents[1]
 
-def smoke(payload):
+def smoke(payload, skip_audio_output=False):
     payload = payload.resolve()
     manifest = json.loads((payload / "runtime/manifest.json").read_text(encoding="utf-8"))
     for relative in manifest["files"]:
@@ -52,9 +52,13 @@ def smoke(payload):
             if encoded.returncode: raise RuntimeError(f"{extension} fixture encoding failed: " + encoded.stdout + encoded.stderr)
             run("gst-launch-1.0.exe", ["-q", "filesrc", f"location={compressed.as_posix()}", "!", "decodebin", "!", "audioconvert", "!", "audioresample", "!", "fakesink"])
         # Exercise the real output device too, using silent PCM.
-        run("gst-launch-1.0.exe", ["-q", "filesrc", f"location={sample.as_posix()}", "!", "decodebin", "!", "audioconvert", "!", "audioresample", "!", "autoaudiosink"])
-    print(f"PASS: {len(manifest['files'])} files, {len(factories)} factories, WAV/FLAC/MP3/AAC/Vorbis/Opus decoding and silent output with SDK-free PATH")
+        if not skip_audio_output:
+            run("gst-launch-1.0.exe", ["-q", "filesrc", f"location={sample.as_posix()}", "!", "decodebin", "!", "audioconvert", "!", "audioresample", "!", "autoaudiosink"])
+    output_status = "audio output skipped" if skip_audio_output else "silent audio output"
+    print(f"PASS: {len(manifest['files'])} files, {len(factories)} factories, WAV/FLAC/MP3/AAC/Vorbis/Opus decoding, {output_status}, SDK-free PATH")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(); parser.add_argument("payload", type=Path)
-    smoke(parser.parse_args().payload)
+    parser.add_argument("--skip-audio-output", action="store_true", help="Skip physical audio output on CI runners without an audio device")
+    args = parser.parse_args()
+    smoke(args.payload, args.skip_audio_output)

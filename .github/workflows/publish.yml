@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: wasm32-unknown-unknown
+          components: rustfmt
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            app/src-tauri -> target
+            plugins/netease-island/backend -> target
+            plugins/runtime-fixture/backend -> target
+
+      - name: Validate release version and notes
+        run: python scripts/release.py notes $env:RELEASE_TAG .local/release-notes.md
+
+      - name: Install frontend dependencies
+        run: pnpm --dir app install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm --dir app format:check
+
+      - name: Test frontend and release tooling
+        run: |
+          pnpm --dir app test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s scripts/tests
+
+      - name: Install plugin compiler
+        run: cargo install cargo-component --version 0.21.1 --locked
+
+      - name: Build plugins and test component
+        run: |
+          pnpm --dir app plugins:build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --dir app plugins:fixtures
+
+      - name: Prepare GStreamer runtime
+        run: python scripts/bootstrap-gstreamer.py
+
+      - name: Test native code
+        run: ./scripts/native.ps1 -Task test -ExtraArgs @('--locked', '--lib', '--tests', '--', '--test-threads=1')
+
+      - name: Build installers
+        run: pnpm --dir app build:release
+
+      - name: Verify bundled audio runtime
+        run: python scripts/smoke-audio-runtime.py app/src-tauri/target/release --skip-audio-output
+
+      - name: Collect release files and checksums
+        run: python scripts/release.py files $env:RELEASE_TAG .local/release-files
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nons-windows-x64
+          path: .local/release-files/*
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/release.py notes "$RELEASE_TAG" .local/release-notes.md
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nons-windows-x64
+          path: artifacts
+
+      - name: Verify artifact checksums
+        working-directory: artifacts
+        run: sha256sum --check SHA256SUMS.txt
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$REPO" --notes-file .local/release-notes.md
+          else
+            gh release create "$TAG" --repo "$REPO" --title "Nons $TAG" \
+              --verify-tag --draft --notes-file .local/release-notes.md
+          fi
+          for file in artifacts/*; do
+            gh release upload "$TAG" "$file" --repo "$REPO" --clobber
+          done
+          gh release edit "$TAG" --repo "$REPO" --draft=false

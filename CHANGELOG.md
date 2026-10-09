@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- GitHub 发布附件包含 Windows MSI／EXE、可单独安装的灵动岛 ZIP，以及 SHA256 校验和。
+
 ## [1.0.0]
 
 首个正式版本，当前发布范围为 Windows x64。macOS/Linux 尚未完成构建、基本播放与安装包验收。
