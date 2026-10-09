@@ -9,20 +9,32 @@ impl Database {
         let db = Connection::open(path).map_err(|e| e.to_string())?;
         db.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS plugins (id TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0); CREATE TABLE IF NOT EXISTS storage (plugin TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(plugin,key)); CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);").map_err(|e| e.to_string())?;
         db.execute_batch("CREATE TABLE IF NOT EXISTS configuration (plugin TEXT PRIMARY KEY, revision INTEGER NOT NULL, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS directory_grants (plugin TEXT NOT NULL, id TEXT NOT NULL, path TEXT NOT NULL, writable INTEGER NOT NULL, PRIMARY KEY(plugin,id));").map_err(|e| e.to_string())?;
+        db.execute_batch("CREATE TABLE IF NOT EXISTS plugin_authorizations (plugin TEXT PRIMARY KEY, scope TEXT NOT NULL);").map_err(|e| e.to_string())?;
         Ok(Self(Mutex::new(db)))
     }
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
         self.0.lock().map_err(|_| "插件存储不可用".into())
     }
-    pub fn enabled(&self, id: &str) -> AppResult<bool> {
+    pub fn enabled(&self, id: &str, scope: &str) -> AppResult<bool> {
         Ok(self
             .lock()?
-            .query_row("SELECT enabled FROM plugins WHERE id=?1", [id], |r| {
+            .query_row("SELECT enabled FROM plugins JOIN plugin_authorizations ON plugin=id WHERE id=?1 AND scope=?2", params![id,scope], |r| {
                 r.get::<_, bool>(0)
             })
             .optional()
             .map_err(|e| e.to_string())?
             .unwrap_or(false))
+    }
+    pub fn authorize(&self, id: &str, scope: &str) -> AppResult<()> {
+        let mut db = self.lock()?;
+        let tx = db.transaction().map_err(|e| e.to_string())?;
+        tx.execute("INSERT INTO plugin_authorizations VALUES(?1,?2) ON CONFLICT(plugin) DO UPDATE SET scope=excluded.scope", params![id,scope]).map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO plugins(id,enabled) VALUES(?1,1) ON CONFLICT(id) DO UPDATE SET enabled=1",
+            [id],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())
     }
     pub fn enable(&self, id: &str, value: bool) -> AppResult<()> {
         self.lock()?.execute("INSERT INTO plugins(id,enabled) VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET enabled=excluded.enabled", params![id,value]).map_err(|e| e.to_string())?;
@@ -48,6 +60,8 @@ impl Database {
         let mut db = self.lock()?;
         let tx = db.transaction().map_err(|e| e.to_string())?;
         tx.execute("DELETE FROM plugins WHERE id=?1", [id])
+            .map_err(|e| e.to_string())?;
+        tx.execute("DELETE FROM plugin_authorizations WHERE plugin=?1", [id])
             .map_err(|e| e.to_string())?;
         tx.execute("DELETE FROM storage WHERE plugin=?1", [id])
             .map_err(|e| e.to_string())?;
@@ -187,6 +201,21 @@ fn check_key(key: &str) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn authorization_is_bound_to_scope_and_cannot_upgrade_legacy_enablement() {
+        let db = Database::open(Path::new(":memory:")).unwrap();
+        db.enable("a", true).unwrap();
+        assert!(!db.enabled("a", "old").unwrap());
+        db.authorize("a", "old").unwrap();
+        assert!(db.enabled("a", "old").unwrap());
+        assert!(!db.enabled("a", "new").unwrap());
+        assert!(!db.enabled("b", "old").unwrap());
+        db.enable("a", false).unwrap();
+        assert!(!db.enabled("a", "old").unwrap());
+        db.remove("a").unwrap();
+        db.enable("a", true).unwrap();
+        assert!(!db.enabled("a", "old").unwrap());
+    }
     #[test]
     fn storage_isolation_and_quota() {
         let db = Database::open(Path::new(":memory:")).unwrap();

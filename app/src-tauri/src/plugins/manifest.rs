@@ -9,6 +9,8 @@ use std::{
 pub const API_VERSION: &str = "1.0.0";
 pub const PERMISSIONS: &[&str] = &[
     "clipboard:music-links",
+    "clipboard:read",
+    "http:request",
     "storage",
     "music:metadata",
     "player:read",
@@ -29,6 +31,8 @@ pub struct Manifest {
     pub frontend: Option<String>,
     pub configuration: Option<String>,
     pub permissions: Vec<String>,
+    #[serde(default, rename = "httpHosts")]
+    pub http_hosts: Vec<String>,
     pub engines: Engines,
     #[serde(default)]
     pub contributes: Contributions,
@@ -162,6 +166,14 @@ pub fn is_link(meta: &std::fs::Metadata) -> bool {
     }
 }
 impl Manifest {
+    pub fn authorization(&self) -> String {
+        let mut permissions = self.permissions.clone();
+        let mut hosts = self.http_hosts.clone();
+        permissions.sort();
+        hosts.sort();
+        serde_json::json!({"version":self.version,"permissions":permissions,"httpHosts":hosts})
+            .to_string()
+    }
     pub fn read(root: &Path) -> AppResult<Self> {
         Self::read_configured(root).map(|(manifest, _)| manifest)
     }
@@ -230,6 +242,16 @@ impl Manifest {
             return Err("未知或重复的插件权限".into());
         }
         let c = &self.contributes;
+        let mut hosts = HashSet::new();
+        if self.http_hosts.len() > 32
+            || self
+                .http_hosts
+                .iter()
+                .any(|host| !super::http::valid_host(host) || !hosts.insert(host))
+            || (self.permissions.iter().any(|p| p == "http:request") == self.http_hosts.is_empty())
+        {
+            return Err("HTTP 权限需要 1 至 32 个不重复的精确域名".into());
+        }
         if let Some(path) = &self.configuration {
             safe_relative(path)?;
             if !path.ends_with(".json") {
@@ -308,6 +330,21 @@ mod tests {
         .unwrap();
         let valid: Manifest = serde_json::from_value(value.clone()).unwrap();
         assert!(valid.validate().is_ok());
+        for hosts in [
+            serde_json::json!([]),
+            serde_json::json!(["*.example.org"]),
+            serde_json::json!(["example.org", "example.org"]),
+        ] {
+            let mut candidate = value.clone();
+            candidate["httpHosts"] = hosts;
+            assert!(serde_json::from_value::<Manifest>(candidate)
+                .unwrap()
+                .validate()
+                .is_err());
+        }
+        let mut different_scope = valid.clone();
+        different_scope.http_hosts.push("example.org".into());
+        assert_ne!(valid.authorization(), different_scope.authorization());
         for (pointer, invalid) in [
             ("/id", serde_json::json!("../bad")),
             ("/version", serde_json::json!("latest")),

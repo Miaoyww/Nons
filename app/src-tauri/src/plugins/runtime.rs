@@ -162,6 +162,7 @@ mod tests {
     #[derive(Default)]
     struct FakeHost {
         events: Mutex<Vec<serde_json::Value>>,
+        http_requests: Mutex<Vec<serde_json::Value>>,
     }
     impl HostHandler for FakeHost {
         fn call<'a>(
@@ -172,7 +173,14 @@ mod tests {
             Box::pin(async move {
                 match operation {
                     "config.get" => Ok(r#"{"values":{"detectLinks":true}}"#.into()),
-                    "music.get-song" => {
+                    "http.request" => {
+                        self.http_requests
+                            .lock()
+                            .unwrap()
+                            .push(serde_json::from_str(args).unwrap());
+                        Ok(r#"{"status":302,"headers":{"location":"https://music.163.com/#/song?id=347230"},"body":""}"#.into())
+                    }
+                    "netease.get-song" => {
                         let args: serde_json::Value = serde_json::from_str(args).unwrap();
                         assert_eq!(args["id"], 347230);
                         Ok(serde_json::json!({"id":347230,"title":"Fixture song","artist":"Fixture artist","album":"Fixture album","durationMs":1000,"cover":""}).to_string())
@@ -217,8 +225,8 @@ mod tests {
             assert_eq!(
                 runtime
                     .call(
-                        "event:music-link",
-                        r#"{"url":"https://music.163.com/#/song?id=347230"}"#
+                        "event:clipboard-text",
+                        r#"{"text":"fixture text https://evil.test/private https://music.163.com/#/song?id=347230"}"#
                     )
                     .await
                     .unwrap(),
@@ -229,6 +237,28 @@ mod tests {
                 assert_eq!(events.len(), 1);
                 assert_eq!(events[0]["event"], "song-detected");
                 assert_eq!(events[0]["payload"]["title"], "Fixture song");
+            }
+            runtime
+                .call(
+                    "event:clipboard-text",
+                    r#"{"text":"unrelated private text https://evil.test/song?id=347230"}"#,
+                )
+                .await
+                .unwrap();
+            assert_eq!(host.events.lock().unwrap().len(), 1);
+            assert!(host.http_requests.lock().unwrap().is_empty());
+            runtime
+                .call(
+                    "event:clipboard-text",
+                    r#"{"text":"分享 https://163cn.tv/fixture"}"#,
+                )
+                .await
+                .unwrap();
+            assert_eq!(host.events.lock().unwrap().len(), 2);
+            {
+                let requests = host.http_requests.lock().unwrap();
+                assert_eq!(requests.len(), 1);
+                assert_eq!(requests[0]["url"], "https://163cn.tv/fixture");
             }
             assert!(runtime.call("unknown", "null").await.is_err());
             assert!(

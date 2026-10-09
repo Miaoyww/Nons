@@ -1,15 +1,33 @@
 {
   "id": "netease-island",
   "name": "灵动岛",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "backend": "backend.wasm",
   "frontend": "ui.mjs",
   "configuration": "configuration.json",
-  "permissions": ["clipboard:music-links", "music:metadata", "player:control", "ui", "config"],
-  "engines": { "app": "^0.1.0", "pluginApi": "^1.0.0", "uiApi": "^1.0.0" },
+  "permissions": [
+    "clipboard:read",
+    "http:request",
+    "music:metadata",
+    "player:control",
+    "ui",
+    "config"
+  ],
+  "engines": {
+    "app": "^0.1.0",
+    "pluginApi": "^1.0.0",
+    "uiApi": "^1.0.0"
+  },
   "contributes": {
-    "views": [{ "id": "island", "slot": "main.overlay", "export": "DynamicIsland" }],
+    "views": [
+      {
+        "id": "island",
+        "slot": "main.overlay",
+        "export": "DynamicIsland"
+      }
+    ],
     "pages": [],
     "navigation": []
-  }
+  },
+  "httpHosts": ["music.163.com", "y.music.163.com", "m.music.163.com", "163cn.tv"]
 }

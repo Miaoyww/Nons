@@ -32,15 +32,20 @@ pub fn start(manager: Arc<PluginManager>) {
             let context = manager.scoped("netease-island", descriptor.generation)?;
             assert!(context.call("player.read", r#"{}"#).await.is_err());
             assert!(context.call("storage.get", r#"{"key":"other"}"#).await.is_err());
+            assert!(context.call("http.request", r#"{"url":"https://unauthorized.test/"}"#).await.is_err());
+            let mut denied = context.clone();
+            denied.permissions.remove("clipboard:read");
+            denied.permissions.remove("http:request");
+            assert!(denied.call("clipboard.read-text", "{}").await.is_err());
+            assert!(denied.call("http.request", r#"{"url":"https://music.163.com/"}"#).await.is_err());
             assert!(manager.resource(&tauri::http::Request::builder().uri(format!("plugin://localhost/netease-island/{}/../manifest.json", descriptor.generation)).body(Vec::new()).unwrap()).is_err());
             manager.app.get_webview_window("main").ok_or("缺少 WebView")?.eval(r#"
                 (()=>{const start=Date.now();const poll=()=>{if(document.querySelector('.nons-island-title')){window.__TAURI_INTERNALS__.invoke('plugin_probe_report',{phase:'render',success:true});return;}if(Date.now()-start>12000){window.__TAURI_INTERNALS__.invoke('plugin_probe_report',{phase:'render',success:false});return;}setTimeout(poll,50);};poll();})();
             "#).map_err(|e| e.to_string())?;
-            // Feed synthetic clipboard text into the same host URL filter; never overwrite the user's clipboard.
-            let links = clipboard::candidates("fixture text https://music.163.com/#/song?id=347230 https://evil.test/private");
-            assert_eq!(links.len(), 1);
+            // Deliver synthetic raw text; filtering belongs to the plugin.
+            let text = "fixture text https://music.163.com/#/song?id=347230 https://evil.test/private";
             *manager.app.state::<Probe>().delivery_started.lock().map_err(|_| "探测计时不可用")? = Some(Instant::now());
-            manager.deliver_link(&links[0]).await;
+            manager.queue_clipboard(text.to_string());
             Ok(())
         }.await;
         if let Err(error) = result {
@@ -148,8 +153,10 @@ pub async fn plugin_probe_report(
               const input=await wait(()=>document.querySelector('[aria-label="欢迎语"]'));
               await wait(()=>input.value);
               const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
-              setter.call(input,'probe-config');input.dispatchEvent(new Event('input',{bubbles:true}));input.focus();input.blur();
-              await new Promise(r=>setTimeout(r,250));
+              input.focus();setter.call(input,'probe-config');input.dispatchEvent(new Event('input',{bubbles:true}));
+              await new Promise(r=>setTimeout(r,0));input.blur();
+              const fixture=(await invoke('plugin_list')).find(p=>p.manifest.id==='settings-fixture');
+              await waitAsync(async()=>(await invoke('plugin_settings',{id:fixture.manifest.id,generation:fixture.generation,operation:'get',args:{}})).snapshot.values.greeting==='probe-config');
               (await wait(()=>button('打开子页面'))).click();
               await wait(()=>document.querySelector('[data-settings-route]')?.textContent==='/settings/advanced');
               if(document.querySelector('[data-probe-state]')?.textContent!=='1:/child')throw Error('main route changed');

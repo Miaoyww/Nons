@@ -37,7 +37,7 @@ gstreamer = { version = "0.25", features = ["v1_24"] }
 gst-plugin-reqwest = { path = "vendor/gst-plugin-reqwest", default-features = false, features = ["static", "rustls-ring"] }
 ncm-api-rs = { git = "https://github.com/SPlayer-Dev/ncm-api-rs.git", rev = "133b65bfe482e41ebccf018870d3fce07bf58eb3" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
-tokio = { version = "1", features = ["sync", "time", "fs"] }
+tokio = { version = "1", features = ["sync", "time", "fs", "macros"] }
 rusqlite = { version = "0.38", features = ["bundled"] }
 lofty = "0.25"
 url = "2"

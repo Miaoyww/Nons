@@ -6,6 +6,7 @@ export interface PluginManifest {
   frontend: string | null
   configuration?: string | null
   permissions: string[]
+  httpHosts?: string[]
   engines: { app: string; pluginApi: string; uiApi: string }
   contributes: {
     views: { id: string; slot: string; export: string }[]

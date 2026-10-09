@@ -12,8 +12,10 @@ import type { PluginDescriptor } from '@/plugins/types'
 import { PluginConfigurationPage } from '../plugins/configuration-page'
 
 const permissionLabels: Record<string, string> = {
-  'clipboard:music-links': '观察剪贴板中的网易云分享链接',
-  'music:metadata': '读取歌曲信息',
+  'clipboard:music-links': '旧版音乐链接权限（需要升级插件）',
+  'clipboard:read': '读取剪贴板文本及监听变化',
+  'http:request': '请求已声明的网络域名',
+  'music:metadata': '读取网易云歌曲信息',
   'player:read': '读取播放状态',
   'player:control': '控制播放',
   storage: '保存独立插件数据',
@@ -291,7 +293,10 @@ export function PluginsPage() {
               <h4 className="font-semibold">启用前确认</h4>
               <ul className="my-3 list-disc space-y-1 pl-5">
                 {plugin.manifest.permissions.map((p) => (
-                  <li key={p}>{permissionLabels[p] ?? p}</li>
+                  <li key={p}>
+                    {permissionLabels[p] ?? p}
+                    {p === 'http:request' && `：${plugin.manifest.httpHosts?.join('、') ?? ''}`}
+                  </li>
                 ))}
               </ul>
               <p className="leading-6 text-muted-foreground">

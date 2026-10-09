@@ -3,17 +3,20 @@ mod clipboard;
 mod configuration;
 mod database;
 mod files;
+mod http;
 mod install;
 pub mod manifest;
+mod netease;
 #[cfg(feature = "plugin-probe")]
 pub mod probe;
 mod runtime;
 pub(crate) mod settings;
 
 use crate::{model::AppResult, netease::Netease, player::Player};
-use capability::{Context, SongService};
+use capability::Context;
 use database::Database;
 use manifest::Manifest;
+use netease::SongService;
 use serde::Serialize;
 use std::{
     collections::BTreeMap,
@@ -42,12 +45,18 @@ struct Record {
     runtime: Option<Arc<tokio::sync::Mutex<runtime::Runtime>>>,
     ready: bool,
 }
+#[derive(Clone, PartialEq, Eq)]
+struct ClipboardChange {
+    text: String,
+    targets: Vec<(String, u64)>,
+}
 pub struct PluginManager {
     root: PathBuf,
     database: Arc<Database>,
     configurations: Arc<configuration::Configurations>,
     files: Arc<files::Files>,
     songs: Arc<SongService>,
+    http: Arc<http::Http>,
     player: Arc<Player>,
     app: tauri::AppHandle,
     records: Mutex<BTreeMap<String, Record>>,
@@ -56,7 +65,7 @@ pub struct PluginManager {
     generation: AtomicU64,
     stopped: AtomicBool,
     watcher: Mutex<Option<clipboard::Shutdown>>,
-    clipboard_sender: tokio::sync::watch::Sender<Vec<String>>,
+    clipboard_sender: tokio::sync::watch::Sender<Option<ClipboardChange>>,
 }
 impl PluginManager {
     pub fn new(
@@ -67,7 +76,7 @@ impl PluginManager {
     ) -> AppResult<Arc<Self>> {
         let root = data.join("plugins");
         std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
-        let (clipboard_sender, mut receiver) = tokio::sync::watch::channel(Vec::new());
+        let (clipboard_sender, mut receiver) = tokio::sync::watch::channel(None);
         let database = Arc::new(Database::open(&data.join("plugins.sqlite3"))?);
         let configurations = Arc::new(configuration::Configurations::new(database.clone()));
         let files = Arc::new(files::Files::new(
@@ -80,6 +89,7 @@ impl PluginManager {
             configurations,
             files,
             songs: Arc::new(SongService::new(netease)),
+            http: Arc::new(http::Http::new()?),
             player,
             app,
             records: Default::default(),
@@ -175,34 +185,23 @@ impl PluginManager {
         });
         let weak = Arc::downgrade(&manager);
         tauri::async_runtime::spawn(async move {
-            let client = match reqwest::Client::builder()
-                .redirect(reqwest::redirect::Policy::none())
-                .timeout(Duration::from_secs(3))
-                .build()
-            {
-                Ok(client) => client,
-                Err(_) => return,
-            };
             while receiver.changed().await.is_ok() {
-                let urls = receiver.borrow_and_update().clone();
+                let change = receiver.borrow_and_update().clone();
                 let Some(manager) = weak.upgrade() else {
                     break;
                 };
                 if manager.stopped.load(Ordering::SeqCst) {
                     break;
                 }
-                for candidate in urls {
-                    if !manager.has_clipboard_subscribers() {
-                        break;
-                    }
-                    if let Ok(Ok(url)) = tokio::time::timeout(
-                        Duration::from_secs(3),
-                        clipboard::resolve(&candidate, &client),
-                    )
-                    .await
-                    {
-                        manager.deliver_link(&url).await;
-                    }
+                if let Some(change) = change {
+                    // Release consumed plaintext without discarding a newer change.
+                    manager.clipboard_sender.send_if_modified(|pending| {
+                        if pending.as_ref() == Some(&change) {
+                            *pending = None;
+                        }
+                        false
+                    });
+                    manager.deliver_clipboard(&change).await;
                 }
             }
         });
@@ -216,6 +215,8 @@ impl PluginManager {
             id: manifest.id.clone(),
             generation,
             permissions: manifest.permissions.iter().cloned().collect(),
+            http_hosts: manifest.http_hosts.clone(),
+            http: self.http.clone(),
             active: Arc::new(AtomicBool::new(false)),
             database: self.database.clone(),
             configurations: self.configurations.clone(),
@@ -247,7 +248,7 @@ impl PluginManager {
             self.configurations.register(&id, configuration)?;
             let context = self.context(&manifest, generation);
             let descriptor = Descriptor {
-                enabled: self.database.enabled(&id)?,
+                enabled: self.database.enabled(&id, &manifest.authorization())?,
                 loaded: false,
                 generation,
                 error: None,
@@ -348,7 +349,14 @@ impl PluginManager {
                 if !confirmed {
                     return Err("请先确认插件权限和前端信任说明".into());
                 }
-                self.database.enable(id, true)?;
+                let scope = self
+                    .lock()?
+                    .get(id)
+                    .ok_or("插件未安装")?
+                    .descriptor
+                    .manifest
+                    .authorization();
+                self.database.authorize(id, &scope)?;
                 self.lock()?
                     .get_mut(id)
                     .ok_or("插件未安装")?
@@ -437,9 +445,20 @@ impl PluginManager {
             .clone();
         if manifest.id != id
             || manifest.permissions != old.permissions
+            || manifest.http_hosts != old.http_hosts
             || manifest.version != old.version
         {
             return Err("插件权限或版本已改变，请重新安装并授权".into());
+        }
+        if manifest
+            .permissions
+            .iter()
+            .any(|p| p == "clipboard:music-links")
+        {
+            return Err("旧剪贴板链接接口已移除，请安装新版插件并重新确认文本读取权限".into());
+        }
+        if !self.database.enabled(id, &manifest.authorization())? {
+            return Err("插件权限范围已改变，请重新确认授权".into());
         }
         let generation = self.generation.fetch_add(1, Ordering::SeqCst);
         self.configurations.register(id, configuration)?;
@@ -589,9 +608,7 @@ impl PluginManager {
     pub fn has_clipboard_subscribers(&self) -> bool {
         self.lock().is_ok_and(|records| {
             records.values().any(|r| {
-                r.descriptor.loaded
-                    && r.ready
-                    && r.context.permissions.contains("clipboard:music-links")
+                r.descriptor.loaded && r.ready && r.context.permissions.contains("clipboard:read")
             })
         })
     }
@@ -601,6 +618,7 @@ impl PluginManager {
             *watcher = Some(clipboard::start(self)?);
         }
         if !self.has_clipboard_subscribers() {
+            self.clipboard_sender.send_replace(None);
             if let Some(watcher) = watcher.take() {
                 watcher.stop();
             }
@@ -610,7 +628,10 @@ impl PluginManager {
         }
         Ok(())
     }
-    async fn deliver_link(self: &Arc<Self>, url: &str) {
+    fn queue_clipboard(&self, text: String) {
+        if text.len() > clipboard::MAX_TEXT {
+            return;
+        }
         let targets = self
             .lock()
             .map(|records| {
@@ -619,19 +640,32 @@ impl PluginManager {
                     .filter(|r| {
                         r.descriptor.loaded
                             && r.ready
-                            && r.context.permissions.contains("clipboard:music-links")
+                            && r.context.permissions.contains("clipboard:read")
                     })
                     .map(|r| (r.context.id.clone(), r.context.generation))
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        for (id, generation) in targets {
+        if !targets.is_empty() {
+            self.clipboard_sender
+                .send_replace(Some(ClipboardChange { text, targets }));
+        }
+    }
+    async fn deliver_clipboard(self: &Arc<Self>, change: &ClipboardChange) {
+        for (id, generation) in &change.targets {
+            if self.scoped(id, *generation).is_err() {
+                continue;
+            }
+            let _ = self.app.emit(
+                "plugin-clipboard-changed",
+                serde_json::json!({"pluginId":id,"generation":generation,"text":change.text}),
+            );
             let _ = self
                 .invoke(
-                    &id,
-                    generation,
-                    "event:music-link",
-                    &serde_json::json!({"url":url}).to_string(),
+                    id,
+                    *generation,
+                    "event:clipboard-text",
+                    &serde_json::json!({"text":change.text}).to_string(),
                 )
                 .await;
         }
@@ -712,14 +746,14 @@ impl PluginManager {
         if let Ok(mut engine) = self.engine.lock() {
             *engine = None;
         }
-        self.clipboard_sender.send_replace(Vec::new());
+        self.clipboard_sender.send_replace(None);
     }
 }
 fn host_module(module: &str) -> AppResult<(Vec<u8>, &'static str)> {
     let (object, exports) = match module {
         "react.mjs" => ("react", "Children,Fragment,Profiler,StrictMode,Suspense,Component,PureComponent,createContext,createElement,cloneElement,isValidElement,forwardRef,memo,lazy,startTransition,useActionState,useCallback,useContext,useDebugValue,useDeferredValue,useEffect,useId,useImperativeHandle,useInsertionEffect,useLayoutEffect,useMemo,useOptimistic,useReducer,useRef,useState,useSyncExternalStore,useTransition,use,act,cache,version"),
         "jsx-runtime.mjs" => ("jsx", "Fragment,jsx,jsxs"),
-        "sdk.mjs" => ("sdk", "usePluginBackend,usePluginEvent,usePluginStorage,usePluginConfig,usePluginFiles,usePluginNavigate,usePluginRoute,usePlayer,useTheme,useCoverSource,useSongPlayback,SongArtists,SongLikeButton,Button"),
+        "sdk.mjs" => ("sdk", "usePluginClipboard,usePluginHttp,useNetease,usePluginBackend,usePluginEvent,usePluginStorage,usePluginConfig,usePluginFiles,usePluginNavigate,usePluginRoute,usePlayer,useTheme,useCoverSource,useSongPlayback,SongArtists,SongLikeButton,Button"),
         _ => return Err("未知宿主桥接模块".into()),
     };
     Ok((format!("const host=globalThis.__NONS_PLUGIN_HOST__.{object};export default host;export const {{{exports}}}=host;").into_bytes(), "text/javascript"))

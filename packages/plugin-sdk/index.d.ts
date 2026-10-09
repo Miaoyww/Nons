@@ -14,6 +14,28 @@ export function usePluginBackend(): {
 }
 export function usePluginEvent<T = unknown>(event: string): T | undefined
 export function useSongPlayback(): (id: number, mode: 'now' | 'next') => Promise<void>
+export function useNetease(): {
+  getSong(id: number): Promise<PluginSong>
+  playSong(id: number, mode: 'now' | 'next'): Promise<void>
+}
+export function usePluginClipboard(): {
+  readText(): Promise<string>
+  subscribe(callback: (text: string) => void): Promise<() => void>
+}
+export interface PluginHttpRequest {
+  url: string
+  method?: 'GET' | 'HEAD'
+  timeoutMs?: number
+  responseType?: 'text' | 'none'
+}
+export interface PluginHttpResponse {
+  status: number
+  headers: Record<string, string>
+  body: string
+}
+export function usePluginHttp(): {
+  request(request: PluginHttpRequest): Promise<PluginHttpResponse>
+}
 export const SongArtists: ComponentType<{ song: PluginSong }>
 export const SongLikeButton: ComponentType<{ song: PluginSong; onError: (error: unknown) => void }>
 export function usePluginStorage(): {

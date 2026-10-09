@@ -274,7 +274,7 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
       next.click()
     })
     assert.equal(calls.length, 1, 'repeated clicks submit one queue operation')
-    assert.equal(calls[0][1].operation, 'player.play-song')
+    assert.equal(calls[0][1].operation, 'netease.play-song')
     assert.deepEqual(JSON.parse(calls[0][1].args), { id: 2, mode: 'next' })
     await React.act(async () => {
       finish('null')

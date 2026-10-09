@@ -6,15 +6,44 @@
   "additionalProperties": false,
   "required": ["id", "name", "version", "permissions", "engines"],
   "anyOf": [
-    { "required": ["backend"], "properties": { "backend": { "type": "string" } } },
-    { "required": ["frontend"], "properties": { "frontend": { "type": "string" } } }
+    {
+      "required": ["backend"],
+      "properties": {
+        "backend": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "required": ["frontend"],
+      "properties": {
+        "frontend": {
+          "type": "string"
+        }
+      }
+    }
   ],
   "properties": {
-    "id": { "$ref": "#/$defs/id" },
-    "name": { "type": "string", "minLength": 1, "maxLength": 128 },
-    "version": { "type": "string", "description": "SemVer; checked by Rust semver." },
-    "backend": { "type": ["string", "null"], "pattern": "\\.wasm$" },
-    "frontend": { "type": ["string", "null"], "pattern": "\\.mjs$" },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "version": {
+      "type": "string",
+      "description": "SemVer; checked by Rust semver."
+    },
+    "backend": {
+      "type": ["string", "null"],
+      "pattern": "\\.wasm$"
+    },
+    "frontend": {
+      "type": ["string", "null"],
+      "pattern": "\\.mjs$"
+    },
     "configuration": {
       "type": ["string", "null"],
       "pattern": "\\.json$",
@@ -33,7 +62,9 @@
           "ui",
           "config",
           "files:data",
-          "files:selected"
+          "files:selected",
+          "clipboard:read",
+          "http:request"
         ]
       }
     },
@@ -42,9 +73,15 @@
       "additionalProperties": false,
       "required": ["app", "pluginApi", "uiApi"],
       "properties": {
-        "app": { "type": "string" },
-        "pluginApi": { "type": "string" },
-        "uiApi": { "type": "string" }
+        "app": {
+          "type": "string"
+        },
+        "pluginApi": {
+          "type": "string"
+        },
+        "uiApi": {
+          "type": "string"
+        }
       }
     },
     "contributes": {
@@ -58,9 +95,15 @@
             "additionalProperties": false,
             "required": ["id", "slot", "export"],
             "properties": {
-              "id": { "$ref": "#/$defs/id" },
-              "slot": { "const": "main.overlay" },
-              "export": { "$ref": "#/$defs/export" }
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "slot": {
+                "const": "main.overlay"
+              },
+              "export": {
+                "$ref": "#/$defs/export"
+              }
             }
           }
         },
@@ -71,9 +114,16 @@
             "additionalProperties": false,
             "required": ["id", "path", "export"],
             "properties": {
-              "id": { "$ref": "#/$defs/id" },
-              "path": { "type": "string", "pattern": "^/" },
-              "export": { "$ref": "#/$defs/export" }
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^/"
+              },
+              "export": {
+                "$ref": "#/$defs/export"
+              }
             }
           }
         },
@@ -84,22 +134,56 @@
             "additionalProperties": false,
             "required": ["id", "label", "page"],
             "properties": {
-              "id": { "$ref": "#/$defs/id" },
-              "label": { "type": "string", "minLength": 1, "maxLength": 128 },
-              "page": { "$ref": "#/$defs/id" }
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "page": {
+                "$ref": "#/$defs/id"
+              }
             }
           }
         },
-        "commands": { "type": "array" },
-        "menus": { "type": "array" },
-        "contextMenus": { "type": "array" },
-        "settings": { "type": "array" },
-        "shortcuts": { "type": "array" }
+        "commands": {
+          "type": "array"
+        },
+        "menus": {
+          "type": "array"
+        },
+        "contextMenus": {
+          "type": "array"
+        },
+        "settings": {
+          "type": "array"
+        },
+        "shortcuts": {
+          "type": "array"
+        }
       }
+    },
+    "httpHosts": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 253
+      },
+      "description": "http:request 的精确域名范围；不含协议、端口、通配符，由 Rust 校验。"
     }
   },
   "$defs": {
-    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
-    "export": { "type": "string", "pattern": "^[a-zA-Z0-9_]{1,128}$" }
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "export": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_]{1,128}$"
+    }
   }
 }

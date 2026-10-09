@@ -1,14 +1,13 @@
-use super::database::Database;
+use super::{database::Database, netease::SongService};
 use crate::{
-    model::{AppResult, Track},
-    netease::Netease,
+    model::AppResult,
     player::{Command, Player},
 };
 use serde_json::{json, Value};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
         Arc,
     },
     time::{Duration, Instant},
@@ -16,76 +15,13 @@ use std::{
 use tauri::Emitter;
 
 pub const MAX_JSON: usize = 64 * 1024;
-pub struct SongService {
-    netease: Arc<Netease>,
-    generation: AtomicU64,
-    cache: tokio::sync::Mutex<HashMap<u64, (u64, Instant, Track)>>,
-}
-impl SongService {
-    pub fn new(netease: Arc<Netease>) -> Self {
-        Self {
-            netease,
-            generation: AtomicU64::new(0),
-            cache: Default::default(),
-        }
-    }
-    pub fn invalidate(&self) {
-        self.generation.fetch_add(1, Ordering::SeqCst);
-    }
-    pub async fn song(&self, id: u64) -> AppResult<Value> {
-        Ok(song_value(id, &self.track(id).await?))
-    }
-    async fn track(&self, id: u64) -> AppResult<Track> {
-        // A bounded serial fetch also coalesces duplicate concurrent requests.
-        let generation = self.generation.load(Ordering::SeqCst);
-        let mut cache = self.cache.lock().await;
-        cache.retain(|_, (entry_generation, time, _)| {
-            *entry_generation == generation && time.elapsed() < Duration::from_secs(600)
-        });
-        // Cache entries belong to the account generation in which they were fetched.
-        if generation != self.generation.load(Ordering::SeqCst) {
-            return Err("账号状态已变化".into());
-        }
-        if let Some((_, _, track)) = cache.get(&id) {
-            return Ok(track.clone());
-        }
-        let track = tokio::time::timeout(Duration::from_secs(3), self.netease.song(id))
-            .await
-            .map_err(|_| "歌曲信息查询超时")??;
-        if generation != self.generation.load(Ordering::SeqCst) {
-            cache.clear();
-            return Err("账号状态已变化".into());
-        }
-        while cache.len() >= 128 {
-            if let Some(key) = cache
-                .iter()
-                .min_by_key(|(_, (_, time, _))| *time)
-                .map(|(key, _)| *key)
-            {
-                cache.remove(&key);
-            }
-        }
-        let value = song_value(id, &track);
-        if serde_json::to_vec(&value).map_err(|e| e.to_string())?.len() > MAX_JSON {
-            return Err("歌曲信息过大".into());
-        }
-        cache.insert(id, (generation, Instant::now(), track.clone()));
-        Ok(track)
-    }
-    pub async fn clear(&self) {
-        self.invalidate();
-        self.cache.lock().await.clear();
-    }
-}
-fn song_value(id: u64, track: &Track) -> Value {
-    json!({"id":id,"key":track.key,"title":track.title,"artist":track.artist,"artists":track.artists,"album":track.album,"durationMs":track.duration_ms,"cover":track.cover})
-}
-
 #[derive(Clone)]
 pub struct Context {
     pub id: String,
     pub generation: u64,
     pub permissions: HashSet<String>,
+    pub http_hosts: Vec<String>,
+    pub http: Arc<super::http::Http>,
     pub active: Arc<AtomicBool>,
     pub database: Arc<Database>,
     pub configurations: Arc<super::configuration::Configurations>,
@@ -112,6 +48,19 @@ impl Context {
         }
         let args: Value = serde_json::from_str(args).map_err(|_| "插件参数必须为 JSON")?;
         let result = match operation {
+            "clipboard.read-text" => {
+                self.check(Some("clipboard:read"))?;
+                let text = tauri::async_runtime::spawn_blocking(super::clipboard::read_text)
+                    .await
+                    .map_err(|e| e.to_string())??;
+                Value::String(text)
+            }
+            "http.request" => {
+                self.check(Some("http:request"))?;
+                self.http
+                    .request(&self.http_hosts, &args, &self.active)
+                    .await?
+            }
             "config.get" | "config.update" | "config.reset" => {
                 self.check(Some("config"))?;
                 let snapshot = if operation == "config.get" {
@@ -187,7 +136,7 @@ impl Context {
                     .map_err(|e| e.to_string())??
                 }
             }
-            "music.get-song" => {
+            "netease.get-song" | "music.get-song" => {
                 self.check(Some("music:metadata"))?;
                 self.songs
                     .song(
@@ -249,7 +198,7 @@ impl Context {
                 let state = self.player.snapshot()?;
                 json!({"status":state.status,"positionMs":state.position_ms,"durationMs":state.duration_ms,"volume":state.volume,"track":state.current().map(|t| json!({"title":t.title,"artist":t.artist,"album":t.album,"durationMs":t.duration_ms,"cover":if t.cover.starts_with("http") { &t.cover } else { "" }}))})
             }
-            "player.play-song" => {
+            "netease.play-song" | "player.play-song" => {
                 self.check(Some("player:control"))?;
                 self.check(Some("music:metadata"))?;
                 let next = match text(&args, "mode")? {

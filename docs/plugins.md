@@ -16,6 +16,8 @@ Nons 在现有播放器上增量提供 `Manifest + WASM Backend + React Frontend
 
 宿主启动、IPC 和协议注册接入原 `lib.rs`；歌曲读取继续使用 `netease.rs` 的现有 Client 和曲目解析。App 增加通用 Provider／Slot，已有工作区和导航增加插件页面分支，设置增加插件管理。Theme 共享原偏好与 CSS tokens，播放 facade 订阅原状态及进度，不创建另一套播放器。
 
+职责归属见 [插件职责边界](adr/0005-plugin-capability-boundary.md)。通用能力提供系统操作；播放器领域能力复用已有业务服务；插件组合这些能力完成自己的业务。下面列出的接口为当前实现，不代表提前实现所有系统能力。
+
 ## 构建与安装
 
 一次性准备：项目仍要求 Rust 1.95、Node/pnpm、Python 和原 GStreamer 开发运行时。另安装：
@@ -64,7 +66,8 @@ app/src-tauri/bundled-plugins/netease-island.zip
   "version": "1.0.0",
   "backend": "backend.wasm",
   "frontend": "ui.mjs",
-  "permissions": ["clipboard:music-links", "music:metadata", "ui"],
+  "permissions": ["clipboard:read", "http:request", "music:metadata", "ui"],
+  "httpHosts": ["music.163.com", "y.music.163.com", "m.music.163.com", "163cn.tv"],
   "engines": { "app": "^0.1.0", "pluginApi": "^1.0.0", "uiApi": "^1.0.0" },
   "contributes": {
     "views": [{ "id": "island", "slot": "main.overlay", "export": "DynamicIsland" }],
@@ -76,35 +79,44 @@ app/src-tauri/bundled-plugins/netease-island.zip
 
 backend／frontend 可独立省略，但至少有一个入口。UI 贡献必须声明 frontend 与 `ui`。未知字段或权限拒绝加载；改动已安装插件的版本或权限需要重新安装并确认。commands、menus、contextMenus、settings、shortcuts 仅保留声明字段，当前不执行。
 
+`http:request` 与 `httpHosts` 一同声明，域名最多 32 个，只接受精确的小写 DNS 域名，不含协议、路径、端口、IP 或通配符。启用前显示域名范围。授权记录绑定插件版本、权限与域名集合，重启后范围变化也需重新确认。历史授权没有范围记录时先保持关闭，用户重新确认后启用；旧 `clipboard:music-links` 仅保留安装识别与升级提示，不再执行，也不转换为原文读取权限。灵动岛 1.3.0 需重新安装并授权。
+
 ## Host Capability 与 SDK
 
 WIT Host 的 `call(operation, args-json)` 返回 JSON 或业务错误，身份来自 Store，Guest 不能指定另一个 pluginId。当前操作：
 
 | 操作                     | 权限                               | 行为                                                                                            |
 | ------------------------ | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `music.get-song`         | `music:metadata`                   | `{id}` 查询宿主网易云歌曲信息，返回 PluginSong                                                  |
+| `clipboard.read-text`    | `clipboard:read`                   | `{}` 读取当前剪贴板文本；变化通过 `event:clipboard-text` 的 `{text}` 交付后端                   |
+| `http.request`           | `http:request` + `httpHosts`       | `{url,method?,timeoutMs?,responseType?}` 请求授权域名，返回 `{status,headers,body}`             |
+| `netease.get-song`       | `music:metadata`                   | `{id}` 查询宿主网易云歌曲信息，返回 PluginSong                                                  |
 | `events.emit`            | 活跃加载实例                       | `{event,payload}` 发布自己的事件                                                                |
 | `storage.get/set/delete` | `storage`                          | 操作自身的 JSON 键值空间                                                                        |
 | `player.read`            | `player:read`                      | 读取经过裁剪的播放状态，不提供本地文件路径                                                      |
 | `player.control`         | `player:control`                   | pause、resume、next、previous、stop，进入既有播放命令队列                                       |
-| `player.play-song`       | `player:control`、`music:metadata` | `{id,mode: "now" 或 "next"}` 使用宿主有界歌曲缓存，立即播放替换队列，下一首播放插入当前曲目之后 |
+| `netease.play-song`      | `player:control`、`music:metadata` | `{id,mode: "now" 或 "next"}` 使用宿主有界歌曲缓存，立即播放替换队列，下一首播放插入当前曲目之后 |
+
+`music.get-song` 和 `player.play-song` 保留为旧调用名的兼容别名；新实现使用 `netease.*` 明确来源。配置与文件操作见 [插件配置开发](plugin-configuration.md)。
 
 公开 React API：
 
-| API                        | 返回／用途                                                                                                 |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `usePluginBackend()`       | `call<T>(method, args?)`；自动绑定身份与加载代次                                                           |
-| `usePluginEvent<T>(event)` | 当前事件最新 payload；订阅随组件卸载清理                                                                   |
-| `usePluginStorage()`       | 异步 get／set／delete；缺失值为 null                                                                       |
-| `usePluginNavigate()`      | 在当前插件命名空间内导航，参数为 `/child` 等相对插件根路径                                                 |
-| `usePluginRoute()`         | 当前插件的 pathname 和 search                                                                              |
-| `usePlayer()`              | 原播放状态和进度；读取需 player:read，control 还需 player:control                                          |
-| `useTheme()`               | 原主题偏好 light／dark／system；实际颜色使用宿主 CSS tokens                                                |
-| `useCoverSource()`         | 复用宿主封面缓存和失败回退                                                                                 |
-| `Button`                   | 宿主已有 Button；不打包另一份 UI 实现                                                                      |
-| `SongArtists`              | `{song}` 复用宿主 ArtistLinks，按结构化艺术家 ID 跳转宿主艺术家页，需 ui                                   |
-| `SongLikeButton`           | `{song,onError}` 复用宿主收藏按钮和账号状态，收藏至我喜欢的音乐，需 ui；未登录、收藏状态未就绪及提交中禁用 |
-| `useSongPlayback()`        | `(id,mode) => Promise<void>`，使用 scoped Host Capability，需 player:control 和 music:metadata             |
+| API                        | 返回／用途                                                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `usePluginBackend()`       | `call<T>(method, args?)`；自动绑定身份与加载代次                                                                       |
+| `usePluginClipboard()`     | `readText()` 读取文本；`subscribe(callback)` 订阅文本变化并返回清理函数；需 `clipboard:read`                           |
+| `usePluginHttp()`          | `request({url,method?,timeoutMs?,responseType?})`；需 `http:request` 与声明域名                                        |
+| `useNetease()`             | `getSong(id)` 查询网易云歌曲，`playSong(id,mode)` 立即／下一首播放；读取需 `music:metadata`，播放另需 `player:control` |
+| `usePluginEvent<T>(event)` | 当前事件最新 payload；订阅随组件卸载清理                                                                               |
+| `usePluginStorage()`       | 异步 get／set／delete；缺失值为 null                                                                                   |
+| `usePluginNavigate()`      | 在当前插件命名空间内导航，参数为 `/child` 等相对插件根路径                                                             |
+| `usePluginRoute()`         | 当前插件的 pathname 和 search                                                                                          |
+| `usePlayer()`              | 原播放状态和进度；读取需 player:read，control 还需 player:control                                                      |
+| `useTheme()`               | 原主题偏好 light／dark／system；实际颜色使用宿主 CSS tokens                                                            |
+| `useCoverSource()`         | 复用宿主封面缓存和失败回退                                                                                             |
+| `Button`                   | 宿主已有 Button；不打包另一份 UI 实现                                                                                  |
+| `SongArtists`              | `{song}` 复用宿主 ArtistLinks，按结构化艺术家 ID 跳转宿主艺术家页，需 ui                                               |
+| `SongLikeButton`           | `{song,onError}` 复用宿主收藏按钮和账号状态，收藏至我喜欢的音乐，需 ui；未登录、收藏状态未就绪及提交中禁用             |
+| `useSongPlayback()`        | `(id,mode) => Promise<void>`，使用 scoped Host Capability，需 player:control 和 music:metadata                         |
 
 SDK 不要求手写 pluginId。所有 SDK 请求经过 `nativeCall` 和 scoped IPC；禁用／reload 后即使 Promise 晚返回，SDK 也拒绝旧结果。事件内部命名为 `plugin:<id>:<event>`，共用 Tauri transport，但 SDK 只读取自身 Scope。订阅在实例卸载时删除；每实例只保留有界的最新事件，不承诺持久历史或初始化之前的事件重放。
 
@@ -114,18 +126,22 @@ SDK 不要求手写 pluginId。所有 SDK 请求经过 `nativeCall` 和 scoped I
 
 ```mermaid
 flowchart LR
-  C[剪贴板变化] --> H[Rust 过滤分享 URL／解析官方短链]
-  H --> W[WASM 识别歌曲 ID]
-  W --> N[Host music.get-song／既有网易云 Client]
+  C[剪贴板变化] --> H[Host 交付有界文本]
+  H --> W[插件筛选网易云链接／解析短链／识别歌曲 ID]
+  W --> R[Host 通用 HTTP／精确域名授权]
+  R --> W
+  W --> N[Host netease.get-song／既有网易云 Client]
   N --> W
   W --> E[plugin-scoped song-detected]
   E --> U[动态 ui.mjs／公共 SDK]
   U --> S[PluginSlot main.overlay]
 ```
 
-Host 仅观察新变化，不在启动时读取旧内容；没有已加载且授权的订阅者时停止监听。Windows 使用 clipboard-win 的事件 Monitor，初始化错误作为 Result 返回；文本读取与其他平台观察复用 clipboard-rs。不写剪贴板、不记录或传送原文，只处理不超过 16KiB 的文本，最多提取 4 个、各不超过 2048 字节的候选 URL。
+Host 自动观察新变化，不在启动时重放旧内容；插件可以显式调用 `readText()` 读取当前文本。没有已加载且授权的插件时停止监听。Windows 使用 clipboard-win 的事件 Monitor，文本读取与其他平台观察复用 clipboard-rs。原文最多 16KiB，通过 scoped 事件交付授权实例；宿主合并待处理变化，消费或停止监听后清理待处理原文，不写剪贴板、不持久化或记录内容。前端订阅清理函数可重复调用，停用自动清理；旧加载代次的事件与异步结果被拒绝。
 
-允许精确域名 `music.163.com`、`y.music.163.com`、`m.music.163.com`、`163cn.tv`，拒绝账号密码及非默认端口。官方短链使用禁止自动跳转的独立 client，每一步校验域名，最多 3 次跳转，总期限 3 秒；支持 HTTP redirect，不执行网页脚本。Guest 仅收到歌曲候选 URL，不能访问任意 HTTP。
+通用 HTTP 复用独立连接池，当前支持 GET／HEAD、UTF-8 文本或仅响应头；每次请求最多 3 秒、响应头 4KiB、文本正文 8KiB、URL 2048 字节。宿主不附带网易云 Cookie，不自动跳转，不缓存响应；收到跳转后由插件决定是否继续请求，每次都校验授权域名、HTTP(S)、账号密码及默认端口。停用后取消正在等待的请求；接口上限仍受现有 IPC 总大小约束。
+
+网易云域名、歌曲 URL 格式和跳转规则全部在 `plugins/netease-island/backend/src/links.rs`。插件最多提取 4 个候选，优先直接歌曲链接；短链共享最多 3 次请求，每次 500 毫秒，以给后续 3 秒元数据查询留出 WASM 的 5 秒执行预算。每一步检查网易云域名，支持 HTTP redirect 和相对跳转，不执行网页脚本；选取首个可识别的歌曲。HTTP 和查询失败保留实例，等待后续复制。
 
 Guest 查询歌曲失败时不产生预览，保留实例以等待后续复制。成功时发出包含结构化艺术家信息的 Song DTO；React 插件绘制封面、标题、可点击歌手、关闭与操作区域。新歌曲替换旧预览；同歌曲 30 秒内去重；8 秒后收起，鼠标悬停或键盘聚焦暂停倒计时，Escape／关闭按钮可收起。1.1.0 新增 player:control 权限，立即播放替换队列，下一首播放使用既有 PlayNext 命令；收藏复用宿主账号与写入缓存失效规则，成功与失败均提供反馈。切换歌曲时重建操作状态，旧请求不覆盖新提示。已安装的 1.0.0 需重新安装新版并确认新增权限。
 

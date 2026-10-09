@@ -1,9 +1,15 @@
 #[rustfmt::skip]
+#[cfg(not(test))]
 mod bindings;
+mod links;
+#[cfg(not(test))]
 use bindings::{nons::plugin::host, Guest};
+#[cfg(not(test))]
 use serde_json::{json, Value};
 
+#[cfg(not(test))]
 struct Island;
+#[cfg(not(test))]
 impl Guest for Island {
     fn initialize() -> Result<(), String> {
         host::call("config.get", "{}")?;
@@ -16,7 +22,7 @@ impl Guest for Island {
         if method == "event:config-changed" {
             return Ok("null".into());
         }
-        if method != "event:music-link" {
+        if method != "event:clipboard-text" {
             return Err("未知方法".into());
         }
         let config: Value =
@@ -25,11 +31,35 @@ impl Guest for Island {
             return Ok("null".into());
         }
         let args: Value = serde_json::from_str(&args).map_err(|_| "无效参数")?;
-        let Some(id) = args.get("url").and_then(Value::as_str).and_then(song_id) else {
+        let text = args
+            .get("text")
+            .and_then(Value::as_str)
+            .ok_or("缺少剪贴板文本")?;
+        if text.len() > 16 * 1024 {
+            return Ok("null".into());
+        }
+        let candidates = links::candidates(text);
+        // Prefer an already usable song link before attempting short links.
+        let mut id = candidates.iter().find_map(links::song_id);
+        let mut remaining = 3;
+        if id.is_none() {
+            for candidate in candidates {
+                if let Ok(url) = links::resolve(candidate, &mut remaining, |request| {
+                    serde_json::from_str(&host::call("http.request", &request.to_string())?)
+                        .map_err(|_| "无效 HTTP 响应".into())
+                }) {
+                    id = links::song_id(&url);
+                    if id.is_some() {
+                        break;
+                    }
+                }
+            }
+        }
+        let Some(id) = id else {
             return Ok("null".into());
         };
         // Network failures are recoverable and must not fault this plugin.
-        if let Ok(song) = host::call("music.get-song", &json!({"id":id}).to_string()) {
+        if let Ok(song) = host::call("netease.get-song", &json!({"id":id}).to_string()) {
             let payload: Value = serde_json::from_str(&song).map_err(|_| "无效歌曲信息")?;
             host::call(
                 "events.emit",
@@ -39,36 +69,5 @@ impl Guest for Island {
         Ok("null".into())
     }
 }
-fn song_id(url: &str) -> Option<u64> {
-    let (_, query) = url.split_once('?')?;
-    query.split('&').find_map(|part| {
-        let (key, value) = part.split_once('=')?;
-        if key != "id" {
-            return None;
-        }
-        let value = value.split('#').next()?;
-        let id = value.parse::<u64>().ok()?;
-        (id > 0 && id <= 9_007_199_254_740_991).then_some(id)
-    })
-}
+#[cfg(not(test))]
 bindings::export!(Island with_types_in bindings);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn parses_normal_and_fragment_links() {
-        assert_eq!(
-            song_id("https://music.163.com/song?id=123&userid=2"),
-            Some(123)
-        );
-        assert_eq!(song_id("https://music.163.com/#/song?id=456"), Some(456));
-        for url in [
-            "https://music.163.com/song",
-            "https://music.163.com/song?id=-1",
-            "https://music.163.com/song?id=9007199254740992",
-        ] {
-            assert_eq!(song_id(url), None);
-        }
-    }
-}

@@ -15,7 +15,82 @@ export { SongArtists, SongLikeButton } from './song-components'
 export function useSongPlayback() {
   const scope = useScope('player:control')
   return useCallback(
-    (id: number, mode: 'now' | 'next') => hostCall<void>(scope, 'player.play-song', { id, mode }),
+    (id: number, mode: 'now' | 'next') => hostCall<void>(scope, 'netease.play-song', { id, mode }),
+    [scope]
+  )
+}
+
+export function useNetease() {
+  const scope = useScope('music:metadata')
+  return useMemo(
+    () => ({
+      getSong: (id: number) =>
+        hostCall<import('./types').PluginSong>(scope, 'netease.get-song', { id }),
+      playSong: (id: number, mode: 'now' | 'next') =>
+        hostCall<void>(scope, 'netease.play-song', { id, mode })
+    }),
+    [scope]
+  )
+}
+
+export interface PluginHttpRequest {
+  url: string
+  method?: 'GET' | 'HEAD'
+  timeoutMs?: number
+  responseType?: 'text' | 'none'
+}
+export interface PluginHttpResponse {
+  status: number
+  headers: Record<string, string>
+  body: string
+}
+export function usePluginHttp() {
+  const scope = useScope('http:request')
+  return useMemo(
+    () => ({
+      request: (request: PluginHttpRequest) =>
+        hostCall<PluginHttpResponse>(scope, 'http.request', request)
+    }),
+    [scope]
+  )
+}
+
+export function usePluginClipboard() {
+  const scope = useScope('clipboard:read')
+  return useMemo(
+    () => ({
+      readText: () => hostCall<string>(scope, 'clipboard.read-text', {}),
+      async subscribe(callback: (text: string) => void): Promise<() => void> {
+        checkScope(scope, 'clipboard:read')
+        let disposed = false
+        const unlisten = await listen<{ pluginId: string; generation: number; text: string }>(
+          'plugin-clipboard-changed',
+          ({ payload }) => {
+            if (
+              disposed ||
+              !scope.active ||
+              payload.pluginId !== scope.descriptor.manifest.id ||
+              payload.generation !== scope.descriptor.generation
+            )
+              return
+            callback(payload.text)
+          }
+        )
+        if (!scope.active) {
+          unlisten()
+          checkScope(scope)
+        }
+        const cleanup = () => {
+          if (disposed) return
+          disposed = true
+          unlisten()
+          scope.cleanups?.delete(cleanup)
+        }
+        scope.cleanups ??= new Set()
+        scope.cleanups.add(cleanup)
+        return cleanup
+      }
+    }),
     [scope]
   )
 }
