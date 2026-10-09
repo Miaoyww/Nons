@@ -241,7 +241,7 @@ export const TrackList = memo(function TrackList({
         <thead className="bg-background text-xs text-muted-foreground">
           <tr className="border-b border-border">
             <th className="w-12 py-3 text-center" scope="col">
-              序号
+              #
             </th>
             <th className="py-3" scope="col" aria-sort={ariaSort(sortable && titleActive)}>
               {sortable ? (
