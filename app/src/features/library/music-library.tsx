@@ -1,3 +1,4 @@
+import { CollectionTabs } from '@/features/library/collection-tabs'
 import { MusicPage } from '@/components/music/music-page'
 import { CollectionContextMenu, useCollectionActions } from '@/features/library/collection-actions'
 import { TrackArtists } from '@/components/music/music-links'
@@ -242,44 +243,50 @@ export default function MusicLibrary({
             disabled={playing || !profile || detailBusy || !detail.tracks.length}
             onPlay={() => void playCollection(collection)}
           />
-          {!profile ? (
-            <div className="library-empty">
-              <p>登录网易云音乐后查看这个收藏。</p>
-              <LoginDialog />
-            </div>
-          ) : detailBusy && !detail.tracks.length ? (
-            <p role="status" className="library-empty">
-              正在加载歌曲…
-            </p>
-          ) : detail.tracks.length ? (
-            <TrackList
-              key={`${collection.kind}:${collection.id}`}
-              tracks={detail.tracks}
-              sortable
-              searchable
-              hasMore={detail.more}
-              currentKey={currentKey}
-              busy={playing}
-              onPlay={(index, tracks) => playPage(tracks, index)}
-              onAppend={append}
-              removeLabel={collection.kind === 'playlist' ? '从歌单删除' : '从列表删除'}
-              onRemove={
-                collection.kind === 'playlist' && collection.creatorId === profile.userId
-                  ? (track) => removeFromPlaylist(collection, track)
-                  : undefined
-              }
-            />
-          ) : (
-            <p className="library-empty">这里还没有歌曲。</p>
-          )}
-          {profile && (
-            <InfiniteLoad
-              more={detail.more}
-              busy={detailBusy}
-              error={detailList.error}
-              onLoad={detailList.loadMore}
-            />
-          )}
+          <CollectionTabs
+            key={`${collection.kind}:${collection.id}`}
+            collection={collection}
+            hasMore={detail.more}
+          >
+            {!profile ? (
+              <div className="library-empty">
+                <p>登录网易云音乐后查看这个收藏。</p>
+                <LoginDialog />
+              </div>
+            ) : detailBusy && !detail.tracks.length ? (
+              <p role="status" className="library-empty">
+                正在加载歌曲…
+              </p>
+            ) : detail.tracks.length ? (
+              <TrackList
+                key={`${collection.kind}:${collection.id}`}
+                tracks={detail.tracks}
+                sortable
+                searchable
+                hasMore={detail.more}
+                currentKey={currentKey}
+                busy={playing}
+                onPlay={(index, tracks) => playPage(tracks, index)}
+                onAppend={append}
+                removeLabel={collection.kind === 'playlist' ? '从歌单删除' : '从列表删除'}
+                onRemove={
+                  collection.kind === 'playlist' && collection.creatorId === profile.userId
+                    ? (track) => removeFromPlaylist(collection, track)
+                    : undefined
+                }
+              />
+            ) : (
+              <p className="library-empty">这里还没有歌曲。</p>
+            )}
+            {profile && (
+              <InfiniteLoad
+                more={detail.more}
+                busy={detailBusy}
+                error={detailList.error}
+                onLoad={detailList.loadMore}
+              />
+            )}
+          </CollectionTabs>
         </>
       ) : (
         <>

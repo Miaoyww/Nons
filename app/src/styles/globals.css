@@ -2741,3 +2741,23 @@
     opacity: 1;
   }
 }
+
+.collection-tabs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 4px;
+}
+.collection-tabs-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-left: auto;
+}
+.collection-content-tabs .track-list thead th {
+  padding-block: 4px;
+}

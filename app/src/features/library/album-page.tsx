@@ -1,3 +1,4 @@
+import { CollectionTabs } from '@/features/library/collection-tabs'
 import { DetailHeader } from '@/features/library/detail-header'
 import { DetailDescription } from '@/features/library/detail-description'
 import { MusicPage } from '@/components/music/music-page'
@@ -101,35 +102,41 @@ export default function AlbumPage({
           </ActionButton>
         </div>
       )}
-      {(busy || list.busy) && !list.items.length ? (
-        <p role="status" className="library-empty">
-          正在加载专辑…
-        </p>
-      ) : list.items.length ? (
-        <TrackList
-          key={`${collection.kind}:${collection.id}`}
-          tracks={list.items}
-          sortable
-          searchable
-          hasMore={list.more}
-          currentKey={currentKey}
-          busy={playing}
-          onPlay={(index, tracks) => {
-            void nativeCall('play_queue', {
-              keys: tracks.map((track) => track.key),
-              index
-            }).catch(onError)
-          }}
-          onAppend={(track) => {
-            void nativeCall('append_queue', { keys: [track.key] })
-              .then(() => onNotice(`已将「${track.title}」设为下一首播放。`))
-              .catch(onError)
-          }}
-        />
-      ) : (
-        <p className="library-empty">这里还没有歌曲。</p>
-      )}
-      <InfiniteLoad more={list.more} busy={list.busy} error={list.error} onLoad={list.loadMore} />
+      <CollectionTabs
+        key={`${collection.kind}:${collection.id}`}
+        collection={album}
+        hasMore={list.more}
+      >
+        {(busy || list.busy) && !list.items.length ? (
+          <p role="status" className="library-empty">
+            正在加载专辑…
+          </p>
+        ) : list.items.length ? (
+          <TrackList
+            key={`${collection.kind}:${collection.id}`}
+            tracks={list.items}
+            sortable
+            searchable
+            hasMore={list.more}
+            currentKey={currentKey}
+            busy={playing}
+            onPlay={(index, tracks) => {
+              void nativeCall('play_queue', {
+                keys: tracks.map((track) => track.key),
+                index
+              }).catch(onError)
+            }}
+            onAppend={(track) => {
+              void nativeCall('append_queue', { keys: [track.key] })
+                .then(() => onNotice(`已将「${track.title}」设为下一首播放。`))
+                .catch(onError)
+            }}
+          />
+        ) : (
+          <p className="library-empty">这里还没有歌曲。</p>
+        )}
+        <InfiniteLoad more={list.more} busy={list.busy} error={list.error} onLoad={list.loadMore} />
+      </CollectionTabs>
     </MusicPage>
   )
 }

@@ -1,3 +1,4 @@
+import { CollectionTabs } from '@/features/library/collection-tabs'
 import { TrackArtists } from '@/components/music/music-links'
 import { useCallback, useEffect, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
@@ -425,51 +426,57 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
               </div>
             </div>
           </header>
-          {list.items.length > 0 ? (
-            <TrackList
-              tracks={list.items}
-              key={`${collection.kind}:${collection.localId ?? collection.id}`}
-              searchable
-              sortable
-              hasMore={list.more}
-              busy={!isTauri()}
-              currentKey={player.index === null ? undefined : player.queue[player.index]?.key}
-              onPlay={(index, tracks) => {
-                const start = index >= 1000 ? index : 0
-                void nativeCall('play_queue', {
-                  keys: tracks.slice(start, start + 1000).map((t) => t.key),
-                  index: index - start
-                }).catch(onError)
-              }}
-              onAppend={(track) =>
-                void nativeCall('append_queue', { keys: [track.key] }).catch(onError)
-              }
-              onRemove={
-                collection.kind === 'playlist'
-                  ? async (track) => {
-                      await nativeCall('remove_local_playlist_track', {
-                        id: collection.localId,
-                        key: track.key
-                      })
-                      setRevision((v) => v + 1)
-                    }
-                  : undefined
-              }
-              removeLabel="从歌单移除"
+          <CollectionTabs
+            key={`${collection.kind}:${collection.localId ?? collection.id}`}
+            collection={collection}
+            hasMore={list.more}
+          >
+            {list.items.length > 0 ? (
+              <TrackList
+                tracks={list.items}
+                key={`${collection.kind}:${collection.localId ?? collection.id}`}
+                searchable
+                sortable
+                hasMore={list.more}
+                busy={!isTauri()}
+                currentKey={player.index === null ? undefined : player.queue[player.index]?.key}
+                onPlay={(index, tracks) => {
+                  const start = index >= 1000 ? index : 0
+                  void nativeCall('play_queue', {
+                    keys: tracks.slice(start, start + 1000).map((t) => t.key),
+                    index: index - start
+                  }).catch(onError)
+                }}
+                onAppend={(track) =>
+                  void nativeCall('append_queue', { keys: [track.key] }).catch(onError)
+                }
+                onRemove={
+                  collection.kind === 'playlist'
+                    ? async (track) => {
+                        await nativeCall('remove_local_playlist_track', {
+                          id: collection.localId,
+                          key: track.key
+                        })
+                        setRevision((v) => v + 1)
+                      }
+                    : undefined
+                }
+                removeLabel="从歌单移除"
+              />
+            ) : (
+              !list.error && (
+                <div className="library-empty">
+                  {list.busy ? '正在读取歌曲…' : '还没有歌曲，在本地歌曲的右键菜单中添加到此歌单。'}
+                </div>
+              )
+            )}
+            <InfiniteLoad
+              more={list.more}
+              busy={list.busy}
+              error={list.error}
+              onLoad={list.loadMore}
             />
-          ) : (
-            !list.error && (
-              <div className="library-empty">
-                {list.busy ? '正在读取歌曲…' : '还没有歌曲，在本地歌曲的右键菜单中添加到此歌单。'}
-              </div>
-            )
-          )}
-          <InfiniteLoad
-            more={list.more}
-            busy={list.busy}
-            error={list.error}
-            onLoad={list.loadMore}
-          />
+          </CollectionTabs>
         </>
       ) : (
         <>

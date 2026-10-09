@@ -3,7 +3,8 @@ import { TrackAlbum } from '@/components/music/music-links'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { scrollParent } from '@/components/music/infinite-load'
 import { Heart, ListPlus, Play, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
-import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { TrackSearchContext } from '@/components/music/track-search-context'
 import { errorText, formatTime, type Track } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
 import { Cover } from '@/components/music/cover'
@@ -92,6 +93,8 @@ export const TrackList = memo(function TrackList({
   const [sort, setSort] = useState<SortKey>('default')
   const [descending, setDescending] = useState(false)
   const [query, setQuery] = useState('')
+  const externalQuery = useContext(TrackSearchContext)
+  const searchQuery = externalQuery ?? query
   const sortCycle = (column: 'title' | 'album' | 'duration') => {
     const keys: SortKey[] = column === 'title' ? ['title', 'artist'] : [column]
     const states = [
@@ -122,7 +125,7 @@ export const TrackList = memo(function TrackList({
     active ? (descending ? ('descending' as const) : ('ascending' as const)) : undefined
   const titleActive = sort === 'title' || sort === 'artist'
   const entries = useMemo(() => {
-    const keyword = query.trim().toLocaleLowerCase()
+    const keyword = searchQuery.trim().toLocaleLowerCase()
     const result = tracks
       .map((track, index) => ({ track, index }))
       .filter(
@@ -147,7 +150,7 @@ export const TrackList = memo(function TrackList({
       })
     }
     return result
-  }, [tracks, query, searchable, sortable, sort, descending])
+  }, [tracks, searchQuery, searchable, sortable, sort, descending])
   const visibleTracks = useMemo(() => entries.map(({ track }) => track), [entries])
   const [cardMode] = useInterfaceDensity()
   const { profile, likedIds, likesReady, likesError, pendingLikes, reloadLikes, toggleLike } =
@@ -198,7 +201,7 @@ export const TrackList = memo(function TrackList({
     : 0
   return (
     <>
-      {searchable && (
+      {searchable && externalQuery === undefined && (
         <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
           {hasMore && (
             <span className="text-xs text-muted-foreground">

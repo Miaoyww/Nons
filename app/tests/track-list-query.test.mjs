@@ -42,6 +42,7 @@ async function harness(run) {
     scrollToIndex() {},
     getVirtualItems: () => []
   }
+  const trackSearchContext = React.createContext(undefined)
   const modules = {
     react: React,
     'react/jsx-runtime': jsx,
@@ -53,6 +54,9 @@ async function harness(run) {
       }
     },
     '@/components/music/infinite-load': { scrollParent: () => null },
+    '@/components/music/track-search-context': {
+      TrackSearchContext: trackSearchContext
+    },
     '@/components/ui/input': { Input: (props) => React.createElement('input', props) },
     '@/components/music/music-links': { TrackAlbum: ({ track }) => track.album },
     '@/components/music/action-button': {
@@ -103,16 +107,21 @@ async function harness(run) {
   const root = createRoot(document.getElementById('root'))
   const render = async (props = {}) => {
     menus.length = 0
+    const { externalQuery, ...listProps } = props
     await act(async () =>
       root.render(
-        React.createElement(exports.TrackList, {
-          tracks,
-          busy: false,
-          searchable: true,
-          onPlay: (...args) => plays.push(args),
-          onRemove: (...args) => removes.push(args),
-          ...props
-        })
+        React.createElement(
+          trackSearchContext.Provider,
+          { value: externalQuery },
+          React.createElement(exports.TrackList, {
+            tracks,
+            busy: false,
+            searchable: true,
+            onPlay: (...args) => plays.push(args),
+            onRemove: (...args) => removes.push(args),
+            ...listProps
+          })
+        )
       )
     )
   }
@@ -254,5 +263,20 @@ test('title header cycles title and artist directions then restores default, oth
       document.querySelector('[aria-label^="专辑排序："]').closest('th').getAttribute('aria-sort'),
       null
     )
+  })
+})
+
+test('detail toolbar search filters the actual list without rendering a duplicate input', async () => {
+  await harness(async ({ render, plays }) => {
+    await render({ externalQuery: 'Beta' })
+    assert.equal(document.querySelector('input'), null)
+    assert.equal(document.querySelectorAll('.track-cover').length, 1)
+    await act(async () => document.querySelector('.track-cover').click())
+    assert.deepEqual(
+      plays.at(-1)[1].map((track) => track.key),
+      ['b']
+    )
+    await render({ externalQuery: 'missing' })
+    assert.match(document.body.textContent, /没有匹配的歌曲/)
   })
 })
