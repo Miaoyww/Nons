@@ -235,7 +235,7 @@ export default function MusicLibrary({
       {showingDetail ? (
         <>
           <CollectionHeader
-            key={`${collection.kind}:${collection.id}`}
+            key={`header:${collection.kind}:${collection.id}`}
             collection={collection}
             description={detail.description}
             total={detail.total || collection.trackCount}
