@@ -257,6 +257,21 @@ mod tests {
         assert!(db.enabled(&new.id, &new.authorization()).unwrap());
     }
     #[test]
+    fn wildcard_http_hosts_require_new_authorization() {
+        let db = Database::open(Path::new(":memory:")).unwrap();
+        let mut manifest: super::super::manifest::Manifest = serde_json::from_str(include_str!(
+            "../../../../plugins/netease-download/manifest.json"
+        ))
+        .unwrap();
+        db.authorize(&manifest.id, &manifest.authorization())
+            .unwrap();
+        manifest.http_hosts = vec!["*".into()];
+        assert!(!db.enabled(&manifest.id, &manifest.authorization()).unwrap());
+        db.authorize(&manifest.id, &manifest.authorization())
+            .unwrap();
+        assert!(db.enabled(&manifest.id, &manifest.authorization()).unwrap());
+    }
+    #[test]
     fn storage_isolation_and_quota() {
         let db = Database::open(Path::new(":memory:")).unwrap();
         db.set("a", "key", "123").unwrap();

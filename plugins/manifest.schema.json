@@ -205,7 +205,7 @@
         "type": "string",
         "maxLength": 253
       },
-      "description": "http:request 的精确域名范围；不含协议、端口、通配符，由 Rust 校验。"
+      "description": "http:request/http:transfer 的域名范围；支持精确域名或 *（任意 DNS 域名，启用时显示敏感权限警告），不含协议、端口、IP 或子域通配符，由 Rust 校验。"
     }
   },
   "$defs": {

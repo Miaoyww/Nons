@@ -126,7 +126,8 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
           id: 'download',
           name: '下载管理',
           version: '1.1.0',
-          permissions: ['ui', 'account:credentials']
+          permissions: ['ui', 'account:credentials', 'http:request', 'http:transfer'],
+          httpHosts: ['*']
         },
         enabled: false,
         loaded: false
@@ -143,6 +144,13 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
       element.textContent.includes('登录 Cookie')
     )
     assert.ok(warning.className.includes('text-destructive'))
+    assert.match(document.body.textContent, /敏感权限：请求任意网络域名/)
+    assert.match(document.body.textContent, /敏感权限：从任意网络域名传输资源到授权目录/)
+    const networkWarning = [...document.querySelectorAll('[role="alert"]')].find((element) =>
+      element.textContent.includes('此插件可访问任意网络域名')
+    )
+    assert.ok(networkWarning.className.includes('text-destructive'))
+    assert.match(networkWarning.textContent, /Cookie 也可能被发送到其他网站/)
     const clickButton = async (text) =>
       React.act(async () =>
         [...document.querySelectorAll('button')]

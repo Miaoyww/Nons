@@ -302,11 +302,21 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
                   <li
                     key={p}
                     className={
-                      p === 'account:credentials' ? 'font-semibold text-destructive' : undefined
+                      p === 'account:credentials' ||
+                      (['http:request', 'http:transfer'].includes(p) &&
+                        plugin.manifest.httpHosts?.includes('*'))
+                        ? 'font-semibold text-destructive'
+                        : undefined
                     }
                   >
-                    {permissionLabels[p] ?? p}
-                    {p === 'http:request' && `：${plugin.manifest.httpHosts?.join('、') ?? ''}`}
+                    {['http:request', 'http:transfer'].includes(p) &&
+                    plugin.manifest.httpHosts?.includes('*')
+                      ? p === 'http:request'
+                        ? '敏感权限：请求任意网络域名'
+                        : '敏感权限：从任意网络域名传输资源到授权目录'
+                      : (permissionLabels[p] ?? p)}
+                    {['http:request', 'http:transfer'].includes(p) &&
+                      `：${plugin.manifest.httpHosts?.join('、') ?? ''}`}
                   </li>
                 ))}
               </ul>
@@ -317,6 +327,15 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
                 >
                   此插件可以读取当前账号的登录
                   Cookie，并以你的账号身份请求网易云服务。请仅授权你信任的插件。
+                </p>
+              )}
+              {plugin.manifest.httpHosts?.includes('*') && (
+                <p
+                  role="alert"
+                  className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+                >
+                  此插件可访问任意网络域名，向任意域名发送其可读取的数据。若同时授权账户凭证，登录
+                  Cookie 也可能被发送到其他网站。请仅授权你信任的插件。
                 </p>
               )}
               <p className="leading-6 text-muted-foreground">

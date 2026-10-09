@@ -29,9 +29,11 @@ pub(super) fn checked_url(hosts: &[String], input: &str) -> AppResult<url::Url> 
         || !url.username().is_empty()
         || url.password().is_some()
         || url.port().is_some()
-        || !url
-            .host_str()
-            .is_some_and(|host| hosts.iter().any(|allowed| allowed == host))
+        || !url.host_str().is_some_and(|host| {
+            hosts
+                .iter()
+                .any(|allowed| allowed == host || (allowed == "*" && valid_host(host)))
+        })
     {
         return Err("HTTP 地址不在插件授权范围内".into());
     }
@@ -269,6 +271,23 @@ mod tests {
             toggle.join().unwrap();
             server.join().unwrap();
         });
+    }
+    #[test]
+    fn wildcard_host_grants_match_domains_and_keep_url_restrictions() {
+        let hosts = vec!["*".into()];
+        for input in ["https://example.org/a", "http://sub.other.test/b"] {
+            assert!(checked_url(&hosts, input).is_ok(), "{input}");
+        }
+        for input in [
+            "https://user:secret@example.org/",
+            "https://example.org:444/",
+            "file:///example.org",
+            "https://127.0.0.1/",
+            "http://[::1]/",
+            "http://localhost/",
+        ] {
+            assert!(checked_url(&hosts, input).is_err(), "{input}");
+        }
     }
     #[test]
     fn exact_host_grants_reject_credentials_ports_and_lookalikes() {
