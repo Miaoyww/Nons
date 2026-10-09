@@ -9,6 +9,7 @@ import { invalidateNativeCache } from '@/lib/runtime-cache'
 import { AnimatePresence } from 'motion/react'
 import { connectPlayer, errorText, nativeCall, usePlayer } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
+import { MusicPage } from '@/components/music/music-page'
 import { PlaybackBar } from '@/features/playback/playback-bar'
 import { PersistentPlaybackBar } from '@/features/playback/persistent-playback-bar'
 import { usePlaybackBarMode } from '@/features/playback/use-playback-bar-mode'
@@ -247,7 +248,9 @@ export function MusicWorkspace({
                   )}
                 </Suspense>
               ) : view === 'plugin' ? (
-                <PluginPageHost path={page.query} />
+                <MusicPage>
+                  <PluginPageHost path={page.query} />
+                </MusicPage>
               ) : view === 'queue' ? (
                 <QueuePage key={queueVisit} onError={onError} />
               ) : view === 'search' ? (

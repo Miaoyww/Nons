@@ -80,10 +80,10 @@ export function DownloadsPage() {
     }
   }
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 p-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">网易云下载</h1>
+          <h1 className="library-heading">网易云下载</h1>
           <p className="mt-2 text-sm text-muted-foreground">在网易云歌曲的右键菜单中选择“下载”。</p>
         </div>
         <Button variant="outline" onClick={configure}>
