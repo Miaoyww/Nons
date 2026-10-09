@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react'
-import { FolderCog, Info, Keyboard, LayoutGrid, Mic2, Settings, Volume2, X } from 'lucide-react'
+import {
+  FolderCog,
+  Info,
+  Keyboard,
+  LayoutGrid,
+  Mic2,
+  SlidersHorizontal,
+  Settings,
+  Volume2,
+  X
+} from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,6 +23,7 @@ import {
 import { useTheme } from '@/features/settings/use-theme'
 import { ShortcutsPage } from '@/features/settings/pages/shortcuts'
 import { GeneralPage } from '@/features/settings/pages/general'
+import { PersonalizationPage } from '@/features/settings/pages/personalization'
 import { AboutPage } from '@/features/settings/pages/about'
 import { PlaybackPage } from '@/features/settings/pages/playback'
 import { LyricsPage } from '@/features/settings/pages/lyrics'
@@ -35,7 +46,14 @@ export function SettingsDialog() {
     return () => window.removeEventListener('plugin-open-configuration', handler)
   }, [])
   const [section, setSection] = useState<
-    'general' | 'playback' | 'lyrics' | 'local-cache' | 'plugins' | 'shortcuts' | 'about'
+    | 'general'
+    | 'personalization'
+    | 'playback'
+    | 'lyrics'
+    | 'local-cache'
+    | 'plugins'
+    | 'shortcuts'
+    | 'about'
   >('general')
   const [theme, setTheme] = useTheme()
   const reducedMotion = useReducedMotion()
@@ -117,6 +135,15 @@ export function SettingsDialog() {
                 <span>常规设置</span>
               </Button>
               <Button
+                variant={section === 'personalization' ? 'secondary' : 'ghost'}
+                className="justify-start gap-2.5 rounded-lg px-3"
+                aria-current={section === 'personalization' ? 'page' : undefined}
+                onClick={() => setSection('personalization')}
+              >
+                <SlidersHorizontal aria-hidden="true" />
+                <span>个性化设置</span>
+              </Button>
+              <Button
                 variant={section === 'playback' ? 'secondary' : 'ghost'}
                 className="justify-start gap-2.5 rounded-lg px-3"
                 aria-current={section === 'playback' ? 'page' : undefined}
@@ -180,17 +207,19 @@ export function SettingsDialog() {
             aria-label={
               section === 'general'
                 ? '常规设置'
-                : section === 'playback'
-                  ? '播放设置'
-                  : section === 'lyrics'
-                    ? '歌词设置'
-                    : section === 'local-cache'
-                      ? '本地与缓存'
-                      : section === 'plugins'
-                        ? '插件设置'
-                        : section === 'shortcuts'
-                          ? '快捷键设置'
-                          : '关于 Nons'
+                : section === 'personalization'
+                  ? '个性化设置'
+                  : section === 'playback'
+                    ? '播放设置'
+                    : section === 'lyrics'
+                      ? '歌词设置'
+                      : section === 'local-cache'
+                        ? '本地与缓存'
+                        : section === 'plugins'
+                          ? '插件设置'
+                          : section === 'shortcuts'
+                            ? '快捷键设置'
+                            : '关于 Nons'
             }
             className="min-w-0 flex-1 overflow-auto bg-background p-5 pt-14 sm:p-10"
           >
@@ -202,6 +231,8 @@ export function SettingsDialog() {
             >
               {section === 'general' ? (
                 <GeneralPage theme={theme} onThemeChange={setTheme} />
+              ) : section === 'personalization' ? (
+                <PersonalizationPage />
               ) : section === 'playback' ? (
                 <PlaybackPage />
               ) : section === 'lyrics' ? (

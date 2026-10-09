@@ -3,12 +3,6 @@ import type { Theme } from '@/features/settings/use-theme'
 import { SettingsCard } from '@/features/settings/settings-card'
 import { FontPicker } from '@/features/settings/font-picker'
 import { useFontSettings } from '@/features/settings/use-font-settings'
-import { usePlaybackBarMode, type PlaybackBarMode } from '@/features/playback/use-playback-bar-mode'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import {
-  useInterfaceDensity,
-  type InterfaceDensity
-} from '@/features/settings/use-interface-density'
 
 const themes = [
   { value: 'light', label: '浅色', icon: Sun },
@@ -24,8 +18,6 @@ export function GeneralPage({
   onThemeChange: (theme: Theme) => void
 }) {
   const { fonts, setFont } = useFontSettings()
-  const [barMode, setBarMode] = usePlaybackBarMode()
-  const [density, setDensity] = useInterfaceDensity()
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -51,37 +43,6 @@ export function GeneralPage({
             </label>
           ))}
         </div>
-      </SettingsCard>
-      <SettingsCard
-        title="播放栏"
-        description="选择底部播放栏的显示方式。关闭后仍可使用全屏播放器与快捷键。"
-      >
-        <ToggleGroup
-          aria-label="播放栏显示方式"
-          value={[barMode]}
-          onValueChange={(values) => {
-            if (values[0]) setBarMode(values[0] as PlaybackBarMode)
-          }}
-        >
-          <ToggleGroupItem value="collapsible">折叠式</ToggleGroupItem>
-          <ToggleGroupItem value="persistent">常驻式</ToggleGroupItem>
-          <ToggleGroupItem value="off">关闭</ToggleGroupItem>
-        </ToggleGroup>
-      </SettingsCard>
-      <SettingsCard
-        title="界面密度"
-        description="统一调整音乐页面的留白、详情封面、标题与歌曲行高。紧凑式显示更多内容，封面、歌名和艺术家仍一起放在左侧。"
-      >
-        <ToggleGroup
-          aria-label="界面密度"
-          value={[density]}
-          onValueChange={(values) => {
-            if (values[0]) setDensity(values[0] as InterfaceDensity)
-          }}
-        >
-          <ToggleGroupItem value="standard">标准式</ToggleGroupItem>
-          <ToggleGroupItem value="compact">紧凑式</ToggleGroupItem>
-        </ToggleGroup>
       </SettingsCard>
       <SettingsCard title="应用字体" description="选择已安装字体，缺失字符使用系统后备字体。">
         <FontPicker
