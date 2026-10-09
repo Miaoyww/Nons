@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { Button } from '@app/plugin-sdk'
+import { Button, Progress } from '@app/plugin-sdk'
 import QRCode from 'qrcode'
 import { qualityLabels } from './protocol'
 import {
@@ -168,11 +168,11 @@ export function DownloadsPage() {
             </div>
             {task.state === 'running' && (
               <div>
-                <progress
+                <Progress
                   className="w-full"
                   aria-label={`${task.song.title} 下载进度`}
-                  value={task.bytes}
-                  max={task.total || 1}
+                  value={task.total ? task.bytes : null}
+                  max={task.total || undefined}
                 />
                 <p className="text-xs tabular-nums">
                   {(task.bytes / 1048576).toFixed(1)} / {((task.total || 0) / 1048576).toFixed(1)}{' '}

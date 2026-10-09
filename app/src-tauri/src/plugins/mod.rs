@@ -759,7 +759,7 @@ fn host_module(module: &str) -> AppResult<(Vec<u8>, &'static str)> {
     let (object, exports) = match module {
         "react.mjs" => ("react", "Children,Fragment,Profiler,StrictMode,Suspense,Component,PureComponent,createContext,createElement,cloneElement,isValidElement,forwardRef,memo,lazy,startTransition,useActionState,useCallback,useContext,useDebugValue,useDeferredValue,useEffect,useId,useImperativeHandle,useInsertionEffect,useLayoutEffect,useMemo,useOptimistic,useReducer,useRef,useState,useSyncExternalStore,useTransition,use,act,cache,version"),
         "jsx-runtime.mjs" => ("jsx", "Fragment,jsx,jsxs"),
-        "sdk.mjs" => ("sdk", "usePluginClipboard,usePluginHttp,useNetease,usePluginBackend,usePluginEvent,usePluginStorage,usePluginConfig,usePluginFiles,usePluginNavigate,usePluginRoute,usePlayer,useTheme,useCoverSource,useSongPlayback,SongArtists,SongLikeButton,Button"),
+        "sdk.mjs" => ("sdk", "usePluginClipboard,usePluginHttp,useNetease,usePluginBackend,usePluginEvent,usePluginStorage,usePluginConfig,usePluginFiles,usePluginNavigate,usePluginRoute,usePlayer,useTheme,useCoverSource,useSongPlayback,SongArtists,SongLikeButton,Button,Progress"),
         _ => return Err("未知宿主桥接模块".into()),
     };
     Ok((format!("const host=globalThis.__NONS_PLUGIN_HOST__.{object};export default host;export const {{{exports}}}=host;").into_bytes(), "text/javascript"))

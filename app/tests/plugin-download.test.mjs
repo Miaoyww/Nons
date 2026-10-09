@@ -8,6 +8,8 @@ import * as React from 'react'
 import * as jsx from 'react/jsx-runtime'
 import { createRoot } from 'react-dom/client'
 import { JSDOM } from 'jsdom'
+import { Progress as ProgressPrimitive } from '@base-ui/react/progress'
+import { cn } from 'cn'
 import { ecb } from '../../plugins/netease-download/node_modules/@noble/ciphers/aes.js'
 import { md5 } from '../../plugins/netease-download/node_modules/@noble/hashes/legacy.js'
 import { bytesToHex } from '../../plugins/netease-download/node_modules/@noble/hashes/utils.js'
@@ -371,6 +373,13 @@ test('download page renders task status and settings without a song ID or URL in
         state: 'setup',
         bytes: 0,
         error: '请选择并授权保存目录'
+      },
+      {
+        id: 2,
+        song: { title: 'Downloading', artist: 'Singer' },
+        state: 'running',
+        bytes: 10,
+        total: 40
       }
     ]
   }
@@ -395,6 +404,11 @@ test('download page renders task status and settings without a song ID or URL in
     './protocol': protocol,
     qrcode: { default: { toDataURL: async () => 'data:image/png;base64,' } },
     '@app/plugin-sdk': {
+      Progress: load('../src/components/ui/progress.tsx', {
+        'react/jsx-runtime': jsx,
+        '@base-ui/react/progress': { Progress: ProgressPrimitive },
+        cn: { cn }
+      }).Progress,
       Button: ({ variant: _, ...props }) => React.createElement('button', props)
     }
   })
@@ -403,6 +417,11 @@ test('download page renders task status and settings without a song ID or URL in
     assert.equal(document.querySelectorAll('input').length, 0)
     assert.match(document.body.textContent, /Title.*需要设置/)
     assert.match(document.body.textContent, /请选择并授权保存目录/)
+    const progress = document.querySelector('[data-slot="progress"]')
+    assert.equal(progress.getAttribute('role'), 'progressbar')
+    assert.equal(progress.getAttribute('aria-label'), 'Downloading 下载进度')
+    assert.ok(progress.querySelector('[data-slot="progress-indicator"]'))
+    assert.equal(document.querySelectorAll('progress').length, 0)
     const settings = [...document.querySelectorAll('button')].find(
       (button) => button.textContent === '下载设置'
     )

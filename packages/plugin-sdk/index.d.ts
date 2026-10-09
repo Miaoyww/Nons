@@ -103,6 +103,15 @@ export const Button: ComponentType<{
   'aria-label'?: string
 }>
 
+export const Progress: ComponentType<{
+  value: number | null
+  min?: number
+  max?: number
+  className?: string
+  'aria-label'?: string
+  'aria-valuetext'?: string
+}>
+
 /** Passed to activate(client) and song menu handlers; bound to this plugin generation. */
 export interface PluginClient {
   call<T = unknown>(operation: string, args?: unknown): Promise<T>

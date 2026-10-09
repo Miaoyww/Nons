@@ -45,7 +45,8 @@ function harness(
     '@/features/settings/use-theme': {},
     '@/components/music/use-cover-source': {},
     '@/features/workspace/music-navigation': {},
-    '@/components/ui/button': {}
+    '@/components/ui/button': {},
+    '@/components/ui/progress': {}
   })
   return { scope, sdk }
 }

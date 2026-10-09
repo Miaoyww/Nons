@@ -181,7 +181,8 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
       '@/features/settings/use-theme': {},
       '@/components/music/use-cover-source': { useCoverSource: () => undefined },
       '@/features/workspace/music-navigation': {},
-      '@/components/ui/button': { Button }
+      '@/components/ui/button': { Button },
+      '@/components/ui/progress': {}
     })
     globalThis.__NONS_PLUGIN_HOST__ = { react: React, jsx, sdk }
     await buildFrontend(

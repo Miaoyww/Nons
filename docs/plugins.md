@@ -114,6 +114,7 @@ WIT Host 的 `call(operation, args-json)` 返回 JSON 或业务错误，身份�
 | `useTheme()`               | 原主题偏好 light／dark／system；实际颜色使用宿主 CSS tokens                                                            |
 | `useCoverSource()`         | 复用宿主封面缓存和失败回退                                                                                             |
 | `Button`                   | 宿主已有 Button；不打包另一份 UI 实现                                                                                  |
+| `Progress`                 | 宿主已有 Progress；`value`／`max` 使用相同单位，`value: null` 表示进度未知，支持 `aria-label`                          |
 | `SongArtists`              | `{song}` 复用宿主 ArtistLinks，按结构化艺术家 ID 跳转宿主艺术家页，需 ui                                               |
 | `SongLikeButton`           | `{song,onError}` 复用宿主收藏按钮和账号状态，收藏至我喜欢的音乐，需 ui；未登录、收藏状态未就绪及提交中禁用             |
 | `useSongPlayback()`        | `(id,mode) => Promise<void>`，使用 scoped Host Capability，需 player:control 和 music:metadata                         |

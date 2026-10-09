@@ -9,6 +9,7 @@ import type { ConfigSnapshot } from './configuration-types'
 export type { ConfigSnapshot } from './configuration-types'
 import { pluginPath, resolvePluginPath } from './types'
 export { Button } from '@/components/ui/button'
+export { Progress } from '@/components/ui/progress'
 export type { PluginSong } from './types'
 export { SongArtists, SongLikeButton } from './song-components'
 
