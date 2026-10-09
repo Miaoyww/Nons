@@ -88,6 +88,8 @@ pub struct Context {
     pub permissions: HashSet<String>,
     pub active: Arc<AtomicBool>,
     pub database: Arc<Database>,
+    pub configurations: Arc<super::configuration::Configurations>,
+    pub files: Arc<super::files::Files>,
     pub songs: Arc<SongService>,
     pub player: Arc<Player>,
     pub app: tauri::AppHandle,
@@ -110,6 +112,81 @@ impl Context {
         }
         let args: Value = serde_json::from_str(args).map_err(|_| "插件参数必须为 JSON")?;
         let result = match operation {
+            "config.get" | "config.update" | "config.reset" => {
+                self.check(Some("config"))?;
+                let snapshot = if operation == "config.get" {
+                    self.configurations.snapshot(&self.id)?
+                } else {
+                    let revision = args
+                        .get("revision")
+                        .and_then(Value::as_u64)
+                        .ok_or("缺少配置修订号")?;
+                    let patch = if operation == "config.update" {
+                        Some(
+                            args.get("patch")
+                                .and_then(Value::as_object)
+                                .ok_or("配置修改必须为对象")?
+                                .clone(),
+                        )
+                    } else {
+                        None
+                    };
+                    let keys = args
+                        .get("keys")
+                        .map(|v| serde_json::from_value(v.clone()).map_err(|_| "配置键列表无效"))
+                        .transpose()?;
+                    self.configurations
+                        .change(&self.id, revision, patch, keys)?
+                };
+                serde_json::to_value(snapshot).map_err(|e| e.to_string())?
+            }
+            op if op.starts_with("files.") => {
+                self.check(None)?;
+                if matches!(
+                    op,
+                    "files.read" | "files.write" | "files.close" | "files.truncate" | "files.roots"
+                ) {
+                    if !self.permissions.contains("files:data")
+                        && !self.permissions.contains("files:selected")
+                    {
+                        return Err("插件缺少文件权限".into());
+                    }
+                } else {
+                    self.check(Some(
+                        if args.get("root").and_then(Value::as_str) == Some("data") {
+                            "files:data"
+                        } else {
+                            "files:selected"
+                        },
+                    ))?;
+                }
+                if op == "files.roots" {
+                    let mut roots = Vec::new();
+                    if self.permissions.contains("files:data") {
+                        roots.push(serde_json::json!({"id":"data","writable":true}));
+                    }
+                    if self.permissions.contains("files:selected") {
+                        roots.extend(
+                            self.files
+                                .grants(&self.id)?
+                                .into_iter()
+                                .map(|g| serde_json::json!({"id":g.id,"writable":g.writable})),
+                        );
+                    }
+                    serde_json::to_value(roots).map_err(|e| e.to_string())?
+                } else {
+                    let files = self.files.clone();
+                    let id = self.id.clone();
+                    let generation = self.generation;
+                    let active = self.active.clone();
+                    let operation = op.to_string();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        files.call(&id, generation, &operation, &args, &active)
+                    })
+                    .await
+                    .map_err(|e| e.to_string())??
+                }
+            }
             "music.get-song" => {
                 self.check(Some("music:metadata"))?;
                 self.songs
@@ -213,7 +290,12 @@ impl Context {
         };
         self.check(None)?;
         let result = serde_json::to_string(&result).map_err(|e| e.to_string())?;
-        if result.len() > MAX_JSON {
+        let limit = if operation.starts_with("config.") {
+            MAX_JSON * 2
+        } else {
+            MAX_JSON
+        };
+        if result.len() > limit {
             return Err("插件响应过大".into());
         }
         Ok(result)

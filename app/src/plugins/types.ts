@@ -4,6 +4,7 @@ export interface PluginManifest {
   version: string
   backend: string | null
   frontend: string | null
+  configuration?: string | null
   permissions: string[]
   engines: { app: string; pluginApi: string; uiApi: string }
   contributes: {

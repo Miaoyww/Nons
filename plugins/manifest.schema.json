@@ -15,6 +15,11 @@
     "version": { "type": "string", "description": "SemVer; checked by Rust semver." },
     "backend": { "type": ["string", "null"], "pattern": "\\.wasm$" },
     "frontend": { "type": ["string", "null"], "pattern": "\\.mjs$" },
+    "configuration": {
+      "type": ["string", "null"],
+      "pattern": "\\.json$",
+      "description": "包内配置声明路径，需要 config 权限。"
+    },
     "permissions": {
       "type": "array",
       "uniqueItems": true,
@@ -25,7 +30,10 @@
           "music:metadata",
           "player:read",
           "player:control",
-          "ui"
+          "ui",
+          "config",
+          "files:data",
+          "files:selected"
         ]
       }
     },

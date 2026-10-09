@@ -24,6 +24,7 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
   let cleanups = 0
   const calls = []
   const modules = {
+    '../plugins/configuration-page': { PluginConfigurationPage: 'div' },
     react: React,
     'react/jsx-runtime': jsx,
     '@tauri-apps/api/core': { isTauri: () => true },

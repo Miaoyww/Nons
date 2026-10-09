@@ -6,14 +6,23 @@ use serde_json::{json, Value};
 struct Island;
 impl Guest for Island {
     fn initialize() -> Result<(), String> {
+        host::call("config.get", "{}")?;
         Ok(())
     }
     fn shutdown() -> Result<(), String> {
         Ok(())
     }
     fn call(method: String, args: String) -> Result<String, String> {
+        if method == "event:config-changed" {
+            return Ok("null".into());
+        }
         if method != "event:music-link" {
             return Err("未知方法".into());
+        }
+        let config: Value =
+            serde_json::from_str(&host::call("config.get", "{}")?).map_err(|_| "无效配置")?;
+        if config["values"]["detectLinks"] == false {
+            return Ok("null".into());
         }
         let args: Value = serde_json::from_str(&args).map_err(|_| "无效参数")?;
         let Some(id) = args.get("url").and_then(Value::as_str).and_then(song_id) else {

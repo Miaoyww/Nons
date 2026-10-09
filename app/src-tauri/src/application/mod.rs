@@ -789,6 +789,7 @@ pub fn run() {
             plugins::probe::plugin_probe_report,
             plugins::plugin_list,
             plugins::plugin_open_folder,
+            plugins::settings::plugin_settings,
             plugins::plugin_discover,
             plugins::plugin_install,
             plugins::plugin_action,

@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 $nonsPluginRoot = Split-Path $PSScriptRoot -Parent
 $nonsPluginApp = Join-Path $nonsPluginRoot 'app'
 $nonsPluginTarget = Join-Path $nonsPluginApp 'src-tauri/target/plugin-probe'
+& node (Join-Path $nonsPluginRoot 'scripts/build-plugin.mjs') settings-fixture (Join-Path $nonsPluginApp 'src-tauri/target/plugin-fixtures/settings-fixture')
+if ($LASTEXITCODE -ne 0) { throw 'Configuration fixture build failed.' }
 if (-not $SkipBuild) {
     Push-Location $nonsPluginApp
     $nonsPluginPreviousTarget = $env:CARGO_TARGET_DIR
@@ -18,7 +20,7 @@ $nonsPluginStderr = [IO.Path]::GetTempFileName()
 $nonsPluginProcess = $null
 try {
     $nonsPluginProcess = Start-Process -FilePath (Join-Path $nonsPluginTarget 'debug/Nons.exe') -WorkingDirectory $nonsPluginApp -WindowStyle Hidden -PassThru -RedirectStandardOutput $nonsPluginStdout -RedirectStandardError $nonsPluginStderr
-    if (-not $nonsPluginProcess.WaitForExit(55000)) { $nonsPluginProcess.Kill($true); throw 'Plugin probe timed out.' }
+    if (-not $nonsPluginProcess.WaitForExit(100000)) { $nonsPluginProcess.Kill($true); throw 'Plugin probe timed out.' }
     $nonsPluginOutput = Get-Content -LiteralPath $nonsPluginStdout -Raw
     Write-Output $nonsPluginOutput
     if ($nonsPluginProcess.ExitCode -ne 0 -or $nonsPluginOutput -notmatch 'uninstall removes storage, page and navigation contributions: passed') {

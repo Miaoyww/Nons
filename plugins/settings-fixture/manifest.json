@@ -1,0 +1,10 @@
+{
+  "id": "settings-fixture",
+  "name": "配置示例",
+  "version": "1.0.0",
+  "frontend": "ui.mjs",
+  "configuration": "configuration.json",
+  "permissions": ["ui", "config", "files:data", "files:selected"],
+  "engines": { "app": "^0.1.0", "pluginApi": "^1.0.0", "uiApi": "^1.0.0" },
+  "contributes": { "pages": [{ "id": "settings", "path": "/settings", "export": "SettingsPage" }] }
+}

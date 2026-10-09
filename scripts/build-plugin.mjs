@@ -8,7 +8,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const name = process.argv[2] ?? 'netease-island'
 if (!/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new Error('Invalid plugin ID')
 const project = resolve(root, 'plugins', name)
-const out = resolve(root, 'app/src-tauri/bundled-plugins', name)
+const out = process.argv[3]
+  ? resolve(root, process.argv[3])
+  : resolve(root, 'app/src-tauri/bundled-plugins', name)
 const manifest = JSON.parse(await readFile(resolve(project, 'manifest.json'), 'utf8'))
 if (manifest.backend) {
   const result = spawnSync(
@@ -42,6 +44,18 @@ if (manifest.backend)
     resolve(out, manifest.backend)
   )
 await copyFile(resolve(project, 'manifest.json'), resolve(out, 'manifest.json'))
+if (manifest.configuration) {
+  const relative = manifest.configuration
+  if (
+    !relative.endsWith('.json') ||
+    relative.includes('\\') ||
+    relative.split('/').some((part) => !part || part === '.' || part === '..') ||
+    relative.includes(':')
+  )
+    throw new Error('Invalid configuration path')
+  await mkdir(dirname(resolve(out, relative)), { recursive: true })
+  await copyFile(resolve(project, relative), resolve(out, relative))
+}
 try {
   await cp(resolve(project, 'assets'), resolve(out, 'assets'), { recursive: true })
 } catch (error) {

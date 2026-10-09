@@ -21,6 +21,40 @@ export function usePluginStorage(): {
   set(key: string, value: unknown): Promise<void>
   delete(key: string): Promise<void>
 }
+export interface ConfigSnapshot {
+  values: Record<string, unknown>
+  revision: number
+  diagnostics: Record<string, string>
+  pendingReload: boolean
+}
+export function usePluginConfig(): {
+  getSnapshot(): Promise<ConfigSnapshot>
+  update(patch: Record<string, unknown>, revision: number): Promise<ConfigSnapshot>
+  reset(revision: number, keys?: string[]): Promise<ConfigSnapshot>
+  subscribe(callback: (snapshot: ConfigSnapshot) => void): Promise<() => void>
+}
+export interface PluginFile {
+  read(offset: number, length?: number): Promise<Uint8Array>
+  write(offset: number, bytes: Uint8Array): Promise<{ bytes: number }>
+  truncate(length: number): Promise<void>
+  close(): Promise<void>
+}
+export function usePluginFiles(): {
+  roots(): Promise<{ id: string; writable: boolean }[]>
+  stat(root: string, path?: string): Promise<{ isDirectory: boolean; size: number }>
+  list(
+    root: string,
+    path?: string,
+    offset?: number
+  ): Promise<{
+    entries: { name: string; isDirectory: boolean; isLink: boolean }[]
+    nextOffset: number | null
+  }>
+  mkdir(root: string, path: string): Promise<void>
+  rename(root: string, path: string, to: string): Promise<void>
+  remove(root: string, path: string): Promise<void>
+  open(root: string, path: string, mode?: 'read' | 'readWrite' | 'create'): Promise<PluginFile>
+}
 export function usePluginNavigate(): (path?: string) => void
 export function usePluginRoute(): { pathname: string; search: string }
 export function useTheme(): 'light' | 'dark' | 'system'

@@ -6,15 +6,42 @@ import {
   useSongPlayback,
   useCoverSource,
   usePluginEvent,
+  usePluginConfig,
   type PluginSong
 } from '@app/plugin-sdk'
 
 export function DynamicIsland() {
+  const config = usePluginConfig()
+  const [preferences, setPreferences] = useState({ previewDuration: 8, pauseOnHover: true })
+  useEffect(() => {
+    let disposed = false
+    let cleanup: (() => void) | undefined
+    const apply = (snapshot: { values: Record<string, unknown> }) => {
+      if (!disposed)
+        setPreferences({
+          previewDuration: Number(snapshot.values.previewDuration),
+          pauseOnHover: !!snapshot.values.pauseOnHover
+        })
+    }
+    void (async () => {
+      const unlisten = await config.subscribe(apply)
+      if (disposed) {
+        unlisten()
+        return
+      }
+      cleanup = unlisten
+      apply(await config.getSnapshot())
+    })().catch(console.error)
+    return () => {
+      disposed = true
+      cleanup?.()
+    }
+  }, [config])
   const detected = usePluginEvent<PluginSong>('song-detected')
   const [song, setSong] = useState<PluginSong>()
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
-  const paused = hovered || focused
+  const paused = (hovered && preferences.pauseOnHover) || focused
   const last = useRef<{ id: number; time: number } | undefined>(undefined)
   const remaining = useRef({ id: 0, ms: 8000 })
   const dismiss = () => {
@@ -26,9 +53,9 @@ export function DynamicIsland() {
     if (!detected || (last.current?.id === detected.id && Date.now() - last.current.time < 30000))
       return
     last.current = { id: detected.id, time: Date.now() }
-    remaining.current = { id: detected.id, ms: 8000 }
+    remaining.current = { id: detected.id, ms: preferences.previewDuration * 1000 }
     setSong(detected)
-  }, [detected])
+  }, [detected, preferences.previewDuration])
   useEffect(() => {
     if (!song || paused) return
     const start = performance.now()

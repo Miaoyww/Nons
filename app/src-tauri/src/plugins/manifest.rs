@@ -14,6 +14,9 @@ pub const PERMISSIONS: &[&str] = &[
     "player:read",
     "player:control",
     "ui",
+    "config",
+    "files:data",
+    "files:selected",
 ];
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -24,6 +27,7 @@ pub struct Manifest {
     pub version: String,
     pub backend: Option<String>,
     pub frontend: Option<String>,
+    pub configuration: Option<String>,
     pub permissions: Vec<String>,
     pub engines: Engines,
     #[serde(default)]
@@ -159,6 +163,11 @@ pub fn is_link(meta: &std::fs::Metadata) -> bool {
 }
 impl Manifest {
     pub fn read(root: &Path) -> AppResult<Self> {
+        Self::read_configured(root).map(|(manifest, _)| manifest)
+    }
+    pub fn read_configured(
+        root: &Path,
+    ) -> AppResult<(Self, Option<std::sync::Arc<super::configuration::Compiled>>)> {
         let path = checked_file(root, "manifest.json")?;
         if path.metadata().map_err(|e| e.to_string())?.len() > 64 * 1024 {
             return Err("Manifest 过大".into());
@@ -167,6 +176,7 @@ impl Manifest {
             serde_json::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
         manifest.validate()?;
+        let configuration = super::configuration::Compiled::read(root, &manifest)?;
         for entry in [manifest.backend.as_ref(), manifest.frontend.as_ref()]
             .into_iter()
             .flatten()
@@ -181,7 +191,7 @@ impl Manifest {
                 return Err("插件入口过大".into());
             }
         }
-        Ok(manifest)
+        Ok((manifest, configuration))
     }
     pub fn validate(&self) -> AppResult<()> {
         if !valid_id(&self.id) || self.name.trim().is_empty() || self.name.len() > 128 {
@@ -220,6 +230,12 @@ impl Manifest {
             return Err("未知或重复的插件权限".into());
         }
         let c = &self.contributes;
+        if let Some(path) = &self.configuration {
+            safe_relative(path)?;
+            if !path.ends_with(".json") {
+                return Err("配置声明必须是 JSON 文件".into());
+            }
+        }
         if (!c.views.is_empty() || !c.pages.is_empty() || !c.navigation.is_empty())
             && (self.frontend.is_none() || !self.permissions.iter().any(|p| p == "ui"))
         {

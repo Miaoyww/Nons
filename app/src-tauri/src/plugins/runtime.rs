@@ -171,6 +171,7 @@ mod tests {
         ) -> Pin<Box<dyn Future<Output = AppResult<String>> + Send + 'a>> {
             Box::pin(async move {
                 match operation {
+                    "config.get" => Ok(r#"{"values":{"detectLinks":true}}"#.into()),
                     "music.get-song" => {
                         let args: serde_json::Value = serde_json::from_str(args).unwrap();
                         assert_eq!(args["id"], 347230);

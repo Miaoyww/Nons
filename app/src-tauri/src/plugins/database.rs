@@ -1,5 +1,6 @@
 use crate::model::AppResult;
 use rusqlite::{params, Connection, OptionalExtension};
+use serde_json::{Map, Value};
 use std::{path::Path, sync::Mutex};
 
 pub struct Database(Mutex<Connection>);
@@ -7,6 +8,7 @@ impl Database {
     pub fn open(path: &Path) -> AppResult<Self> {
         let db = Connection::open(path).map_err(|e| e.to_string())?;
         db.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS plugins (id TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0); CREATE TABLE IF NOT EXISTS storage (plugin TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(plugin,key)); CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);").map_err(|e| e.to_string())?;
+        db.execute_batch("CREATE TABLE IF NOT EXISTS configuration (plugin TEXT PRIMARY KEY, revision INTEGER NOT NULL, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS directory_grants (plugin TEXT NOT NULL, id TEXT NOT NULL, path TEXT NOT NULL, writable INTEGER NOT NULL, PRIMARY KEY(plugin,id));").map_err(|e| e.to_string())?;
         Ok(Self(Mutex::new(db)))
     }
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
@@ -49,7 +51,93 @@ impl Database {
             .map_err(|e| e.to_string())?;
         tx.execute("DELETE FROM storage WHERE plugin=?1", [id])
             .map_err(|e| e.to_string())?;
+        tx.execute("DELETE FROM configuration WHERE plugin=?1", [id])
+            .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())
+    }
+    pub fn config_read(&self, id: &str) -> AppResult<(u64, Map<String, Value>)> {
+        let row: Option<(u64, String)> = self
+            .lock()?
+            .query_row(
+                "SELECT revision,value FROM configuration WHERE plugin=?1",
+                [id],
+                |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        match row {
+            Some((revision, value)) => Ok((
+                revision,
+                serde_json::from_str(&value).map_err(|e| e.to_string())?,
+            )),
+            None => Ok((0, Map::new())),
+        }
+    }
+    pub fn config_change(
+        &self,
+        id: &str,
+        expected: u64,
+        change: impl FnOnce(&mut Map<String, Value>) -> AppResult<()>,
+    ) -> AppResult<()> {
+        let mut db = self.lock()?;
+        let tx = db.transaction().map_err(|e| e.to_string())?;
+        let row: Option<(u64, String)> = tx
+            .query_row(
+                "SELECT revision,value FROM configuration WHERE plugin=?1",
+                [id],
+                |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let (revision, mut values) = match row {
+            Some((revision, text)) => (
+                revision,
+                serde_json::from_str(&text).map_err(|e| e.to_string())?,
+            ),
+            None => (0, Map::new()),
+        };
+        if expected != revision {
+            return Err("配置已被其他页面修改，请刷新后重试".into());
+        }
+        if revision >= 9_007_199_254_740_991 {
+            return Err("配置修订号已耗尽".into());
+        }
+        change(&mut values)?;
+        let text = serde_json::to_string(&values).map_err(|e| e.to_string())?;
+        if text.len() > 65536 {
+            return Err("配置超过 64KiB".into());
+        }
+        tx.execute("INSERT INTO configuration VALUES(?1,?2,?3) ON CONFLICT(plugin) DO UPDATE SET revision=excluded.revision,value=excluded.value", params![id,(revision+1) as i64,text]).map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())
+    }
+    pub fn grants(&self, id: &str) -> AppResult<Vec<(String, String, bool)>> {
+        let db = self.lock()?;
+        let mut stmt = db
+            .prepare("SELECT id,path,writable FROM directory_grants WHERE plugin=?1 ORDER BY id")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+    pub fn grant(&self, plugin: &str, id: &str, path: &str, writable: bool) -> AppResult<()> {
+        self.lock()?
+            .execute(
+                "INSERT INTO directory_grants VALUES(?1,?2,?3,?4)",
+                params![plugin, id, path, writable],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    pub fn revoke(&self, plugin: &str, id: Option<&str>) -> AppResult<()> {
+        self.lock()?
+            .execute(
+                "DELETE FROM directory_grants WHERE plugin=?1 AND (?2 IS NULL OR id=?2)",
+                params![plugin, id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
     }
     pub fn get(&self, id: &str, key: &str) -> AppResult<Option<String>> {
         check_key(key)?;

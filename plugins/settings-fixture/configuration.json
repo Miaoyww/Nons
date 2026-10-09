@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "page": { "mode": "custom", "pageId": "settings" },
+  "fields": [
+    {
+      "key": "greeting",
+      "title": "欢迎语",
+      "description": "由自定义页面编辑的文本。",
+      "schema": { "type": "string", "maxLength": 80 },
+      "default": "你好，NonsPlayer",
+      "apply": "live"
+    },
+    {
+      "key": "rules",
+      "title": "复杂规则",
+      "description": "由插件自行设计编辑界面的对象。",
+      "schema": {
+        "type": "object",
+        "required": ["names"],
+        "additionalProperties": false,
+        "properties": {
+          "names": { "type": "array", "items": { "type": "string" }, "maxItems": 10 }
+        }
+      },
+      "default": { "names": [] },
+      "apply": "reload"
+    }
+  ]
+}

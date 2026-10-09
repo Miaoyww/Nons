@@ -156,12 +156,22 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
     })
     let finish
     const sdk = load('../src/plugins/sdk.ts', {
+      '@tauri-apps/api/event': { listen: async () => () => {} },
       react: React,
       './song-components': songComponents,
       './scope': scopeModule,
       './types': routing,
       '@/lib/player': {
         nativeCall: (...args) => {
+          if (args[1]?.operation === 'config.get')
+            return Promise.resolve(
+              JSON.stringify({
+                values: { previewDuration: 8, pauseOnHover: true },
+                revision: 0,
+                diagnostics: {},
+                pendingReload: false
+              })
+            )
           calls.push(args)
           return new Promise((resolve) => {
             finish = resolve
@@ -186,7 +196,7 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
       [
         'sdk',
         'sdk',
-        'Button,SongArtists,SongLikeButton,useSongPlayback,useCoverSource,usePluginEvent'
+        'Button,SongArtists,SongLikeButton,useSongPlayback,useCoverSource,usePluginEvent,usePluginConfig'
       ]
     ]) {
       await writeFile(
@@ -198,7 +208,7 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
     const scope = {
       descriptor: {
         generation: 7,
-        manifest: { id: 'sample', permissions: ['ui', 'storage', 'player:control'] }
+        manifest: { id: 'sample', permissions: ['ui', 'storage', 'player:control', 'config'] }
       },
       active: true,
       events: new Map(),

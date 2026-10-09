@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { errorText, nativeCall } from '@/lib/player'
 import { usePlugins } from '@/plugins/host'
 import type { PluginDescriptor } from '@/plugins/types'
+import { PluginConfigurationPage } from '../plugins/configuration-page'
 
 const permissionLabels: Record<string, string> = {
   'clipboard:music-links': '观察剪贴板中的网易云分享链接',
@@ -16,7 +17,10 @@ const permissionLabels: Record<string, string> = {
   'player:read': '读取播放状态',
   'player:control': '控制播放',
   storage: '保存独立插件数据',
-  ui: '运行受信任的界面代码'
+  ui: '运行受信任的界面代码',
+  config: '管理独立插件配置',
+  'files:data': '读写插件专属数据目录',
+  'files:selected': '申请访问用户选择的外部目录'
 }
 export function PluginsPage() {
   const { plugins } = usePlugins()
@@ -25,6 +29,8 @@ export function PluginsPage() {
   const [review, setReview] = useState<PluginDescriptor>()
   const [trusted, setTrusted] = useState(false)
   const [removing, setRemoving] = useState<string>()
+  const [keepData, setKeepData] = useState(false)
+  const [configuring, setConfiguring] = useState<string>()
   const [query, setQuery] = useState('')
   const [dragging, setDragging] = useState(false)
   const pageRef = useRef<HTMLDivElement>(null)
@@ -93,6 +99,7 @@ export function PluginsPage() {
   const filteredPlugins = plugins.filter((plugin) =>
     `${plugin.manifest.name} ${plugin.manifest.id}`.toLocaleLowerCase().includes(search)
   )
+  const selectedPlugin = plugins.find((plugin) => plugin.manifest.id === configuring)
   const action = (id: string, action: string, confirmed = false) =>
     run(() => nativeCall('plugin_action', { id, action, confirmed }))
   function install(directory: boolean) {
@@ -106,6 +113,14 @@ export function PluginsPage() {
       if (typeof path === 'string') await nativeCall('plugin_install', { path })
     })
   }
+  if (selectedPlugin)
+    return (
+      <PluginConfigurationPage
+        key={`${selectedPlugin.manifest.id}:${selectedPlugin.generation}`}
+        plugin={selectedPlugin}
+        back={() => setConfiguring(undefined)}
+      />
+    )
   return (
     <div ref={pageRef} className="flex flex-col gap-6" aria-busy={busy}>
       <div>
@@ -198,9 +213,18 @@ export function PluginsPage() {
             <Button
               variant="ghost"
               size="icon"
-              disabled
-              aria-label={`设置 ${plugin.manifest.name}（暂未开放）`}
-              title="插件设置（暂未开放）"
+              disabled={
+                busy ||
+                !(
+                  plugin.manifest.configuration ||
+                  plugin.manifest.permissions.some(
+                    (p) => p === 'files:data' || p === 'files:selected'
+                  )
+                )
+              }
+              aria-label={`设置 ${plugin.manifest.name}`}
+              title="插件设置"
+              onClick={() => setConfiguring(plugin.manifest.id)}
             >
               <Settings aria-hidden="true" />
             </Button>
@@ -253,7 +277,10 @@ export function PluginsPage() {
                 className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 aria-label={`卸载 ${plugin.manifest.name}`}
                 title="卸载插件"
-                onClick={() => setRemoving(plugin.manifest.id)}
+                onClick={() => {
+                  setRemoving(plugin.manifest.id)
+                  setKeepData(false)
+                }}
               >
                 <Trash2 aria-hidden="true" />
               </Button>
@@ -293,13 +320,17 @@ export function PluginsPage() {
           )}
           {removing === plugin.manifest.id && (
             <div className="mt-4 rounded-lg bg-muted/50 p-4 text-sm">
-              <p>卸载插件会同时删除其独立存储数据。</p>
+              <p>默认清理插件配置、独立存储和专属数据目录；外部授权目录不会被清理。</p>
+              <label className="mt-3 flex items-center gap-2">
+                <Switch checked={keepData} onCheckedChange={setKeepData} disabled={busy} />
+                保留插件数据，重新安装时恢复
+              </label>
               <div className="mt-3 flex gap-2">
                 <Button
                   variant="destructive"
                   disabled={busy}
                   onClick={() => {
-                    void action(plugin.manifest.id, 'uninstall')
+                    void action(plugin.manifest.id, keepData ? 'uninstall-keep-data' : 'uninstall')
                     setRemoving(undefined)
                   }}
                 >

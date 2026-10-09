@@ -1,11 +1,14 @@
 mod capability;
 mod clipboard;
+mod configuration;
 mod database;
+mod files;
 mod install;
 pub mod manifest;
 #[cfg(feature = "plugin-probe")]
 pub mod probe;
 mod runtime;
+pub(crate) mod settings;
 
 use crate::{model::AppResult, netease::Netease, player::Player};
 use capability::{Context, SongService};
@@ -42,6 +45,8 @@ struct Record {
 pub struct PluginManager {
     root: PathBuf,
     database: Arc<Database>,
+    configurations: Arc<configuration::Configurations>,
+    files: Arc<files::Files>,
     songs: Arc<SongService>,
     player: Arc<Player>,
     app: tauri::AppHandle,
@@ -63,9 +68,17 @@ impl PluginManager {
         let root = data.join("plugins");
         std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
         let (clipboard_sender, mut receiver) = tokio::sync::watch::channel(Vec::new());
+        let database = Arc::new(Database::open(&data.join("plugins.sqlite3"))?);
+        let configurations = Arc::new(configuration::Configurations::new(database.clone()));
+        let files = Arc::new(files::Files::new(
+            data.join("plugin-data"),
+            database.clone(),
+        ));
         let manager = Arc::new(Self {
             root,
-            database: Arc::new(Database::open(&data.join("plugins.sqlite3"))?),
+            database,
+            configurations,
+            files,
             songs: Arc::new(SongService::new(netease)),
             player,
             app,
@@ -112,6 +125,55 @@ impl PluginManager {
         }
         manager.discover()?;
         let weak = Arc::downgrade(&manager);
+        let mut changes = manager.configurations.changes.subscribe();
+        tauri::async_runtime::spawn(async move {
+            loop {
+                let ids = match changes.recv().await {
+                    Ok(id) => vec![id],
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        let Some(manager) = weak.upgrade() else {
+                            break;
+                        };
+                        manager
+                            .list()
+                            .unwrap_or_default()
+                            .into_iter()
+                            .filter(|p| p.manifest.configuration.is_some())
+                            .map(|p| p.manifest.id)
+                            .collect()
+                    }
+                    Err(_) => break,
+                };
+                let Some(manager) = weak.upgrade() else {
+                    break;
+                };
+                if manager.stopped.load(Ordering::SeqCst) {
+                    break;
+                }
+                for id in ids {
+                    let _ = manager
+                        .app
+                        .emit("plugin-config-changed", serde_json::json!({"pluginId":id}));
+                    let target = manager.lock().ok().and_then(|r| {
+                        r.get(&id)
+                            .filter(|r| r.descriptor.loaded && r.runtime.is_some())
+                            .map(|r| r.descriptor.generation)
+                    });
+                    if let Some(generation) = target {
+                        if let Ok(snapshot) = manager.configurations.snapshot(&id) {
+                            if let Ok(args) = serde_json::to_string(
+                                &serde_json::json!({"revision":snapshot.revision,"pendingReload":snapshot.pending_reload}),
+                            ) {
+                                let _ = manager
+                                    .invoke(&id, generation, "event:config-changed", &args)
+                                    .await;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        let weak = Arc::downgrade(&manager);
         tauri::async_runtime::spawn(async move {
             let client = match reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
@@ -156,6 +218,8 @@ impl PluginManager {
             permissions: manifest.permissions.iter().cloned().collect(),
             active: Arc::new(AtomicBool::new(false)),
             database: self.database.clone(),
+            configurations: self.configurations.clone(),
+            files: self.files.clone(),
             songs: self.songs.clone(),
             player: self.player.clone(),
             app: self.app.clone(),
@@ -175,11 +239,12 @@ impl PluginManager {
             if manifest::is_link(&meta) || !meta.is_dir() {
                 continue;
             }
-            let manifest = match Manifest::read(&entry.path()) {
-                Ok(manifest) if manifest.id == id => manifest,
+            let (manifest, configuration) = match Manifest::read_configured(&entry.path()) {
+                Ok((manifest, configuration)) if manifest.id == id => (manifest, configuration),
                 _ => continue,
             };
             let generation = self.generation.fetch_add(1, Ordering::SeqCst);
+            self.configurations.register(&id, configuration)?;
             let context = self.context(&manifest, generation);
             let descriptor = Descriptor {
                 enabled: self.database.enabled(&id)?,
@@ -315,7 +380,7 @@ impl PluginManager {
                     self.load(id).await?;
                 }
             }
-            "uninstall" => {
+            "uninstall" | "uninstall-keep-data" => {
                 self.database.enable(id, false)?;
                 self.lock()?
                     .get_mut(id)
@@ -323,8 +388,23 @@ impl PluginManager {
                     .descriptor
                     .enabled = false;
                 self.unload(id).await?;
-                std::fs::remove_dir_all(self.root.join(id)).map_err(|e| e.to_string())?;
-                self.database.remove(id)?;
+                let files = self.files.clone();
+                let plugin_id = id.to_string();
+                let program = self.root.join(id);
+                let database = self.database.clone();
+                let keep = action == "uninstall-keep-data";
+                tauri::async_runtime::spawn_blocking(move || -> AppResult<()> {
+                    files.revoke(&plugin_id, None)?;
+                    std::fs::remove_dir_all(program).map_err(|e| e.to_string())?;
+                    if !keep {
+                        files.clear_data(&plugin_id)?;
+                        database.remove(&plugin_id)?;
+                    }
+                    Ok(())
+                })
+                .await
+                .map_err(|e| e.to_string())??;
+                self.configurations.register(id, None)?;
                 self.lock()?.remove(id);
             }
             _ => return Err("未知插件操作".into()),
@@ -337,7 +417,7 @@ impl PluginManager {
         if self.lock()?.get(id).ok_or("插件未安装")?.descriptor.loaded {
             return Ok(());
         }
-        let manifest = Manifest::read(&self.root.join(id))?;
+        let (manifest, configuration) = Manifest::read_configured(&self.root.join(id))?;
         if manifest.backend.is_some()
             && self
                 .lock()?
@@ -362,6 +442,8 @@ impl PluginManager {
             return Err("插件权限或版本已改变，请重新安装并授权".into());
         }
         let generation = self.generation.fetch_add(1, Ordering::SeqCst);
+        self.configurations.register(id, configuration)?;
+        self.configurations.loaded(id)?;
         let context = self.context(&manifest, generation);
         context.active.store(true, Ordering::SeqCst);
         let runtime = if let Some(entry) = &manifest.backend {
@@ -375,6 +457,8 @@ impl PluginManager {
                 Ok(runtime) => Some(Arc::new(tokio::sync::Mutex::new(runtime))),
                 Err(error) => {
                     context.active.store(false, Ordering::SeqCst);
+                    self.configurations.unloaded(id);
+                    self.files.close_instance(id, generation);
                     self.lock()?
                         .get_mut(id)
                         .ok_or("插件未安装")?
@@ -403,6 +487,8 @@ impl PluginManager {
             let mut records = self.lock()?;
             let record = records.get_mut(id).ok_or("插件未安装")?;
             record.context.active.store(false, Ordering::SeqCst);
+            self.files.close_instance(id, record.descriptor.generation);
+            self.configurations.unloaded(id);
             record.descriptor.loaded = false;
             record.ready = false;
             record.runtime.take()
@@ -484,6 +570,8 @@ impl PluginManager {
             .filter(|r| r.descriptor.loaded && r.descriptor.generation == generation)
         {
             record.context.active.store(false, Ordering::SeqCst);
+            self.files.close_instance(id, generation);
+            self.configurations.unloaded(id);
             record.descriptor.loaded = false;
             record.descriptor.error = Some(error.chars().take(512).collect());
             record.runtime = None;
@@ -612,6 +700,8 @@ impl PluginManager {
         if let Ok(records) = self.lock() {
             for record in records.values() {
                 record.context.active.store(false, Ordering::SeqCst);
+                self.files
+                    .close_instance(&record.descriptor.manifest.id, record.descriptor.generation);
             }
         }
         if let Ok(mut watcher) = self.watcher.lock() {
@@ -629,7 +719,7 @@ fn host_module(module: &str) -> AppResult<(Vec<u8>, &'static str)> {
     let (object, exports) = match module {
         "react.mjs" => ("react", "Children,Fragment,Profiler,StrictMode,Suspense,Component,PureComponent,createContext,createElement,cloneElement,isValidElement,forwardRef,memo,lazy,startTransition,useActionState,useCallback,useContext,useDebugValue,useDeferredValue,useEffect,useId,useImperativeHandle,useInsertionEffect,useLayoutEffect,useMemo,useOptimistic,useReducer,useRef,useState,useSyncExternalStore,useTransition,use,act,cache,version"),
         "jsx-runtime.mjs" => ("jsx", "Fragment,jsx,jsxs"),
-        "sdk.mjs" => ("sdk", "usePluginBackend,usePluginEvent,usePluginStorage,usePluginNavigate,usePluginRoute,usePlayer,useTheme,useCoverSource,useSongPlayback,SongArtists,SongLikeButton,Button"),
+        "sdk.mjs" => ("sdk", "usePluginBackend,usePluginEvent,usePluginStorage,usePluginConfig,usePluginFiles,usePluginNavigate,usePluginRoute,usePlayer,useTheme,useCoverSource,useSongPlayback,SongArtists,SongLikeButton,Button"),
         _ => return Err("未知宿主桥接模块".into()),
     };
     Ok((format!("const host=globalThis.__NONS_PLUGIN_HOST__.{object};export default host;export const {{{exports}}}=host;").into_bytes(), "text/javascript"))

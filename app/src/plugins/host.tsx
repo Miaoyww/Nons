@@ -14,7 +14,7 @@ import { listen } from '@tauri-apps/api/event'
 import { errorText, nativeCall } from '@/lib/player'
 import * as sdk from './sdk'
 import { installBridge } from './bridge'
-import { PluginScope, type Scope } from './scope'
+import { PluginScope, PluginNavigationScope, type Scope } from './scope'
 import { resolvePluginPage, resolvePluginPath, type PluginDescriptor } from './types'
 
 interface Loaded {
@@ -36,6 +36,8 @@ export function pluginResourceUrl(plugin: PluginDescriptor, relative: string) {
 }
 function deactivate(plugin: Loaded) {
   plugin.scope.active = false
+  plugin.scope.cleanups?.forEach((cleanup) => cleanup())
+  plugin.scope.cleanups?.clear()
   plugin.scope.events.clear()
   plugin.scope.listeners.clear()
   try {
@@ -257,7 +259,13 @@ export function PluginSlot({ name }: { name: string }) {
     </>
   )
 }
-export function PluginPageHost({ path }: { path: string }) {
+export function PluginPageHost({
+  path,
+  navigate
+}: {
+  path: string
+  navigate?: (path: string) => void
+}) {
   const { plugins, loaded } = usePlugins()
   const route = resolvePluginPath(path)
   const plugin = route ? loaded.get(route.pluginId) : undefined
@@ -267,11 +275,17 @@ export function PluginPageHost({ path }: { path: string }) {
       : undefined
   if (plugin && page)
     return (
-      <Contribution
-        key={`${route!.pluginId}:${plugin.scope.descriptor.generation}:${page.id}`}
-        plugin={plugin}
-        name={page.export}
-      />
+      <PluginNavigationScope.Provider
+        value={
+          navigate && route ? { pathname: route.pathname, search: route.search, navigate } : null
+        }
+      >
+        <Contribution
+          key={`${route!.pluginId}:${plugin.scope.descriptor.generation}:${page.id}`}
+          plugin={plugin}
+          name={page.export}
+        />
+      </PluginNavigationScope.Provider>
     )
   const descriptor = plugins.find((p) => p.manifest.id === route?.pluginId)
   return (

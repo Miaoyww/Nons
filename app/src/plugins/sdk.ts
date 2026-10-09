@@ -1,9 +1,12 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import { nativeCall, usePlayer as useHostPlayer, useProgress } from '@/lib/player'
 import { useTheme as useHostTheme } from '@/features/settings/use-theme'
 import { useCoverSource as useHostCoverSource } from '@/components/music/use-cover-source'
 import { useMusicNavigation } from '@/features/workspace/music-navigation'
-import { checkScope, useScope, type Scope } from './scope'
+import { checkScope, useScope, PluginNavigationScope, type Scope } from './scope'
+import type { ConfigSnapshot } from './configuration-types'
+export type { ConfigSnapshot } from './configuration-types'
 import { pluginPath, resolvePluginPath } from './types'
 export { Button } from '@/components/ui/button'
 export type { PluginSong } from './types'
@@ -74,22 +77,118 @@ export function usePluginStorage() {
 }
 export function usePluginNavigate() {
   const scope = useScope('ui')
+  const local = useContext(PluginNavigationScope)
   const { navigate } = useMusicNavigation()
   return useCallback(
     (path = '/') => {
       checkScope(scope, 'ui')
+      pluginPath(scope.descriptor.manifest.id, path)
+      if (local) {
+        local.navigate(path)
+        return
+      }
       navigate('plugin', pluginPath(scope.descriptor.manifest.id, path))
     },
-    [scope, navigate]
+    [scope, navigate, local]
   )
 }
 export function usePluginRoute() {
   const scope = useScope('ui')
+  const local = useContext(PluginNavigationScope)
   const { page } = useMusicNavigation()
+  if (local) return { pathname: local.pathname, search: local.search }
   const route = page.view === 'plugin' ? resolvePluginPath(page.query) : undefined
   return route?.pluginId === scope.descriptor.manifest.id
     ? { pathname: route.pathname, search: route.search }
     : { pathname: '/', search: '' }
+}
+export function usePluginConfig() {
+  const scope = useScope('config')
+  return useMemo(
+    () => ({
+      getSnapshot: () => hostCall<ConfigSnapshot>(scope, 'config.get', {}),
+      update: (patch: Record<string, unknown>, revision: number) =>
+        hostCall<ConfigSnapshot>(scope, 'config.update', { patch, revision }),
+      reset: (revision: number, keys?: string[]) =>
+        hostCall<ConfigSnapshot>(scope, 'config.reset', { revision, keys }),
+      async subscribe(callback: (snapshot: ConfigSnapshot) => void) {
+        checkScope(scope, 'config')
+        let disposed = false
+        let serial = 0
+        const unlisten = await listen<{ pluginId: string }>(
+          'plugin-config-changed',
+          ({ payload }) => {
+            if (payload.pluginId !== scope.descriptor.manifest.id || disposed || !scope.active)
+              return
+            const request = ++serial
+            void hostCall<ConfigSnapshot>(scope, 'config.get', {})
+              .then((value) => {
+                if (!disposed && request === serial && scope.active) callback(value)
+              })
+              .catch(console.error)
+          }
+        )
+        if (!scope.active) {
+          unlisten()
+          checkScope(scope)
+        }
+        const cleanup = () => {
+          if (disposed) return
+          disposed = true
+          unlisten()
+          scope.cleanups?.delete(cleanup)
+        }
+        scope.cleanups ??= new Set()
+        scope.cleanups.add(cleanup)
+        return cleanup
+      }
+    }),
+    [scope]
+  )
+}
+export function usePluginFiles() {
+  const scope = useScope()
+  return useMemo(
+    () => ({
+      roots: () => hostCall<{ id: string; writable: boolean }[]>(scope, 'files.roots', {}),
+      stat: (root: string, path = '') =>
+        hostCall<{ isDirectory: boolean; size: number }>(scope, 'files.stat', { root, path }),
+      list: (root: string, path = '', offset = 0) =>
+        hostCall<{
+          entries: { name: string; isDirectory: boolean; isLink: boolean }[]
+          nextOffset: number | null
+        }>(scope, 'files.list', { root, path, offset }),
+      mkdir: (root: string, path: string) => hostCall<void>(scope, 'files.mkdir', { root, path }),
+      rename: (root: string, path: string, to: string) =>
+        hostCall<void>(scope, 'files.rename', { root, path, to }),
+      remove: (root: string, path: string) => hostCall<void>(scope, 'files.remove', { root, path }),
+      open: async (root: string, path: string, mode: 'read' | 'readWrite' | 'create' = 'read') => {
+        const { handle } = await hostCall<{ handle: number }>(scope, 'files.open', {
+          root,
+          path,
+          mode
+        })
+        return {
+          async read(offset: number, length = 32768) {
+            const { data } = await hostCall<{ data: string }>(scope, 'files.read', {
+              handle,
+              offset,
+              length
+            })
+            return Uint8Array.from(atob(data), (c) => c.charCodeAt(0))
+          },
+          write(offset: number, bytes: Uint8Array) {
+            if (bytes.length > 32768) throw new Error('写入块超过 32KiB')
+            const data = btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''))
+            return hostCall<{ bytes: number }>(scope, 'files.write', { handle, offset, data })
+          },
+          truncate: (length: number) => hostCall<void>(scope, 'files.truncate', { handle, length }),
+          close: () => hostCall<void>(scope, 'files.close', { handle })
+        }
+      }
+    }),
+    [scope]
+  )
 }
 export function usePlayer() {
   const scope = useScope('player:read')

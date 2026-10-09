@@ -6,8 +6,14 @@ export interface Scope {
   active: boolean
   events: Map<string, unknown>
   listeners: Set<() => void>
+  cleanups?: Set<() => void>
 }
 export const PluginScope = createContext<Scope | null>(null)
+export const PluginNavigationScope = createContext<{
+  pathname: string
+  search: string
+  navigate: (path: string) => void
+} | null>(null)
 export function checkScope(scope: Scope, permission?: string) {
   if (!scope.active) throw new Error('插件已禁用或卸载')
   if (permission && !scope.descriptor.manifest.permissions.includes(permission))
