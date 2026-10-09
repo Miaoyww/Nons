@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { DetailHeader } from '@/features/library/detail-header'
+import { DetailDescription } from '@/features/library/detail-description'
 import { Play } from 'lucide-react'
 import type { MusicCollection } from '@/features/workspace/music-navigation'
 import { ActionButton } from '@/components/music/action-button'
@@ -21,13 +22,10 @@ export function CollectionHeader({
   disabled,
   onPlay
 }: Props) {
-  const [expanded, setExpanded] = useState(false)
   const kind =
     collection.kind === 'playlist' ? '歌单' : collection.kind === 'album' ? '专辑' : '艺人'
-  const longDescription =
-    !!description && (description.length > 160 || description.split('\n').length > 3)
   return (
-    <header className="library-detail-header">
+    <DetailHeader>
       <Cover
         cover={collection.cover}
         className={`library-detail-cover ${collection.kind === 'artist' ? 'rounded-full' : 'rounded-xl'}`}
@@ -44,27 +42,7 @@ export function CollectionHeader({
             {total > 0 && ` · ${total} 首音乐`}
           </p>
         </div>
-        {description && (
-          <div className="library-detail-description">
-            <p
-              id="collection-description"
-              className={!expanded && longDescription ? 'line-clamp-3' : undefined}
-            >
-              {description}
-            </p>
-            {longDescription && (
-              <button
-                type="button"
-                className="library-description-toggle"
-                aria-expanded={expanded}
-                aria-controls="collection-description"
-                onClick={() => setExpanded((value) => !value)}
-              >
-                {expanded ? '收起简介' : '展开简介'}
-              </button>
-            )}
-          </div>
-        )}
+        <DetailDescription description={description} />
         <div className="library-detail-actions">
           <ActionButton
             variant="secondary"
@@ -77,6 +55,6 @@ export function CollectionHeader({
           </ActionButton>
         </div>
       </div>
-    </header>
+    </DetailHeader>
   )
 }

@@ -1,3 +1,5 @@
+import { DetailHeader } from '@/features/library/detail-header'
+import { DetailDescription } from '@/features/library/detail-description'
 import { MusicPage } from '@/components/music/music-page'
 // Independent album detail, adapted from the playlist detail in music-library.tsx.
 // Layout originally adapted from YesPlayMusic src/views/library.vue.
@@ -28,7 +30,6 @@ export default function AlbumPage({
 }) {
   const [refresh, setRefresh] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [expanded, setExpanded] = useState(false)
   const { detail, error, busy } = useEntityDetail(collection, refresh)
   const album = detail?.item ?? collection
   const player = usePlayer()
@@ -58,7 +59,7 @@ export default function AlbumPage({
   }
   return (
     <MusicPage aria-label="专辑详情">
-      <header className="library-detail-header">
+      <DetailHeader>
         <Cover cover={album.cover} className="library-detail-cover rounded-xl" />
         <div className="library-detail-info">
           <h1 className="library-detail-title">{album.name}</h1>
@@ -70,24 +71,7 @@ export default function AlbumPage({
               {list.metadata?.total ?? album.trackCount} 首 · {formatReleaseDate(album.publishedAt)}
             </p>
           </div>
-          {detail?.description && (
-            <div className="library-detail-description">
-              <p id="album-description" className={expanded ? undefined : 'line-clamp-3'}>
-                {detail.description}
-              </p>
-              {detail.description.length > 160 && (
-                <button
-                  type="button"
-                  className="library-description-toggle"
-                  aria-controls="album-description"
-                  aria-expanded={expanded}
-                  onClick={() => setExpanded(!expanded)}
-                >
-                  {expanded ? '收起简介' : '展开简介'}
-                </button>
-              )}
-            </div>
-          )}
+          <DetailDescription description={detail?.description} />
           <div className="library-detail-actions">
             <ActionButton
               variant="secondary"
@@ -100,7 +84,7 @@ export default function AlbumPage({
             </ActionButton>
           </div>
         </div>
-      </header>
+      </DetailHeader>
       {error && (
         <div role="alert" className="mb-5 flex items-center gap-3 text-sm text-destructive">
           {error}

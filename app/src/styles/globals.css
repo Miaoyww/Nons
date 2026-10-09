@@ -747,11 +747,12 @@
 .library-detail-header {
   display: flex;
   gap: clamp(28px, 3vw, 44px);
-  align-items: flex-start;
+  align-items: flex-end;
+  --detail-cover-size: clamp(240px, 22vw, 280px);
   margin-bottom: 36px;
 }
 .library-detail-cover {
-  width: clamp(240px, 22vw, 280px);
+  width: max(var(--detail-cover-size), var(--detail-content-height, 0px));
   aspect-ratio: 1;
   box-shadow: 0 8px 24px rgb(0 0 0 / 15%);
 }
@@ -760,8 +761,9 @@
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  align-self: stretch;
-  padding-block: 4px;
+  align-self: flex-start;
+  padding-block: 0;
+  min-height: var(--detail-cover-size);
 }
 .library-detail-title {
   font-size: clamp(32px, 3.6vw, 48px);
@@ -2510,11 +2512,11 @@
   --music-page-top: 64px;
 }
 :where(.music-workspace[data-density='compact']) .library-detail-header {
+  --detail-cover-size: clamp(144px, 14vw, 184px);
   gap: 24px;
   margin-bottom: 24px;
 }
 :where(.music-workspace[data-density='compact']) .library-detail-cover {
-  width: clamp(144px, 14vw, 184px);
   flex-shrink: 0;
 }
 :where(.music-workspace[data-density='compact']) .library-detail-title {
@@ -2647,5 +2649,45 @@
 @container (max-width: 560px) {
   :where(.music-workspace[data-density='compact']) .discover-playlist-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.library-detail-description {
+  min-width: 0;
+  white-space: normal;
+}
+.library-description-card {
+  position: relative;
+  width: min(780px, calc(100vw - 32px), var(--available-width));
+  max-height: min(360px, var(--available-height));
+  overflow: auto;
+  padding: 24px 64px 24px 24px;
+  border-radius: 16px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 15%);
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.library-description-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.library-description-close:focus-visible {
+  outline: 2px solid var(--ring);
+}
+@media (max-width: 700px) {
+  .library-detail-cover {
+    width: var(--detail-cover-size);
+  }
+  .library-detail-info {
+    min-height: 0;
   }
 }

@@ -1,3 +1,5 @@
+import { DetailHeader } from '@/features/library/detail-header'
+import { DetailDescription } from '@/features/library/detail-description'
 import { MusicPage } from '@/components/music/music-page'
 import { useCallback, useRef, useState, type KeyboardEvent } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
@@ -32,7 +34,6 @@ export default function ArtistPage({
   const [tab, setTab] = useState<'songs' | 'albums'>('songs')
   const [refresh, setRefresh] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [expanded, setExpanded] = useState(false)
   const tabButtons = useRef<(HTMLButtonElement | null)[]>([])
   const { detail, error, busy } = useEntityDetail(collection, refresh)
   const artist = detail?.item ?? collection
@@ -87,7 +88,7 @@ export default function ArtistPage({
   }
   return (
     <MusicPage className="artist-page" aria-label="歌手详情">
-      <header className="library-detail-header">
+      <DetailHeader>
         <Cover cover={artist.cover} className="library-detail-cover rounded-full" />
         <div className="library-detail-info">
           <h1 className="library-detail-title">{artist.name}</h1>
@@ -98,24 +99,7 @@ export default function ArtistPage({
               {detail?.albumCount != null && ` · ${detail.albumCount} 张专辑`}
             </p>
           </div>
-          {detail?.description && (
-            <div className="library-detail-description">
-              <p id="artist-description" className={expanded ? undefined : 'line-clamp-3'}>
-                {detail.description}
-              </p>
-              {detail.description.length > 160 && (
-                <button
-                  type="button"
-                  className="library-description-toggle"
-                  aria-controls="artist-description"
-                  aria-expanded={expanded}
-                  onClick={() => setExpanded(!expanded)}
-                >
-                  {expanded ? '收起简介' : '展开简介'}
-                </button>
-              )}
-            </div>
-          )}
+          <DetailDescription description={detail?.description} />
           <div className="library-detail-actions">
             <ActionButton
               variant="secondary"
@@ -133,7 +117,7 @@ export default function ArtistPage({
             </ActionButton>
           </div>
         </div>
-      </header>
+      </DetailHeader>
       {busy && (
         <p role="status" className="mb-4 text-sm text-muted-foreground">
           正在加载歌手信息…
