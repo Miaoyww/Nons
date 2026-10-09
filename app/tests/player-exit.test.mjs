@@ -75,6 +75,7 @@ function harness(initialMode = 'collapsible') {
     '@/features/playback/shortcuts/use-playback-shortcuts': { usePlaybackShortcuts() {} },
     '@/lib/player': { usePlayer: () => ({ index: null, queue: [] }) },
     '@/components/music/action-button': { ActionButton: 'ActionButton' },
+    '@/components/music/music-page': { MusicPage: 'MusicPage' },
     '@/features/playback/playback-bar': { PlaybackBar: 'PlaybackBar' },
     '@/plugins/host': { PluginPageHost: 'PluginPageHost' },
     '@/features/workspace/music-navigation': {
