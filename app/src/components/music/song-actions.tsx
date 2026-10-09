@@ -1,3 +1,4 @@
+import { PluginSongMenuItems } from '@/plugins/song-menu'
 import { LocalPlaylistPicker } from '@/features/local/local-playlist-picker'
 import { PlaylistPicker } from '@/features/library/playlist-picker'
 import { ContextMenu } from '@base-ui/react/context-menu'
@@ -59,7 +60,10 @@ export function songCopyName(track: Track) {
 const SongActionsContext = createContext<{
   collect: (track: Track) => void
   details: (track: Track) => void
-  run: (operation: () => void | Promise<unknown>, notice?: string) => void
+  run: (
+    operation: () => void | Promise<unknown>,
+    notice?: string | ((result: unknown) => string | undefined)
+  ) => void
   copy: (text: string) => void
 } | null>(null)
 
@@ -117,11 +121,15 @@ export function SongActionsProvider({
       disposed = true
     }
   }, [track, retry])
-  function run(operation: () => void | Promise<unknown>, notice?: string) {
+  function run(
+    operation: () => void | Promise<unknown>,
+    notice?: string | ((result: unknown) => string | undefined)
+  ) {
     void Promise.resolve()
       .then(operation)
-      .then(() => {
-        if (notice) onNotice(notice)
+      .then((result) => {
+        const message = typeof notice === 'function' ? notice(result) : notice
+        if (message) onNotice(message)
       })
       .catch(onError)
   }
@@ -369,6 +377,7 @@ export function SongContextMenu({
                 {liked ? '取消收藏' : '收藏'}
               </ContextMenu.Item>
             )}
+            <PluginSongMenuItems track={track} run={(work, notice) => actions.run(work, notice)} />
             {!unavailable && <ContextMenu.Separator />}
             {!unavailable && track.source.kind === 'local' && (
               <ContextMenu.Item onClick={() => actions.collect(track)}>

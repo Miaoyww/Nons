@@ -12,7 +12,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { errorText } from '@/lib/player'
-import type { ConfigField } from '@/plugins/configuration-types'
+import type { ConfigField, DirectoryGrant } from '@/plugins/configuration-types'
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export function ConfigurationField({
@@ -21,7 +21,9 @@ export function ConfigurationField({
   diagnostic,
   disabled,
   save,
-  reset
+  reset,
+  grants = [],
+  authorize
 }: {
   field: ConfigField
   value: unknown
@@ -29,6 +31,8 @@ export function ConfigurationField({
   disabled: boolean
   save: (key: string, value: unknown) => Promise<void>
   reset: (key: string) => Promise<void>
+  grants?: DirectoryGrant[]
+  authorize?: (key: string) => Promise<void>
 }) {
   const id = useId()
   const [draft, setDraft] = useState(value)
@@ -77,7 +81,43 @@ export function ConfigurationField({
     }
   }
   let control
-  if (editor.kind === 'switch')
+  if (editor.kind === 'authorizedDirectory') {
+    const available = grants.filter((grant) => grant.writable)
+    control = (
+      <div className="flex w-full items-center gap-2">
+        <Select
+          value={String(draft || '')}
+          onValueChange={(next) => {
+            edit(next)
+            void commit(next)
+          }}
+        >
+          <SelectTrigger {...aria} disabled={blocked} className="min-w-0 flex-1">
+            <SelectValue>
+              {available.find((grant) => grant.id === draft)?.path ||
+                (draft ? '目录授权已撤销，请重新选择' : '请选择保存目录')}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {available.map((grant) => (
+              <SelectItem key={grant.id} value={grant.id}>
+                {grant.path}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline"
+          disabled={blocked || !authorize}
+          onClick={() => {
+            void authorize?.(field.key).catch((error) => setError(errorText(error)))
+          }}
+        >
+          选择并授权
+        </Button>
+      </div>
+    )
+  } else if (editor.kind === 'switch')
     control = (
       <Switch
         {...aria}

@@ -74,3 +74,9 @@ node scripts/build-plugin.mjs settings-fixture app/src-tauri/target/plugin-fixtu
 ```
 
 结构参考 [配置定义 schema](../plugins/configuration.schema.json)，接口参考 [SDK 类型](../packages/plugin-sdk/index.d.ts)。
+
+## 授权目录配置
+
+`editor.kind: "authorizedDirectory"` 用于保存读写授权的根 ID（string 默认值可为 `""`）。统一页面列出已有读写授权并提供“选择并授权”；一次选择完成目录授权和配置修订写入，配置写入失败则撤销本次新增授权。需要 `config` 与 `files:selected`。普通 `directory` 编辑器仍只保存路径，不授予权限。
+
+撤销授权保留字段原值并显示失效提示，插件必须通过 `files.roots` 再验证。新任务不得使用失效或只读根；目录选择取消不修改原配置。

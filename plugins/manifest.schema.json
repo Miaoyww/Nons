@@ -64,7 +64,9 @@
           "files:data",
           "files:selected",
           "clipboard:read",
-          "http:request"
+          "http:request",
+          "http:transfer",
+          "secrets"
         ]
       }
     },
@@ -155,7 +157,32 @@
           "type": "array"
         },
         "contextMenus": {
-          "type": "array"
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "target", "source", "label", "export"],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "target": {
+                "const": "song"
+              },
+              "source": {
+                "enum": ["netease", "local"]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "export": {
+                "$ref": "#/$defs/export"
+              }
+            }
+          }
         },
         "settings": {
           "type": "array"

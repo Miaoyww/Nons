@@ -10,7 +10,9 @@ mod netease;
 #[cfg(feature = "plugin-probe")]
 pub mod probe;
 mod runtime;
+mod secrets;
 pub(crate) mod settings;
+mod transfers;
 
 use crate::{model::AppResult, netease::Netease, player::Player};
 use capability::Context;
@@ -57,6 +59,7 @@ pub struct PluginManager {
     files: Arc<files::Files>,
     songs: Arc<SongService>,
     http: Arc<http::Http>,
+    transfers: Arc<transfers::Transfers>,
     player: Arc<Player>,
     app: tauri::AppHandle,
     records: Mutex<BTreeMap<String, Record>>,
@@ -90,6 +93,7 @@ impl PluginManager {
             files,
             songs: Arc::new(SongService::new(netease)),
             http: Arc::new(http::Http::new()?),
+            transfers: Arc::new(transfers::Transfers::default()),
             player,
             app,
             records: Default::default(),
@@ -217,6 +221,7 @@ impl PluginManager {
             permissions: manifest.permissions.iter().cloned().collect(),
             http_hosts: manifest.http_hosts.clone(),
             http: self.http.clone(),
+            transfers: self.transfers.clone(),
             active: Arc::new(AtomicBool::new(false)),
             database: self.database.clone(),
             configurations: self.configurations.clone(),
@@ -403,6 +408,7 @@ impl PluginManager {
                 let keep = action == "uninstall-keep-data";
                 tauri::async_runtime::spawn_blocking(move || -> AppResult<()> {
                     files.revoke(&plugin_id, None)?;
+                    secrets::clear(&plugin_id, &database)?;
                     std::fs::remove_dir_all(program).map_err(|e| e.to_string())?;
                     if !keep {
                         files.clear_data(&plugin_id)?;

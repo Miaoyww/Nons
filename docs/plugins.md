@@ -77,7 +77,7 @@ app/src-tauri/bundled-plugins/netease-island.zip
 }
 ```
 
-backend／frontend 可独立省略，但至少有一个入口。UI 贡献必须声明 frontend 与 `ui`。未知字段或权限拒绝加载；改动已安装插件的版本或权限需要重新安装并确认。commands、menus、contextMenus、settings、shortcuts 仅保留声明字段，当前不执行。
+backend／frontend 可独立省略，但至少有一个入口。UI 贡献必须声明 frontend 与 `ui`。未知字段或权限拒绝加载；改动已安装插件的版本或权限需要重新安装并确认。commands、menus、settings、shortcuts 仅保留声明字段，当前不执行。contextMenus 的歌曲入口已执行，见下节。
 
 `http:request` 与 `httpHosts` 一同声明，域名最多 32 个，只接受精确的小写 DNS 域名，不含协议、路径、端口、IP 或通配符。启用前显示域名范围。授权记录绑定插件版本、权限与域名集合，重启后范围变化也需重新确认。历史授权没有范围记录时先保持关闭，用户重新确认后启用；旧 `clipboard:music-links` 仅保留安装识别与升级提示，不再执行，也不转换为原文读取权限。灵动岛 1.3.0 需重新安装并授权。
 
@@ -200,3 +200,34 @@ cd ..
 
 本机 Windows x64、Rust 1.95、GStreamer 1.28.7 的检查结果记录在 `docs/implementation.md`。开发构建体积和单次端到端时间不能代表 Release 内存／响应预算；没有据此宣称插件平台“极轻”或“极快”。
 配置编辑页面、配置 API 和目录授权见 [插件配置开发](plugin-configuration.md)。
+
+## 歌曲菜单与独立下载插件
+
+插件 API／UI API 1.1.0 增加歌曲菜单贡献。`contextMenus` 每插件最多 16 项，格式为 `{id,target:"song",source:"netease"或"local",label,export}`。宿主按曲目的真实来源筛选；本地音乐绑定的网易云歌词 ID 不改变来源。贡献处理方法接收 `(song, client)`；song 只含公开元数据及 `{kind:"netease",id}`／`{kind:"local"}`，不交付本地路径。
+
+可选 `activate(client)` 在模块加载时调用，旧的无参 activate 保持兼容。client 提供绑定身份和加载代次的 `call(operation,args)`、`openPage(path?)` 和 `openConfiguration()`；同样受宿主权限与取消检查。处理方法可返回提示文字，宿主复用歌曲操作通知显示。菜单点击不改变播放队列、不预取音频地址，停用立即撤销贡献，旧异步结果不可发布。
+
+新增通用操作：
+
+| 操作                     | 权限与限制                                                                                                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `secrets.get/set/delete` | `secrets`；`{key,value?}`，系统凭据库隔离为插件 ID／键，每插件 16 键、每值 16KiB；不访问播放器账号。卸载即使保留普通数据也清理凭据。                                    |
+| `http.request`           | 增加 POST、可选 body 和有限请求头；正文 32KiB、请求头 16KiB、POST 响应头 16KiB，返回 cookies 数组。仍不自动携带宿主凭据、不跳转、不缓存，正文仍最多 8KiB、总期限 3 秒。 |
+| `transfers.start`        | `http:transfer`、精确 httpHosts 和目标根文件权限；`{url,root,path,maxBytes?}` 返回 `{id}`。仅 GET，无账号头、无跳转，直接流式写新文件。                                 |
+| `transfers.get/cancel`   | `http:transfer`；`{id}` 返回 `{id,state,bytes,total,error}`；ID 绑定插件与代次，不包含 URL。                                                                            |
+| `files.publish`          | 目标根文件权限；`{root,path,to}`，使用同根 hard link 后移除临时文件，目标存在时失败，避免覆盖。文件系统须支持硬链接（Windows 推荐 NTFS）。                              |
+
+传输每插件最多 2 个、全局最多 8 个，最多保留 128 个状态；单文件上限 512MiB、HTTP 总期限 10 分钟、读取停滞期限 30 秒。文件块在阻塞线程写入，文件权限撤销会关闭句柄，后续写入和发布被拒绝。实例停用取消网络操作；授权撤销或停用后可能保留未完成 `.part`，不越权清理外部目录。
+
+`plugins/netease-download` 是独立前端插件，不默认构建或随安装包分发。网易云 EAPI 协议、独立二维码账号、下载资格与音质选择全部在插件内；不调用本体播放 URL 或导出播放缓存。通过下载接口选择资源，拒绝试听和低于最低音质的资源；凭据留在系统凭据库，URL 只在内存中使用。
+
+```powershell
+pnpm --dir plugins/netease-download install --frozen-lockfile
+node scripts/build-plugin.mjs netease-download .local/plugins/netease-download
+```
+
+在插件管理中安装 `.local/plugins/netease-download.zip` 并授权。配置默认音质、允许降级、最低音质与授权保存目录；右键网易云歌曲选择“下载”。缺少目录时打开插件配置；缺少账号时下载任务页提供扫码登录，所选歌曲保留。配置完成后继续等待任务。任务页面没有歌曲链接／ID 输入框，页面关闭后下载继续。
+
+队列串行，最多保留 32 项，新任务保存配置快照；修改设置只影响新任务与显式重试。重复添加待处理歌曲去重。先传输 `.part`，核对预期大小和音频头后以实际格式发布；重名失败不覆盖。重启后的中断任务显示重试，重新解析 URL 并从头下载，不承诺续传。完成文件不进入播放缓存，已有本地音乐目录同步可正常收录；目录授权不会自动加入曲库。
+
+验证包括 EAPI 独立加密向量、音质与权限失败、在线／本地菜单来源、队列去重与配置快照，以及 Rust 文件传输、取消、目录撤权和不覆盖测试。真实账号扫码与下载需交互验收；macOS/Linux 与非 NTFS 目录仍需对应环境验证。

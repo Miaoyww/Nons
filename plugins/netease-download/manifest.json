@@ -1,0 +1,70 @@
+{
+  "id": "netease-download",
+  "name": "网易云下载",
+  "version": "1.0.0",
+  "frontend": "ui.mjs",
+  "configuration": "configuration.json",
+  "permissions": [
+    "ui",
+    "config",
+    "storage",
+    "secrets",
+    "http:request",
+    "http:transfer",
+    "files:selected"
+  ],
+  "httpHosts": [
+    "interface.music.163.com",
+    "music.163.com",
+    "m1.music.126.net",
+    "m2.music.126.net",
+    "m3.music.126.net",
+    "m4.music.126.net",
+    "m5.music.126.net",
+    "m6.music.126.net",
+    "m7.music.126.net",
+    "m8.music.126.net",
+    "m9.music.126.net",
+    "m10.music.126.net",
+    "m701.music.126.net",
+    "m702.music.126.net",
+    "m703.music.126.net",
+    "m704.music.126.net",
+    "m705.music.126.net",
+    "m801.music.126.net",
+    "m802.music.126.net",
+    "m803.music.126.net",
+    "m804.music.126.net",
+    "m805.music.126.net"
+  ],
+  "engines": {
+    "app": "^1.0.0",
+    "pluginApi": "^1.1.0",
+    "uiApi": "^1.1.0"
+  },
+  "contributes": {
+    "contextMenus": [
+      {
+        "id": "download",
+        "target": "song",
+        "source": "netease",
+        "label": "下载",
+        "export": "downloadSong"
+      }
+    ],
+    "pages": [
+      {
+        "id": "downloads",
+        "path": "/",
+        "export": "DownloadsPage"
+      }
+    ],
+    "navigation": [
+      {
+        "id": "downloads-entry",
+        "label": "下载任务",
+        "page": "downloads"
+      }
+    ]
+  }
+}

@@ -145,6 +145,47 @@ impl Files {
             Dir::open_ambient_dir(&self.data, ambient_authority()).map_err(|e| e.to_string())?;
         root.remove_dir_all(plugin).map_err(|e| e.to_string())
     }
+    pub fn write_transfer(
+        &self,
+        plugin: &str,
+        generation: u64,
+        handle: u64,
+        data: &[u8],
+        active: &std::sync::atomic::AtomicBool,
+    ) -> AppResult<()> {
+        let mut state = self.state.lock().map_err(|_| "插件文件管理器不可用")?;
+        if !active.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("插件已停用".into());
+        }
+        let h = state
+            .handles
+            .get_mut(&handle)
+            .filter(|h| h.plugin == plugin && h.generation == generation && h.writable)
+            .ok_or("文件句柄已失效或目录授权已撤销")?;
+        h.file
+            .write_all(data)
+            .map_err(|_| "写入文件失败：请检查磁盘空间".to_string())
+    }
+    pub fn sync_transfer(
+        &self,
+        plugin: &str,
+        generation: u64,
+        handle: u64,
+        active: &std::sync::atomic::AtomicBool,
+    ) -> AppResult<()> {
+        let state = self.state.lock().map_err(|_| "插件文件管理器不可用")?;
+        if !active.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("插件已停用".into());
+        }
+        state
+            .handles
+            .get(&handle)
+            .filter(|h| h.plugin == plugin && h.generation == generation)
+            .ok_or("文件句柄已失效或目录授权已撤销")?
+            .file
+            .sync_all()
+            .map_err(|_| "保存文件失败".to_string())
+    }
     pub fn call(
         &self,
         plugin: &str,
@@ -253,9 +294,11 @@ impl Files {
         let path = args.get("path").and_then(Value::as_str).unwrap_or("");
         relative(path)?;
         let file_path = if path.is_empty() { "." } else { path };
-        let mutating = matches!(operation, "files.mkdir" | "files.rename" | "files.remove")
-            || (operation == "files.open"
-                && args.get("mode").and_then(Value::as_str).unwrap_or("read") != "read");
+        let mutating = matches!(
+            operation,
+            "files.mkdir" | "files.rename" | "files.publish" | "files.remove"
+        ) || (operation == "files.open"
+            && args.get("mode").and_then(Value::as_str).unwrap_or("read") != "read");
         if mutating && !root.writable {
             return Err("目录只读".into());
         }
@@ -310,6 +353,19 @@ impl Files {
                     return Err("缺少目录路径".into());
                 }
                 root.dir.create_dir_all(path).map_err(|e| e.to_string())?;
+                Ok(Value::Null)
+            }
+            "files.publish" => {
+                let to = text(args, "to")?;
+                relative(to)?;
+                if path.is_empty() || to.is_empty() {
+                    return Err("缺少文件路径".into());
+                }
+                // Creating a hard link is atomic and fails if the destination exists.
+                root.dir
+                    .hard_link(path, &root.dir, to)
+                    .map_err(|_| "保存失败：目标已存在或目录不支持原子发布")?;
+                root.dir.remove_file(path).map_err(|e| e.to_string())?;
                 Ok(Value::Null)
             }
             "files.rename" => {
@@ -402,6 +458,64 @@ fn relative(path: &str) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn transfer_writes_and_publication_respect_revocation_and_never_overwrite() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Arc::new(Database::open(Path::new(":memory:")).unwrap());
+        let files = Arc::new(Files::new(tmp.path().join("data"), db));
+        let grant = files.grant("one", tmp.path().into(), true).unwrap();
+        let active = std::sync::atomic::AtomicBool::new(true);
+        let call = |op, args| files.call("one", 1, op, &args, &active);
+        let handle = call(
+            "files.open",
+            json!({"root":grant.id,"path":"track.part","mode":"create"}),
+        )
+        .unwrap()["handle"]
+            .as_u64()
+            .unwrap();
+        assert!(files
+            .write_transfer("other", 1, handle, b"bad", &active)
+            .is_err());
+        files
+            .write_transfer("one", 1, handle, b"audio", &active)
+            .unwrap();
+        files.sync_transfer("one", 1, handle, &active).unwrap();
+        call("files.close", json!({"handle":handle})).unwrap();
+        std::fs::write(tmp.path().join("track.mp3"), b"original").unwrap();
+        assert!(call(
+            "files.publish",
+            json!({"root":grant.id,"path":"track.part","to":"track.mp3"})
+        )
+        .is_err());
+        assert_eq!(
+            std::fs::read(tmp.path().join("track.mp3")).unwrap(),
+            b"original"
+        );
+        call(
+            "files.publish",
+            json!({"root":grant.id,"path":"track.part","to":"new.mp3"}),
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("new.mp3")).unwrap(), b"audio");
+        assert!(!tmp.path().join("track.part").exists());
+        let handle = call(
+            "files.open",
+            json!({"root":grant.id,"path":"second.part","mode":"create"}),
+        )
+        .unwrap()["handle"]
+            .as_u64()
+            .unwrap();
+        files.revoke("one", Some(&grant.id)).unwrap();
+        assert!(files
+            .write_transfer("one", 1, handle, b"late", &active)
+            .is_err());
+        assert!(call(
+            "files.publish",
+            json!({"root":grant.id,"path":"second.part","to":"late.mp3"})
+        )
+        .is_err());
+        assert!(!tmp.path().join("late.mp3").exists());
+    }
     #[test]
     fn pagination_and_readonly_handle_revocation() {
         let tmp = tempfile::tempdir().unwrap();

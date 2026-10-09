@@ -44,6 +44,7 @@ function harness() {
     '@tauri-apps/api/core': { isTauri: () => true },
     '@base-ui/react/context-menu': { ContextMenu: {} },
     'lucide-react': {},
+    '@/plugins/song-menu': { PluginSongMenuItems: () => null },
     '@/features/library/playlist-picker': { PlaylistPicker: 'PlaylistPicker' },
     '@/features/local/local-playlist-picker': { LocalPlaylistPicker: 'LocalPlaylistPicker' },
     '@/components/music/action-button': { ActionButton: 'ActionButton' },

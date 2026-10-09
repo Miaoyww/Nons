@@ -22,6 +22,7 @@ pub struct Context {
     pub permissions: HashSet<String>,
     pub http_hosts: Vec<String>,
     pub http: Arc<super::http::Http>,
+    pub transfers: Arc<super::transfers::Transfers>,
     pub active: Arc<AtomicBool>,
     pub database: Arc<Database>,
     pub configurations: Arc<super::configuration::Configurations>,
@@ -60,6 +61,25 @@ impl Context {
                 self.http
                     .request(&self.http_hosts, &args, &self.active)
                     .await?
+            }
+            op if op.starts_with("secrets.") => {
+                self.check(Some("secrets"))?;
+                let id = self.id.clone();
+                let op = op.to_string();
+                let active = self.active.clone();
+                let database = self.database.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    if !active.load(Ordering::SeqCst) {
+                        return Err("插件已停用".into());
+                    }
+                    super::secrets::call(&id, &op, &args, &database, &active)
+                })
+                .await
+                .map_err(|_| "凭据操作失败")??
+            }
+            "transfers.start" | "transfers.get" | "transfers.cancel" => {
+                self.check(Some("http:transfer"))?;
+                self.transfers.call(self.clone(), operation, &args)?
             }
             "config.get" | "config.update" | "config.reset" => {
                 self.check(Some("config"))?;

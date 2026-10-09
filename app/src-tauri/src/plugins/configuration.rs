@@ -118,7 +118,12 @@ impl Compiled {
             if let Some(editor) = &field.editor {
                 let kind = editor.kind.as_str();
                 let expected = match kind {
-                    "text" | "textarea" | "color" | "file" | "directory" => "string",
+                    "text"
+                    | "textarea"
+                    | "color"
+                    | "file"
+                    | "directory"
+                    | "authorizedDirectory" => "string",
                     "number" | "slider" => "number",
                     "switch" => "boolean",
                     "select" => "enum",
@@ -420,6 +425,18 @@ impl Configurations {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn download_configuration_compiles_quality_and_authorized_directory_fields() {
+        let definition: Definition = serde_json::from_str(include_str!(
+            "../../../../plugins/netease-download/configuration.json"
+        ))
+        .unwrap();
+        let compiled = Compiled::compile(definition).unwrap();
+        let (values, diagnostics) = compiled.effective(&Map::new());
+        assert!(diagnostics.is_empty());
+        assert_eq!(values["quality"], "lossless");
+        assert_eq!(values["directory"], "");
+    }
     use serde_json::json;
     fn definition() -> Definition {
         serde_json::from_value(json!({"version":1,"page":{"mode":"generated"},"fields":[{"key":"duration","title":"时长","description":"秒","schema":{"type":"number","minimum":1,"maximum":30},"default":8,"apply":"reload","editor":{"kind":"slider","min":1,"max":30}},{"key":"rules","title":"规则","description":"自定义","schema":{"type":"object","required":["names"],"properties":{"names":{"type":"array","items":{"type":"string"}}}},"default":{"names":[]}}]})).unwrap()

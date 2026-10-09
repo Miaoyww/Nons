@@ -6,22 +6,33 @@
   "additionalProperties": false,
   "required": ["version", "page", "fields"],
   "properties": {
-    "version": { "const": 1 },
+    "version": {
+      "const": 1
+    },
     "page": {
       "oneOf": [
         {
           "type": "object",
           "additionalProperties": false,
           "required": ["mode"],
-          "properties": { "mode": { "const": "generated" } }
+          "properties": {
+            "mode": {
+              "const": "generated"
+            }
+          }
         },
         {
           "type": "object",
           "additionalProperties": false,
           "required": ["mode", "pageId"],
           "properties": {
-            "mode": { "const": "custom" },
-            "pageId": { "type": "string", "minLength": 1 }
+            "mode": {
+              "const": "custom"
+            },
+            "pageId": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       ]
@@ -40,18 +51,32 @@
             "maxLength": 128,
             "description": "顶层配置键；点不表示嵌套路径。"
           },
-          "title": { "type": "string", "minLength": 1, "maxLength": 128 },
-          "description": { "type": "string", "maxLength": 2048 },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2048
+          },
           "schema": {
             "type": "object",
             "description": "JSON Schema 2020-12，只允许当前字段 schema 内部引用。"
           },
           "default": {},
-          "apply": { "enum": ["live", "reload"], "default": "live" },
-          "group": { "type": ["string", "null"] },
+          "apply": {
+            "enum": ["live", "reload"],
+            "default": "live"
+          },
+          "group": {
+            "type": ["string", "null"]
+          },
           "editor": {
             "anyOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "type": "object",
                 "additionalProperties": false,
@@ -68,13 +93,23 @@
                       "multiselect",
                       "color",
                       "file",
-                      "directory"
+                      "directory",
+                      "authorizedDirectory"
                     ]
                   },
-                  "min": { "type": ["number", "null"] },
-                  "max": { "type": ["number", "null"] },
-                  "step": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-                  "unit": { "type": ["string", "null"] },
+                  "min": {
+                    "type": ["number", "null"]
+                  },
+                  "max": {
+                    "type": ["number", "null"]
+                  },
+                  "step": {
+                    "type": ["number", "null"],
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": ["string", "null"]
+                  },
                   "options": {
                     "type": "array",
                     "maxItems": 128,
@@ -82,7 +117,13 @@
                       "type": "object",
                       "additionalProperties": false,
                       "required": ["label", "value"],
-                      "properties": { "label": { "type": "string", "minLength": 1 }, "value": {} }
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "value": {}
+                      }
                     }
                   }
                 }

@@ -35,7 +35,9 @@ export function useNetease() {
 
 export interface PluginHttpRequest {
   url: string
-  method?: 'GET' | 'HEAD'
+  method?: 'GET' | 'HEAD' | 'POST'
+  headers?: Record<string, string>
+  body?: string
   timeoutMs?: number
   responseType?: 'text' | 'none'
 }
@@ -43,6 +45,7 @@ export interface PluginHttpResponse {
   status: number
   headers: Record<string, string>
   body: string
+  cookies?: string[]
 }
 export function usePluginHttp() {
   const scope = useScope('http:request')
@@ -236,6 +239,8 @@ export function usePluginFiles() {
       mkdir: (root: string, path: string) => hostCall<void>(scope, 'files.mkdir', { root, path }),
       rename: (root: string, path: string, to: string) =>
         hostCall<void>(scope, 'files.rename', { root, path, to }),
+      publish: (root: string, path: string, to: string) =>
+        hostCall<void>(scope, 'files.publish', { root, path, to }),
       remove: (root: string, path: string) => hostCall<void>(scope, 'files.remove', { root, path }),
       open: async (root: string, path: string, mode: 'read' | 'readWrite' | 'create' = 'read') => {
         const { handle } = await hostCall<{ handle: number }>(scope, 'files.open', {
@@ -300,4 +305,25 @@ export function useTheme() {
 export function useCoverSource(cover?: string, enabled = true) {
   useScope('ui')
   return useHostCoverSource(cover, enabled)
+}
+
+export interface PluginClient {
+  call<T = unknown>(operation: string, args?: unknown): Promise<T>
+  openPage(path?: string): void
+  openConfiguration(): void
+}
+export function createPluginClient(scope: Scope, navigate: (path: string) => void): PluginClient {
+  return {
+    call: (operation, args = {}) => hostCall(scope, operation, args),
+    openPage: (path = '/') => {
+      checkScope(scope, 'ui')
+      navigate(pluginPath(scope.descriptor.manifest.id, path))
+    },
+    openConfiguration: () => {
+      checkScope(scope, 'ui')
+      window.dispatchEvent(
+        new CustomEvent('plugin-open-configuration', { detail: scope.descriptor.manifest.id })
+      )
+    }
+  }
 }

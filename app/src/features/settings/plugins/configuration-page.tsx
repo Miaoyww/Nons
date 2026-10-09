@@ -196,6 +196,8 @@ export function PluginConfigurationPage({
                     value={snapshot.values[field.key]}
                     diagnostic={snapshot.diagnostics[field.key]}
                     disabled={busy}
+                    grants={settings?.grants}
+                    authorize={(key) => change('grant', { writable: true, key })}
                     save={(key, value) => change('update', { patch: { [key]: value } })}
                     reset={(key) => change('reset', { keys: [key] })}
                   />

@@ -45,9 +45,40 @@ pub async fn plugin_settings(
             let path = path.into_path().map_err(|e| e.to_string())?;
             let files = manager.files.clone();
             let id = id.clone();
-            tauri::async_runtime::spawn_blocking(move || files.grant(&id, path, writable))
-                .await
-                .map_err(|e| e.to_string())??;
+            let grant =
+                tauri::async_runtime::spawn_blocking(move || files.grant(&id, path, writable))
+                    .await
+                    .map_err(|e| e.to_string())??;
+            if let Some(key) = args.get("key").and_then(serde_json::Value::as_str) {
+                let result = (|| -> AppResult<()> {
+                    if !manifest.permissions.iter().any(|p| p == "config") {
+                        return Err("插件缺少配置权限".into());
+                    }
+                    let definition = manager.configurations.definition(&manifest.id)?;
+                    if !definition.fields.iter().any(|f| {
+                        f.key == key
+                            && f.editor
+                                .as_ref()
+                                .is_some_and(|e| e.kind == "authorizedDirectory")
+                    }) {
+                        return Err("配置项不是授权目录选择器".into());
+                    }
+                    let revision = args
+                        .get("revision")
+                        .and_then(serde_json::Value::as_u64)
+                        .ok_or("缺少配置修订号")?;
+                    let mut patch = serde_json::Map::new();
+                    patch.insert(key.to_string(), serde_json::Value::String(grant.id.clone()));
+                    manager
+                        .configurations
+                        .change(&manifest.id, revision, Some(patch), None)?;
+                    Ok(())
+                })();
+                if result.is_err() {
+                    manager.files.revoke(&manifest.id, Some(&grant.id))?;
+                }
+                result?;
+            }
         }
     } else {
         let _operation = manager.operations.lock().await;

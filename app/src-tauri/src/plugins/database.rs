@@ -10,10 +10,36 @@ impl Database {
         db.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS plugins (id TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0); CREATE TABLE IF NOT EXISTS storage (plugin TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(plugin,key)); CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);").map_err(|e| e.to_string())?;
         db.execute_batch("CREATE TABLE IF NOT EXISTS configuration (plugin TEXT PRIMARY KEY, revision INTEGER NOT NULL, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS directory_grants (plugin TEXT NOT NULL, id TEXT NOT NULL, path TEXT NOT NULL, writable INTEGER NOT NULL, PRIMARY KEY(plugin,id));").map_err(|e| e.to_string())?;
         db.execute_batch("CREATE TABLE IF NOT EXISTS plugin_authorizations (plugin TEXT PRIMARY KEY, scope TEXT NOT NULL);").map_err(|e| e.to_string())?;
+        db.execute_batch("CREATE TABLE IF NOT EXISTS plugin_secret_keys (plugin TEXT NOT NULL, key TEXT NOT NULL, PRIMARY KEY(plugin,key));").map_err(|e| e.to_string())?;
         Ok(Self(Mutex::new(db)))
     }
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
         self.0.lock().map_err(|_| "插件存储不可用".into())
+    }
+    pub fn secret_keys(&self, plugin: &str) -> AppResult<Vec<String>> {
+        let db = self.lock()?;
+        let mut query = db
+            .prepare("SELECT key FROM plugin_secret_keys WHERE plugin=?1")
+            .map_err(|e| e.to_string())?;
+        let keys = query
+            .query_map([plugin], |row| row.get(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<String>, _>>()
+            .map_err(|e| e.to_string())?;
+        Ok(keys)
+    }
+    pub fn secret_key(&self, plugin: &str, key: &str, add: bool) -> AppResult<()> {
+        self.lock()?
+            .execute(
+                if add {
+                    "INSERT OR IGNORE INTO plugin_secret_keys VALUES(?1,?2)"
+                } else {
+                    "DELETE FROM plugin_secret_keys WHERE plugin=?1 AND key=?2"
+                },
+                params![plugin, key],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
     }
     pub fn enabled(&self, id: &str, scope: &str) -> AppResult<bool> {
         Ok(self

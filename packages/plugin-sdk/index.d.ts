@@ -24,7 +24,9 @@ export function usePluginClipboard(): {
 }
 export interface PluginHttpRequest {
   url: string
-  method?: 'GET' | 'HEAD'
+  method?: 'GET' | 'HEAD' | 'POST'
+  headers?: Record<string, string>
+  body?: string
   timeoutMs?: number
   responseType?: 'text' | 'none'
 }
@@ -32,6 +34,7 @@ export interface PluginHttpResponse {
   status: number
   headers: Record<string, string>
   body: string
+  cookies?: string[]
 }
 export function usePluginHttp(): {
   request(request: PluginHttpRequest): Promise<PluginHttpResponse>
@@ -74,6 +77,7 @@ export function usePluginFiles(): {
   }>
   mkdir(root: string, path: string): Promise<void>
   rename(root: string, path: string, to: string): Promise<void>
+  publish(root: string, path: string, to: string): Promise<void>
   remove(root: string, path: string): Promise<void>
   open(root: string, path: string, mode?: 'read' | 'readWrite' | 'create'): Promise<PluginFile>
 }
@@ -98,3 +102,26 @@ export const Button: ComponentType<{
   size?: 'default' | 'sm' | 'lg' | 'icon' | 'icon-sm'
   'aria-label'?: string
 }>
+
+/** Passed to activate(client) and song menu handlers; bound to this plugin generation. */
+export interface PluginClient {
+  call<T = unknown>(operation: string, args?: unknown): Promise<T>
+  openPage(path?: string): void
+  openConfiguration(): void
+}
+export interface PluginMenuSong {
+  key: string
+  title: string
+  artist: string
+  album: string
+  durationMs: number
+  cover: string
+  source: { kind: 'netease'; id: number } | { kind: 'local' }
+}
+export interface PluginTransfer {
+  id: number
+  state: 'running' | 'completed' | 'cancelled' | 'failed'
+  bytes: number
+  total: number | null
+  error: string | null
+}

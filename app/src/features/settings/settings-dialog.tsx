@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FolderCog, Info, Keyboard, LayoutGrid, Mic2, Settings, Volume2, X } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,19 @@ import { PluginsPage } from '@/features/settings/pages/plugins'
 import { version } from '../../../package.json'
 
 export function SettingsDialog() {
+  const [open, setOpen] = useState(false)
+  const [pluginId, setPluginId] = useState<string>()
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail
+      if (typeof id !== 'string') return
+      setPluginId(id)
+      setSection('plugins')
+      setOpen(true)
+    }
+    window.addEventListener('plugin-open-configuration', handler)
+    return () => window.removeEventListener('plugin-open-configuration', handler)
+  }, [])
   const [section, setSection] = useState<
     'general' | 'playback' | 'lyrics' | 'local-cache' | 'plugins' | 'shortcuts' | 'about'
   >('general')
@@ -29,8 +42,13 @@ export function SettingsDialog() {
 
   return (
     <Dialog
-      onOpenChange={(open) => {
-        if (open) setSection('general')
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) {
+          setPluginId(undefined)
+          setSection('general')
+        }
       }}
     >
       <DialogTrigger
@@ -191,7 +209,7 @@ export function SettingsDialog() {
               ) : section === 'local-cache' ? (
                 <LocalCachePage />
               ) : section === 'plugins' ? (
-                <PluginsPage />
+                <PluginsPage initialPluginId={pluginId} />
               ) : section === 'shortcuts' ? (
                 <ShortcutsPage />
               ) : (

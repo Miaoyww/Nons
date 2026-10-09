@@ -24,6 +24,7 @@ export interface ConfigField {
       | 'color'
       | 'file'
       | 'directory'
+      | 'authorizedDirectory'
     min?: number | null
     max?: number | null
     step?: number | null

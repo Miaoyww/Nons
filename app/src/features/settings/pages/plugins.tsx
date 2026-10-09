@@ -15,6 +15,8 @@ const permissionLabels: Record<string, string> = {
   'clipboard:music-links': '旧版音乐链接权限（需要升级插件）',
   'clipboard:read': '读取剪贴板文本及监听变化',
   'http:request': '请求已声明的网络域名',
+  'http:transfer': '将授权域名的资源传输到授权目录',
+  secrets: '管理插件自己的系统凭据',
   'music:metadata': '读取网易云歌曲信息',
   'player:read': '读取播放状态',
   'player:control': '控制播放',
@@ -24,7 +26,7 @@ const permissionLabels: Record<string, string> = {
   'files:data': '读写插件专属数据目录',
   'files:selected': '申请访问用户选择的外部目录'
 }
-export function PluginsPage() {
+export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = {}) {
   const { plugins } = usePlugins()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
@@ -32,7 +34,10 @@ export function PluginsPage() {
   const [trusted, setTrusted] = useState(false)
   const [removing, setRemoving] = useState<string>()
   const [keepData, setKeepData] = useState(false)
-  const [configuring, setConfiguring] = useState<string>()
+  const [configuring, setConfiguring] = useState<string | undefined>(initialPluginId)
+  useEffect(() => {
+    if (initialPluginId) setConfiguring(initialPluginId)
+  }, [initialPluginId])
   const [query, setQuery] = useState('')
   const [dragging, setDragging] = useState(false)
   const pageRef = useRef<HTMLDivElement>(null)

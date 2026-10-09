@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, time::Duration};
 
-pub struct Http(reqwest::Client);
+pub struct Http(pub(super) reqwest::Client);
 
 pub fn valid_host(host: &str) -> bool {
     host.len() <= 253
@@ -20,7 +20,7 @@ pub fn valid_host(host: &str) -> bool {
         && matches!(url::Host::parse(host), Ok(url::Host::Domain(domain)) if domain == host)
 }
 
-fn checked_url(hosts: &[String], input: &str) -> AppResult<url::Url> {
+pub(super) fn checked_url(hosts: &[String], input: &str) -> AppResult<url::Url> {
     if input.len() > 2048 {
         return Err("HTTP URL 超过 2048 字节".into());
     }
@@ -48,6 +48,10 @@ struct Request {
     timeout_ms: Option<u64>,
     #[serde(default)]
     response_type: Option<String>,
+    #[serde(default)]
+    headers: BTreeMap<String, String>,
+    #[serde(default)]
+    body: Option<String>,
 }
 
 impl Http {
@@ -73,7 +77,8 @@ impl Http {
         let method = match request.method.as_deref().unwrap_or("GET") {
             "GET" => reqwest::Method::GET,
             "HEAD" => reqwest::Method::HEAD,
-            _ => return Err("HTTP 当前支持 GET 和 HEAD".into()),
+            "POST" => reqwest::Method::POST,
+            _ => return Err("HTTP 当前支持 GET、HEAD 和 POST".into()),
         };
         let read_body = match request.response_type.as_deref().unwrap_or("text") {
             "text" => true,
@@ -84,20 +89,52 @@ impl Http {
         if !(1..=3000).contains(&timeout) {
             return Err("HTTP 超时必须为 1 至 3000 毫秒".into());
         }
+        let mut builder = self.0.request(method.clone(), url);
+        if request.body.as_ref().is_some_and(|body| body.len() > 32768)
+            || (request.body.is_some() && method != reqwest::Method::POST)
+        {
+            return Err("HTTP 正文仅限 POST，最多 32KiB".into());
+        }
+        let mut header_size = 0;
+        for (name, value) in &request.headers {
+            header_size += name.len() + value.len();
+            if !matches!(
+                name.to_ascii_lowercase().as_str(),
+                "content-type" | "accept" | "user-agent" | "referer" | "cookie" | "authorization"
+            ) || header_size > 16384
+            {
+                return Err("HTTP 请求头无效或超过 16KiB".into());
+            }
+            let name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+                .map_err(|_| "HTTP 请求头无效")?;
+            let value =
+                reqwest::header::HeaderValue::from_str(value).map_err(|_| "HTTP 请求头无效")?;
+            builder = builder.header(name, value);
+        }
+        if let Some(body) = request.body {
+            builder = builder.body(body);
+        }
         let operation = tokio::time::timeout(Duration::from_millis(timeout), async {
-            let mut response = self
-                .0
-                .request(method, url)
-                .send()
-                .await
-                .map_err(|_| "HTTP 请求失败")?;
+            let mut response = builder.send().await.map_err(|_| "HTTP 请求失败")?;
             let status = response.status().as_u16();
+            let cookies: Vec<String> = response
+                .headers()
+                .get_all("set-cookie")
+                .iter()
+                .filter_map(|value| value.to_str().ok().map(str::to_string))
+                .collect();
             let mut headers = BTreeMap::new();
             let mut header_bytes = 0;
             for (name, value) in response.headers() {
                 let value = value.to_str().map_err(|_| "HTTP 响应头不是文本")?;
                 header_bytes += name.as_str().len() + value.len();
-                if header_bytes > 4096 {
+                if header_bytes
+                    > if method == reqwest::Method::POST {
+                        16384
+                    } else {
+                        4096
+                    }
+                {
                     return Err("HTTP 响应头超过 4KiB".into());
                 }
                 headers.insert(name.as_str().to_string(), value.to_string());
@@ -113,7 +150,7 @@ impl Http {
                 }
             }
             let body = String::from_utf8(bytes).map_err(|_| "HTTP 响应不是 UTF-8 文本")?;
-            Ok(json!({"status":status,"headers":headers,"body":body}))
+            Ok(json!({"status":status,"headers":headers,"body":body,"cookies":cookies}))
         });
         tokio::select! {
             result = operation => result.map_err(|_| "HTTP 请求超时")?,

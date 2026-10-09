@@ -63,7 +63,10 @@ jobs:
         run: python scripts/release.py notes $env:RELEASE_TAG .local/release-notes.md
 
       - name: Install frontend dependencies
-        run: pnpm --dir app install --frozen-lockfile
+        run: |
+          pnpm --dir app install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --dir plugins/netease-download install --frozen-lockfile
 
       - name: Check formatting
         run: pnpm --dir app format:check

@@ -13,6 +13,7 @@ import { convertFileSrc, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { errorText, nativeCall } from '@/lib/player'
 import * as sdk from './sdk'
+import { useMusicNavigation } from '@/features/workspace/music-navigation'
 import { installBridge } from './bridge'
 import { PluginScope, PluginNavigationScope, type Scope } from './scope'
 import { resolvePluginPage, resolvePluginPath, type PluginDescriptor } from './types'
@@ -60,6 +61,9 @@ function isComponent(value: unknown) {
   )
 }
 export function PluginProvider({ children }: { children: ReactNode }) {
+  const { navigate } = useMusicNavigation()
+  const navigation = React.useRef(navigate)
+  navigation.current = navigate
   const [registry, setRegistry] = useState<Registry>({ plugins: [], loaded: new Map() })
   useEffect(() => {
     if (!isTauri()) return
@@ -118,12 +122,20 @@ export function PluginProvider({ children }: { children: ReactNode }) {
                   if (!isComponent(module[contribution.export]))
                     throw new Error(`插件未导出 ${contribution.export}`)
                 }
+                for (const menu of descriptor.manifest.contributes.contextMenus ?? []) {
+                  if (typeof module[menu.export] !== 'function')
+                    throw new Error(`插件未导出菜单处理方法 ${menu.export}`)
+                }
                 plugin = {
                   module,
                   scope: { descriptor, active: true, events: new Map(), listeners: new Set() }
                 }
                 if (typeof module.activate === 'function') {
-                  const dispose: unknown = await module.activate()
+                  const dispose: unknown = await module.activate(
+                    sdk.createPluginClient(plugin.scope, (path) =>
+                      navigation.current('plugin', path)
+                    )
+                  )
                   if (typeof dispose === 'function') plugin.dispose = dispose as () => void
                 }
                 const latest = await nativeCall<PluginDescriptor[]>('plugin_list')

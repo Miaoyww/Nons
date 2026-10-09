@@ -12,6 +12,13 @@ export interface PluginManifest {
     views: { id: string; slot: string; export: string }[]
     pages: { id: string; path: string; export: string }[]
     navigation: { id: string; label: string; page: string }[]
+    contextMenus?: {
+      id: string
+      target: 'song'
+      source: 'netease' | 'local'
+      label: string
+      export: string
+    }[]
   }
 }
 export interface PluginDescriptor {

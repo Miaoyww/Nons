@@ -6,11 +6,13 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-pub const API_VERSION: &str = "1.0.0";
+pub const API_VERSION: &str = "1.1.0";
 pub const PERMISSIONS: &[&str] = &[
     "clipboard:music-links",
     "clipboard:read",
     "http:request",
+    "http:transfer",
+    "secrets",
     "storage",
     "music:metadata",
     "player:read",
@@ -58,7 +60,7 @@ pub struct Contributions {
     #[serde(default)]
     pub menus: Vec<serde_json::Value>,
     #[serde(default)]
-    pub context_menus: Vec<serde_json::Value>,
+    pub context_menus: Vec<ContextMenu>,
     #[serde(default)]
     pub settings: Vec<serde_json::Value>,
     #[serde(default)]
@@ -84,6 +86,16 @@ pub struct Navigation {
     pub id: String,
     pub label: String,
     pub page: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContextMenu {
+    pub id: String,
+    pub label: String,
+    pub target: String,
+    pub source: String,
+    pub export: String,
 }
 
 pub fn valid_id(id: &str) -> bool {
@@ -248,7 +260,11 @@ impl Manifest {
                 .http_hosts
                 .iter()
                 .any(|host| !super::http::valid_host(host) || !hosts.insert(host))
-            || (self.permissions.iter().any(|p| p == "http:request") == self.http_hosts.is_empty())
+            || (self
+                .permissions
+                .iter()
+                .any(|p| p == "http:request" || p == "http:transfer")
+                == self.http_hosts.is_empty())
         {
             return Err("HTTP 权限需要 1 至 32 个不重复的精确域名".into());
         }
@@ -258,7 +274,10 @@ impl Manifest {
                 return Err("配置声明必须是 JSON 文件".into());
             }
         }
-        if (!c.views.is_empty() || !c.pages.is_empty() || !c.navigation.is_empty())
+        if (!c.views.is_empty()
+            || !c.pages.is_empty()
+            || !c.navigation.is_empty()
+            || !c.context_menus.is_empty())
             && (self.frontend.is_none() || !self.permissions.iter().any(|p| p == "ui"))
         {
             return Err("UI 扩展缺少 frontend 或 ui 权限".into());
@@ -269,6 +288,7 @@ impl Manifest {
             .iter()
             .map(|v| (&v.id, &v.export))
             .chain(c.pages.iter().map(|p| (&p.id, &p.export)))
+            .chain(c.context_menus.iter().map(|m| (&m.id, &m.export)))
         {
             if !valid_id(id)
                 || !ids.insert(id)
@@ -280,6 +300,16 @@ impl Manifest {
             {
                 return Err("扩展标识或导出名称无效".into());
             }
+        }
+        if c.context_menus.len() > 16
+            || c.context_menus.iter().any(|m| {
+                m.target != "song"
+                    || !matches!(m.source.as_str(), "netease" | "local")
+                    || m.label.trim().is_empty()
+                    || m.label.len() > 128
+            })
+        {
+            return Err("歌曲菜单贡献无效".into());
         }
         if c.views.iter().any(|v| v.slot != "main.overlay") {
             return Err("未知 UI Slot".into());
@@ -311,6 +341,25 @@ impl Manifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn validates_download_plugin_and_rejects_unknown_menu_targets() {
+        let value: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../plugins/netease-download/manifest.json"
+        ))
+        .unwrap();
+        serde_json::from_value::<Manifest>(value.clone())
+            .unwrap()
+            .validate()
+            .unwrap();
+        for (key, invalid) in [("target", "album"), ("source", "any"), ("export", "../run")] {
+            let mut candidate = value.clone();
+            candidate["contributes"]["contextMenus"][0][key] = serde_json::json!(invalid);
+            assert!(serde_json::from_value::<Manifest>(candidate)
+                .unwrap()
+                .validate()
+                .is_err());
+        }
+    }
     #[test]
     fn rejects_paths_and_reserved_ids() {
         for path in ["../a", "/a", "a\\b", "C:/a", "a/%2e", "a//b", "a./b"] {
