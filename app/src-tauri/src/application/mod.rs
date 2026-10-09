@@ -3,6 +3,7 @@ use crate::{
     netease, player, plugins, storage, ttml_cache,
 };
 
+use crate::platform::desktop;
 use model::{AppResult, Lyrics, OutputDevice, PlayerSnapshot, Track, TrackSource};
 use netease::{
     AccountProfile, CollectionPage, LibrarySummary, LoginStatus, Netease, QrLogin, TrackPage,
@@ -780,9 +781,14 @@ pub fn run() {
                     .build()?,
                 cover_requests: tokio::sync::Semaphore::new(8),
             });
+            desktop::setup(app)?;
             Ok(())
         })
+        .on_window_event(desktop::on_window_event)
         .invoke_handler(tauri::generate_handler![
+            desktop::close_behavior,
+            desktop::set_close_behavior,
+            desktop::tray_action,
             about::open_devtools,
             discovery_hitokoto,
             #[cfg(feature = "plugin-probe")]

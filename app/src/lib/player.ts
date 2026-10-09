@@ -246,38 +246,42 @@ export function retryPrivateFm() {
   privateFm?.retry()
 }
 
-export async function connectPlayer(): Promise<UnlistenFn> {
+export async function connectPlayer({ observer = false } = {}): Promise<UnlistenFn> {
   if (!isTauri()) return () => {}
-  const fm = createPrivateFm(
-    () => snapshot,
-    nativeCall,
-    (privateFmError) => {
-      snapshot = { ...snapshot, privateFmError }
-      stateListeners.forEach((notify) => notify())
-    }
-  )
+  const fm = observer
+    ? undefined
+    : createPrivateFm(
+        () => snapshot,
+        nativeCall,
+        (privateFmError) => {
+          snapshot = { ...snapshot, privateFmError }
+          stateListeners.forEach((notify) => notify())
+        }
+      )
   privateFm = fm
   const listeners: UnlistenFn[] = []
   try {
     listeners.push(
       await listen<PlayerSnapshot>('player-state', ({ payload }) => updateState(payload))
     )
-    listeners.push(
-      await listen<Omit<Progress, 'receivedAt'>>('player-progress', ({ payload }) =>
-        updateProgress(payload)
+    if (!observer)
+      listeners.push(
+        await listen<Omit<Progress, 'receivedAt'>>('player-progress', ({ payload }) =>
+          updateProgress(payload)
+        )
       )
-    )
-    listeners.push(await listen('lyrics-updated', () => invalidateNativeCache(['track_lyrics'])))
+    if (!observer)
+      listeners.push(await listen('lyrics-updated', () => invalidateNativeCache(['track_lyrics'])))
     const serial = updateSerial
     const initial = await nativeCall<PlayerSnapshot>('player_snapshot')
     if (serial === updateSerial) updateState(initial)
     return () => {
-      fm.dispose()
+      fm?.dispose()
       if (privateFm === fm) privateFm = undefined
       listeners.forEach((unlisten) => unlisten())
     }
   } catch (error) {
-    fm.dispose()
+    fm?.dispose()
     if (privateFm === fm) privateFm = undefined
     listeners.forEach((unlisten) => unlisten())
     throw error

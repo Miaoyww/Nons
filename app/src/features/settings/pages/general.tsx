@@ -3,6 +3,7 @@ import type { Theme } from '@/features/settings/use-theme'
 import { SettingsCard } from '@/features/settings/settings-card'
 import { FontPicker } from '@/features/settings/font-picker'
 import { useFontSettings } from '@/features/settings/use-font-settings'
+import { CloseBehaviorSelect } from '@/features/settings/close-behavior-select'
 
 const themes = [
   { value: 'light', label: '浅色', icon: Sun },
@@ -52,6 +53,7 @@ export function GeneralPage({
           defaultLabel="应用默认字体"
         />
       </SettingsCard>
+      <CloseBehaviorSelect />
     </div>
   )
 }

@@ -12,12 +12,14 @@ export function TrackIdentity({
   track,
   cover,
   showSource = false,
-  mode
+  mode,
+  interactive = true
 }: {
   track: Track
   cover?: ReactNode
   showSource?: boolean
   mode?: InterfaceDensity
+  interactive?: boolean
 }) {
   const [preferredMode] = useInterfaceDensity()
   const displayMode = mode ?? preferredMode
@@ -32,7 +34,7 @@ export function TrackIdentity({
           className="track-identity-artist truncate text-xs text-muted-foreground"
           title={track.artist}
         >
-          <TrackArtists track={track} />
+          {interactive ? <TrackArtists track={track} /> : track.artist}
           {showSource && track.source.kind === 'local' && <span className="ml-2">· 本地</span>}
         </p>
       </div>

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { isTauri } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import {
   FolderCog,
   Info,
@@ -34,6 +36,25 @@ import { version } from '../../../package.json'
 export function SettingsDialog() {
   const [open, setOpen] = useState(false)
   const [pluginId, setPluginId] = useState<string>()
+  useEffect(() => {
+    if (!isTauri()) return
+    let disposed = false
+    let stop: (() => void) | undefined
+    void listen('open-settings', () => {
+      setPluginId(undefined)
+      setSection('general')
+      setOpen(true)
+    })
+      .then((unlisten) => {
+        if (disposed) unlisten()
+        else stop = unlisten
+      })
+      .catch(console.error)
+    return () => {
+      disposed = true
+      stop?.()
+    }
+  }, [])
   useEffect(() => {
     const handler = (event: Event) => {
       const id = (event as CustomEvent<string>).detail
