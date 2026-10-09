@@ -306,6 +306,31 @@ impl Files {
             return Err("不允许操作目录根本身".into());
         }
         match operation {
+            "files.resolve" => {
+                let base = if root_id == "data" {
+                    self.data_directory(plugin)?
+                } else {
+                    PathBuf::from(
+                        self.grants(plugin)?
+                            .into_iter()
+                            .find(|g| g.id == root_id)
+                            .ok_or("目录授权已撤销")?
+                            .path,
+                    )
+                };
+                let resolved = if path.is_empty() {
+                    let metadata = std::fs::symlink_metadata(&base).map_err(|e| e.to_string())?;
+                    if super::manifest::is_link(&metadata) || !metadata.is_dir() {
+                        return Err("授权目录不可用或被替换为链接".into());
+                    }
+                    base
+                } else {
+                    super::manifest::checked_file(&base, path)?
+                };
+                // Validate through the granted directory handle as well as its current path.
+                root.dir.metadata(file_path).map_err(|e| e.to_string())?;
+                Ok(json!({"path":resolved.to_string_lossy().trim_start_matches(r"\\?\")}))
+            }
             "files.stat" => {
                 let m = root.dir.metadata(file_path).map_err(|e| e.to_string())?;
                 Ok(json!({"isDirectory":m.is_dir(),"size":m.len()}))
@@ -528,6 +553,21 @@ mod tests {
         let grant = files.grant("one", outside.path().into(), false).unwrap();
         let active = std::sync::atomic::AtomicBool::new(true);
         let call = |op, args| files.call("one", 1, op, &args, &active);
+        assert!(
+            call("files.resolve", json!({"root":grant.id,"path":"file-0"})).unwrap()["path"]
+                .as_str()
+                .unwrap()
+                .ends_with("file-0")
+        );
+        assert!(files
+            .call(
+                "two",
+                1,
+                "files.resolve",
+                &json!({"root":grant.id,"path":"file-0"}),
+                &active
+            )
+            .is_err());
         let first = call("files.list", json!({"root":grant.id})).unwrap();
         assert_eq!(first["entries"].as_array().unwrap().len(), 128);
         let second = call(

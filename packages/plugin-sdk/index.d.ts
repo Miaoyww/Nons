@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react'
+import type { ComponentType, ReactNode, ComponentProps } from 'react'
 export interface PluginSong {
   id: number
   key: string
@@ -112,6 +112,34 @@ export const Progress: ComponentType<{
   'aria-valuetext'?: string
 }>
 
+export const Input: ComponentType<ComponentProps<'input'>>
+export const Icon: ComponentType<{
+  name: 'folder' | 'pause' | 'play' | 'search' | 'settings' | 'delete'
+}>
+export const Tabs: ComponentType<{
+  value: string
+  onValueChange: (value: string) => void
+  children?: ReactNode
+  className?: string
+}>
+export const TabsList: ComponentType<{
+  children?: ReactNode
+  className?: string
+  'aria-label'?: string
+}>
+export const TabsTab: ComponentType<{ value: string; children?: ReactNode }>
+export const TabsPanels: ComponentType<{ children?: ReactNode }>
+export const TabsPanel: ComponentType<{ value: string; children?: ReactNode }>
+export const SongIdentity: ComponentType<{ song: PluginMenuSong }>
+export interface DownloadedSong {
+  song: PluginMenuSong
+  root: string
+  path: string
+  completedAt?: number
+  size: number
+}
+export const DownloadedSongList: ComponentType<{ songs: DownloadedSong[] }>
+
 /** Passed to activate(client) and song menu handlers; bound to this plugin generation. */
 export interface PluginClient {
   call<T = unknown>(operation: string, args?: unknown): Promise<T>
@@ -121,6 +149,9 @@ export interface PluginClient {
 export interface PluginMenuSong {
   key: string
   title: string
+  aliases?: string[]
+  artists?: { name: string; id?: number | null }[]
+  albumId?: number | null
   artist: string
   album: string
   durationMs: number
@@ -129,7 +160,7 @@ export interface PluginMenuSong {
 }
 export interface PluginTransfer {
   id: number
-  state: 'running' | 'completed' | 'cancelled' | 'failed'
+  state: 'running' | 'paused' | 'completed' | 'cancelled' | 'failed'
   bytes: number
   total: number | null
   error: string | null

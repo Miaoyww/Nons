@@ -152,6 +152,7 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
       'react/jsx-runtime': jsx,
       './scope': scopeModule,
       '@/components/music/music-links': artistLinks,
+      '@/components/music/track-identity': {},
       '@/features/playback/current-track-like': likeButton
     })
     let finish
@@ -182,7 +183,11 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
       '@/components/music/use-cover-source': { useCoverSource: () => undefined },
       '@/features/workspace/music-navigation': {},
       '@/components/ui/button': { Button },
-      '@/components/ui/progress': {}
+      '@/components/ui/progress': {},
+      '@/components/ui/input': {},
+      '@/components/animate-ui/components/base/tabs': {},
+      './downloaded-song-list': {},
+      './icon': {}
     })
     globalThis.__NONS_PLUGIN_HOST__ = { react: React, jsx, sdk }
     await buildFrontend(

@@ -1,4 +1,4 @@
-import { TrackArtists, TrackAlbum } from '@/components/music/music-links'
+import { TrackAlbum } from '@/components/music/music-links'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { scrollParent } from '@/components/music/infinite-load'
 import { Heart, ListPlus, Play } from 'lucide-react'
@@ -8,7 +8,8 @@ import { ActionButton } from '@/components/music/action-button'
 import { Cover } from '@/components/music/cover'
 import { useAccount } from '@/features/account/account'
 import { SongContextMenu } from '@/components/music/song-actions'
-import { TrackTitle, trackDisplayTitle } from '@/components/music/track-title'
+import { TrackIdentity } from '@/components/music/track-identity'
+import type { ReactNode } from 'react'
 
 interface Props {
   tracks: Track[]
@@ -21,6 +22,12 @@ interface Props {
   locateRequest?: number
   onRemove?: (track: Track, index: number) => void | Promise<unknown>
   removeLabel?: string
+  extraColumns?: {
+    label: string
+    className?: string
+    render: (track: Track, index: number) => ReactNode
+  }[]
+  showDuration?: boolean
 }
 
 export const TrackList = memo(function TrackList({
@@ -33,7 +40,9 @@ export const TrackList = memo(function TrackList({
   currentIndex,
   locateRequest,
   onRemove,
-  removeLabel
+  removeLabel,
+  extraColumns = [],
+  showDuration = true
 }: Props) {
   const { profile, likedIds, likesReady, likesError, pendingLikes, reloadLikes, toggleLike } =
     useAccount()
@@ -67,7 +76,8 @@ export const TrackList = memo(function TrackList({
     virtualizer.scrollToIndex(currentIndex, { align: 'center' })
   }, [locateRequest, scrollMargin, virtualizer])
   const showLikes = tracks.some((track) => track.source.kind === 'netease')
-  const columns = 4 + Number(showLikes) + Number(!!onAppend)
+  const columns =
+    3 + Number(showDuration) + extraColumns.length + Number(showLikes) + Number(!!onAppend)
   const rows = virtualizer.getVirtualItems()
   const top = rows.length ? Math.max(0, rows[0].start - scrollMargin) : 0
   const bottom = rows.length
@@ -103,9 +113,16 @@ export const TrackList = memo(function TrackList({
                 <span className="sr-only">喜欢</span>
               </th>
             )}
-            <th className="w-20 py-3" scope="col">
-              时长
-            </th>
+            {showDuration && (
+              <th className="w-20 py-3" scope="col">
+                时长
+              </th>
+            )}
+            {extraColumns.map((column) => (
+              <th key={column.label} className={column.className ?? 'w-28 py-3'} scope="col">
+                {column.label}
+              </th>
+            ))}
             {onAppend && (
               <th className="w-12" scope="col">
                 <span className="sr-only">加入队列</span>
@@ -154,35 +171,24 @@ export const TrackList = memo(function TrackList({
                   {offset + index + 1}
                 </td>
                 <td className="py-3 pr-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <button
-                      type="button"
-                      className="track-cover"
-                      disabled={busy}
-                      aria-label={`播放 ${track.title}`}
-                      onClick={() => onPlay(index)}
-                    >
-                      <Cover cover={track.cover} className="size-11" />
-                      <span className="track-cover-play">
-                        <Play aria-hidden="true" />
-                      </span>
-                    </button>
-                    <div className="min-w-0">
-                      <p
-                        className="track-title truncate font-medium"
-                        title={trackDisplayTitle(track)}
+                  <TrackIdentity
+                    track={track}
+                    showSource
+                    cover={
+                      <button
+                        type="button"
+                        className="track-cover"
+                        disabled={busy}
+                        aria-label={`播放 ${track.title}`}
+                        onClick={() => onPlay(index)}
                       >
-                        <TrackTitle track={track} />
-                      </p>
-                      <p
-                        className="mt-1 truncate text-xs text-muted-foreground"
-                        title={track.artist}
-                      >
-                        <TrackArtists track={track} />
-                        {track.source.kind === 'local' && <span className="ml-2">· 本地</span>}
-                      </p>
-                    </div>
-                  </div>
+                        <Cover cover={track.cover} className="size-11" />
+                        <span className="track-cover-play">
+                          <Play aria-hidden="true" />
+                        </span>
+                      </button>
+                    }
+                  />
                 </td>
                 <td className="truncate pr-4 text-muted-foreground" title={track.album}>
                   <TrackAlbum track={track} />
@@ -215,9 +221,16 @@ export const TrackList = memo(function TrackList({
                     )}
                   </td>
                 )}
-                <td className="tabular-nums text-muted-foreground">
-                  {formatTime(track.durationMs)}
-                </td>
+                {showDuration && (
+                  <td className="tabular-nums text-muted-foreground">
+                    {formatTime(track.durationMs)}
+                  </td>
+                )}
+                {extraColumns.map((column) => (
+                  <td key={column.label} className="tabular-nums text-muted-foreground">
+                    {column.render(track, index)}
+                  </td>
+                ))}
                 {onAppend && (
                   <td>
                     <ActionButton

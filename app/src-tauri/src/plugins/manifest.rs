@@ -6,13 +6,14 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-pub const API_VERSION: &str = "1.1.0";
+pub const API_VERSION: &str = "1.2.0";
 pub const PERMISSIONS: &[&str] = &[
     "clipboard:music-links",
     "clipboard:read",
     "http:request",
     "http:transfer",
     "secrets",
+    "account:credentials",
     "storage",
     "music:metadata",
     "player:read",

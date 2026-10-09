@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { test } from 'node:test'
-import { createCipheriv, createHash } from 'node:crypto'
+import { createCipheriv, createHash, webcrypto } from 'node:crypto'
 import ts from 'typescript'
 import * as React from 'react'
 import * as jsx from 'react/jsx-runtime'
@@ -43,6 +43,84 @@ const protocol = load('../../plugins/netease-download/frontend/protocol.ts', {
   '@noble/hashes/utils.js': { bytesToHex }
 })
 const menus = load('../src/plugins/song-menu-context.ts')
+
+test('completed songs resolve authorized local files, retain available rows and play through the scoped file capability', async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' })
+  globalThis.window = dom.window
+  globalThis.document = dom.window.document
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  const root = createRoot(document.getElementById('root'))
+  const calls = []
+  let list
+  const scope = {}
+  const component = load(
+    '../src/plugins/downloaded-song-list.tsx',
+    {
+      react: React,
+      'react/jsx-runtime': jsx,
+      '@/components/music/track-list': {
+        TrackList: (props) => {
+          list = props
+          return null
+        }
+      },
+      './scope': { useScope: () => scope },
+      './sdk': {
+        createPluginClient: () => ({
+          call: async (operation, args) => {
+            calls.push({ operation, args })
+            if (operation === 'files.resolve') {
+              if (args.path === 'missing.mp3') throw new Error('File missing')
+              return { path: 'C:/Music/song.mp3' }
+            }
+          }
+        })
+      }
+    },
+    { crypto: webcrypto }
+  )
+  const song = {
+    key: 'ncm:12',
+    title: 'Title',
+    artist: 'Artist',
+    album: 'Album',
+    cover: '',
+    durationMs: 100,
+    source: { kind: 'netease', id: 12 }
+  }
+  const songs = [
+    { song, root: 'grant', path: 'song.mp3', completedAt: 1234, size: 1048576 },
+    { song, root: 'grant', path: 'missing.mp3', size: 0 }
+  ]
+  try {
+    await React.act(async () => {
+      root.render(React.createElement(component.DownloadedSongList, { songs }))
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    await React.act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    assert.equal(list.tracks.length, 1)
+    assert.equal(
+      list.tracks[0].key,
+      `local:${createHash('sha256').update('C:/Music/song.mp3').digest('hex')}`
+    )
+    assert.equal(list.tracks[0].source.kind, 'local')
+    assert.match(document.body.textContent, /1 首歌曲文件不可用/)
+    assert.equal(list.extraColumns[1].render(null, 0), '1.0 MiB')
+    await React.act(async () => list.onPlay(0))
+    const playback = calls.find((call) => call.operation === 'files.play')
+    assert.equal(playback.args.root, 'grant')
+    assert.equal(playback.args.path, 'song.mp3')
+    assert.equal(playback.args.track.source.path, 'C:/Music/song.mp3')
+  } finally {
+    await React.act(async () => root.unmount())
+    dom.window.close()
+    delete globalThis.window
+    delete globalThis.document
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT
+  }
+})
 test('song contributions match the stream source, never a linked local ID or lyric source', () => {
   const manifest = {
     contributes: { contextMenus: [{ target: 'song', source: 'netease', label: '下载' }] }
@@ -173,7 +251,8 @@ test('menu download persists settings snapshot, resolves once, streams and publi
     openConfiguration: () => {},
     call: async (op, args) => {
       calls.push({ op, args })
-      if (op === 'secrets.get') return 'MUSIC_U=plugin-cookie'
+      if (op === 'netease.account-credentials')
+        return { cookie: 'MUSIC_U=host-cookie', generation: 1 }
       if (op === 'storage.get') return null
       if (op === 'config.get') return { values: config }
       if (op === 'files.roots') return [{ id: 'dir-one', writable: true }]
@@ -210,8 +289,8 @@ test('menu download persists settings snapshot, resolves once, streams and publi
   assert.equal(runtime.snapshot().tasks[0].options.quality, 'lossless')
   assert.equal(calls.filter((c) => c.op === 'transfers.start').length, 1)
   assert.equal(calls.find((c) => c.op === 'files.publish').args.to, 'Singer - Title [12].flac')
-  assert.ok(!calls.some((c) => c.op.startsWith('netease.') || c.op.startsWith('player.')))
-  assert.ok(!JSON.stringify(calls.filter((c) => c.op === 'storage.set')).includes('plugin-cookie'))
+  assert.ok(!calls.some((c) => c.op === 'netease.play-song' || c.op.startsWith('player.')))
+  assert.ok(!JSON.stringify(calls.filter((c) => c.op === 'storage.set')).includes('host-cookie'))
   assert.ok(!JSON.stringify(calls.filter((c) => c.op === 'storage.set')).includes('m801.music'))
   dispose()
 })
@@ -236,6 +315,7 @@ test('missing directory retains the selected song and opens configuration; linke
           }
         }
       if (op === 'files.roots') return []
+      if (op === 'netease.account-credentials') return { cookie: null, generation: 1 }
       return null
     }
   }
@@ -356,7 +436,7 @@ test('actual contributed menu invokes the plugin with a scoped client and reject
   assert.equal(module.PluginSongMenuItems({ track: song, run: () => {} }).props.children.length, 0)
 })
 
-test('download page renders task status and settings without a song ID or URL input', async () => {
+test('download management renders shared progress, search and individual controls without plugin login', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' })
   globalThis.window = dom.window
   globalThis.document = dom.window.document
@@ -364,7 +444,6 @@ test('download page renders task status and settings without a song ID or URL in
   const root = createRoot(document.getElementById('root'))
   let configurations = 0
   const view = {
-    loggedIn: false,
     message: '已加入下载队列',
     tasks: [
       {
@@ -395,7 +474,11 @@ test('download page renders task status and settings without a song ID or URL in
     createLogin: async () => 'key',
     logout: async () => {},
     retryTask: async () => {},
-    cancelTask: async () => {}
+    cancelTask: async () => {},
+    pauseTask: async () => {},
+    resumeTask: async () => {},
+    deleteTask: async () => {},
+    openDirectory: async () => {}
   }
   const module = load('../../plugins/netease-download/frontend/index.tsx', {
     react: React,
@@ -409,27 +492,39 @@ test('download page renders task status and settings without a song ID or URL in
         '@base-ui/react/progress': { Progress: ProgressPrimitive },
         cn: { cn }
       }).Progress,
-      Button: ({ variant: _, ...props }) => React.createElement('button', props)
+      Input: (props) => React.createElement('input', props),
+      Icon: () => null,
+      SongIdentity: ({ song }) => React.createElement('span', null, `${song.title} ${song.artist}`),
+      DownloadedSongList: () => React.createElement('div', null, 'completed-list'),
+      Tabs: ({ children }) => React.createElement('div', null, children),
+      TabsList: ({ children }) => React.createElement('div', null, children),
+      TabsTab: ({ children }) => React.createElement('span', null, children),
+      TabsPanels: ({ children }) => React.createElement('div', null, children),
+      TabsPanel: ({ children }) => React.createElement('div', null, children),
+      Button: ({ variant: _, size: __, ...props }) => React.createElement('button', props)
     }
   })
   try {
     await React.act(async () => root.render(React.createElement(module.DownloadsPage)))
-    assert.equal(document.querySelectorAll('input').length, 0)
+    assert.equal(document.querySelectorAll('input').length, 1)
+    assert.equal(document.querySelector('input').getAttribute('type'), 'search')
     assert.match(document.body.textContent, /Title.*需要设置/)
     assert.match(document.body.textContent, /请选择并授权保存目录/)
-    const progress = document.querySelector('[data-slot="progress"]')
+    const progress = document.querySelector(
+      '[data-slot="progress"][aria-label="Downloading 下载进度"]'
+    )
     assert.equal(progress.getAttribute('role'), 'progressbar')
     assert.equal(progress.getAttribute('aria-label'), 'Downloading 下载进度')
     assert.ok(progress.querySelector('[data-slot="progress-indicator"]'))
     assert.equal(document.querySelectorAll('progress').length, 0)
     const settings = [...document.querySelectorAll('button')].find(
-      (button) => button.textContent === '下载设置'
+      (button) => button.getAttribute('aria-label') === '下载设置'
     )
     await React.act(async () => settings.click())
     assert.equal(configurations, 1)
-    assert.ok(
-      [...document.querySelectorAll('button')].some((button) => button.textContent === '扫码登录')
-    )
+    assert.ok(!document.body.textContent.includes('扫码登录'))
+    assert.ok(document.querySelector('[aria-label="暂停下载 Downloading"]'))
+    assert.ok(document.querySelector('[aria-label="删除下载任务 Downloading"]'))
   } finally {
     await React.act(async () => root.unmount())
     dom.window.close()
@@ -437,4 +532,108 @@ test('download page renders task status and settings without a song ID or URL in
     delete globalThis.document
     delete globalThis.IS_REACT_ACT_ENVIRONMENT
   }
+})
+
+test('task pause and resume use the same transfer; delete cancels it without storing host credentials', async () => {
+  const runtime = load('../../plugins/netease-download/frontend/runtime.ts', {
+    './protocol': protocol
+  })
+  const calls = []
+  let transferState = 'running'
+  const client = {
+    openPage() {},
+    openConfiguration() {},
+    async call(op, args) {
+      calls.push({ op, args })
+      if (op === 'storage.get') return null
+      if (op === 'config.get')
+        return {
+          values: {
+            quality: 'lossless',
+            minimumQuality: 'standard',
+            allowFallback: true,
+            directory: 'dir-one'
+          }
+        }
+      if (op === 'files.roots') return [{ id: 'dir-one', writable: true }]
+      if (op === 'netease.account-credentials')
+        return { cookie: 'MUSIC_U=private-cookie', generation: 1 }
+      if (op === 'http.request')
+        return {
+          status: 200,
+          body: JSON.stringify({
+            code: 200,
+            data: { url: 'https://m801.music.126.net/song', level: 'lossless', size: 100 }
+          })
+        }
+      if (op === 'transfers.start') return { id: 7 }
+      if (op === 'transfers.get') return { state: transferState, bytes: 20 }
+      if (op === 'transfers.pause') transferState = 'paused'
+      if (op === 'transfers.resume') transferState = 'running'
+      if (op === 'transfers.cancel') transferState = 'cancelled'
+      return null
+    }
+  }
+  const dispose = await runtime.activate(client)
+  await runtime.downloadSong({
+    key: 'ncm:12',
+    title: 'Title',
+    artist: 'Singer',
+    album: 'Album',
+    cover: 'https://example.org/cover',
+    durationMs: 100,
+    source: { kind: 'netease', id: 12 }
+  })
+  await until(() => runtime.snapshot().tasks[0].state === 'running')
+  const id = runtime.snapshot().tasks[0].id
+  await runtime.pauseTask(id)
+  assert.equal(runtime.snapshot().tasks[0].state, 'paused')
+  await runtime.resumeTask(id)
+  assert.equal(runtime.snapshot().tasks[0].state, 'running')
+  assert.equal(calls.filter((c) => c.op === 'transfers.start').length, 1)
+  await runtime.deleteTask(id)
+  assert.equal(runtime.snapshot().tasks.length, 0)
+  assert.ok(calls.some((c) => c.op === 'transfers.cancel' && c.args.id === 7))
+  assert.ok(!JSON.stringify(calls.filter((c) => c.op === 'storage.set')).includes('private-cookie'))
+  dispose()
+})
+
+test('missing host login retains the task and never starts a transfer or separate login', async () => {
+  const runtime = load('../../plugins/netease-download/frontend/runtime.ts', {
+    './protocol': protocol
+  })
+  const calls = []
+  const dispose = await runtime.activate({
+    openPage() {},
+    openConfiguration() {},
+    async call(op, args) {
+      calls.push({ op, args })
+      if (op === 'storage.get') return null
+      if (op === 'config.get')
+        return {
+          values: {
+            quality: 'lossless',
+            minimumQuality: 'standard',
+            allowFallback: true,
+            directory: 'dir-one'
+          }
+        }
+      if (op === 'files.roots') return [{ id: 'dir-one', writable: true }]
+      if (op === 'netease.account-credentials') return { cookie: null, generation: 2 }
+      return null
+    }
+  })
+  await runtime.downloadSong({
+    key: 'ncm:12',
+    title: 'Title',
+    artist: 'Singer',
+    album: '',
+    cover: '',
+    durationMs: 100,
+    source: { kind: 'netease', id: 12 }
+  })
+  await until(() => runtime.snapshot().tasks[0].state === 'setup')
+  assert.match(runtime.snapshot().tasks[0].error, /NonsPlayer 中登录/)
+  assert.ok(!calls.some((c) => c.op === 'transfers.start' || c.op === 'http.request'))
+  dispose()
 })

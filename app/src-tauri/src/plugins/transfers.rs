@@ -25,6 +25,7 @@ struct Task {
     plugin: String,
     generation: u64,
     cancel: Arc<AtomicBool>,
+    paused: Arc<AtomicBool>,
     snapshot: Arc<Mutex<Snapshot>>,
 }
 #[derive(Default)]
@@ -45,6 +46,14 @@ impl Transfers {
                 .ok_or("传输任务已失效")?;
             if operation == "transfers.cancel" {
                 task.cancel.store(true, Ordering::SeqCst);
+            }
+            if matches!(operation, "transfers.pause" | "transfers.resume") {
+                let mut snapshot = task.snapshot.lock().map_err(|_| "传输状态不可用")?;
+                if matches!(snapshot.state.as_str(), "running" | "paused") {
+                    let paused = operation == "transfers.pause";
+                    task.paused.store(paused, Ordering::SeqCst);
+                    snapshot.state = if paused { "paused" } else { "running" }.into();
+                }
             }
             return serde_json::to_value(
                 task.snapshot.lock().map_err(|_| "传输状态不可用")?.clone(),
@@ -78,7 +87,7 @@ impl Transfers {
         let running = |t: &&Task| {
             t.snapshot
                 .lock()
-                .map(|s| s.state == "running")
+                .map(|s| matches!(s.state.as_str(), "running" | "paused"))
                 .unwrap_or(true)
         };
         if tasks.values().filter(running).count() >= 8
@@ -97,13 +106,17 @@ impl Transfers {
                 || t.plugin != context.id
                 || t.snapshot
                     .lock()
-                    .map(|s| s.state == "running")
+                    .map(|s| matches!(s.state.as_str(), "running" | "paused"))
                     .unwrap_or(true)
         });
         if tasks.len() >= 128 {
             let old = tasks
                 .iter()
-                .find(|(_, t)| t.snapshot.lock().is_ok_and(|s| s.state != "running"))
+                .find(|(_, t)| {
+                    t.snapshot
+                        .lock()
+                        .is_ok_and(|s| !matches!(s.state.as_str(), "running" | "paused"))
+                })
                 .map(|(id, _)| *id);
             if let Some(id) = old {
                 tasks.remove(&id);
@@ -120,18 +133,29 @@ impl Transfers {
             error: None,
         }));
         let cancel = Arc::new(AtomicBool::new(false));
+        let paused = Arc::new(AtomicBool::new(false));
         tasks.insert(
             id,
             Task {
                 plugin: context.id.clone(),
                 generation: context.generation,
                 cancel: cancel.clone(),
+                paused: paused.clone(),
                 snapshot: snapshot.clone(),
             },
         );
         let context = TransferContext::from(&context);
         tauri::async_runtime::spawn(async move {
-            let result = run(&context, url, &root, &path, max_bytes, &snapshot, &cancel).await;
+            let result = run(
+                &context,
+                url,
+                &root,
+                &path,
+                max_bytes,
+                &snapshot,
+                (&cancel, &paused),
+            )
+            .await;
             if let Ok(mut state) = snapshot.lock() {
                 state.state = if result.is_ok() {
                     "completed"
@@ -172,8 +196,9 @@ async fn run(
     path: &str,
     max: u64,
     snapshot: &Arc<Mutex<Snapshot>>,
-    cancel: &AtomicBool,
+    controls: (&AtomicBool, &AtomicBool),
 ) -> AppResult<()> {
+    let (cancel, paused) = controls;
     let io = |operation: &str, args: Value| {
         let files = context.files.clone();
         let plugin = context.id.clone();
@@ -192,14 +217,18 @@ async fn run(
     .map_err(|_| "创建文件失败")??;
     let handle = opened["handle"].as_u64().ok_or("文件句柄无效")?;
     let transfer = async {
-        let mut response = context
-            .http
-            .0
-            .get(url)
-            .timeout(Duration::from_secs(600))
-            .send()
-            .await
-            .map_err(|_| "连接资源失败")?;
+        let mut response = tokio::time::timeout(
+            Duration::from_secs(30),
+            context
+                .http
+                .0
+                .get(url)
+                .timeout(Duration::from_secs(24 * 60 * 60))
+                .send(),
+        )
+        .await
+        .map_err(|_| "连接资源超时")?
+        .map_err(|_| "连接资源失败")?;
         if !response.status().is_success() {
             return Err("资源服务器拒绝传输或返回重定向".into());
         }
@@ -209,16 +238,31 @@ async fn run(
         }
         snapshot.lock().map_err(|_| "传输状态不可用")?.total = total;
         let mut bytes = 0u64;
-        while let Some(chunk) = tokio::time::timeout(Duration::from_secs(30), response.chunk())
-            .await
-            .map_err(|_| "传输停滞超过 30 秒")?
-            .map_err(|_| "读取资源失败")?
-        {
+        let mut network_time = Duration::ZERO;
+        loop {
+            while paused.load(Ordering::SeqCst) {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            let started = std::time::Instant::now();
+            let chunk = tokio::time::timeout(Duration::from_secs(30), response.chunk())
+                .await
+                .map_err(|_| "传输停滞超过 30 秒")?
+                .map_err(|_| "读取资源失败")?;
+            network_time += started.elapsed();
+            if network_time > Duration::from_secs(600) {
+                return Err("传输网络等待超过 10 分钟".into());
+            }
+            let Some(chunk) = chunk else {
+                break;
+            };
             bytes += chunk.len() as u64;
             if bytes > max {
                 return Err("资源超过传输大小上限".into());
             }
             for block in chunk.chunks(32768) {
+                while paused.load(Ordering::SeqCst) {
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
                 let data = block.to_vec();
                 let files = context.files.clone();
                 let plugin = context.id.clone();
@@ -301,6 +345,75 @@ mod tests {
         (Arc::new(super::super::http::Http(client)), server)
     }
     #[test]
+    fn pause_preserves_partial_file_then_resumes_and_cancel_cleans_paused_transfer() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let tmp = tempfile::tempdir().unwrap();
+                let db = Arc::new(
+                    super::super::database::Database::open(Path::new(":memory:")).unwrap(),
+                );
+                let files = Arc::new(super::super::files::Files::new(tmp.path().join("data"), db));
+                let grant = files.grant("one", tmp.path().into(), true).unwrap();
+                for cancel_while_paused in [false, true] {
+                    let (http, server) = fixture(vec![42; 100_000], Duration::from_millis(5));
+                    let context = TransferContext {
+                        id: "one".into(),
+                        generation: 1,
+                        files: files.clone(),
+                        http,
+                        active: Arc::new(AtomicBool::new(true)),
+                    };
+                    let snapshot = Arc::new(Mutex::new(Snapshot {
+                        id: 1,
+                        state: "paused".into(),
+                        bytes: 0,
+                        total: None,
+                        error: None,
+                    }));
+                    let paused = Arc::new(AtomicBool::new(true));
+                    let cancel = Arc::new(AtomicBool::new(false));
+                    let pause_toggle = paused.clone();
+                    let cancel_toggle = cancel.clone();
+                    let tmp_path = tmp.path().join("pause.part");
+                    let toggle = tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(150)).await;
+                        assert_eq!(std::fs::metadata(tmp_path).unwrap().len(), 0);
+                        if cancel_while_paused {
+                            cancel_toggle.store(true, Ordering::SeqCst);
+                        } else {
+                            pause_toggle.store(false, Ordering::SeqCst);
+                        }
+                    });
+                    let result = run(
+                        &context,
+                        url::Url::parse("http://example.org/file").unwrap(),
+                        &grant.id,
+                        "pause.part",
+                        100_000,
+                        &snapshot,
+                        (&cancel, &paused),
+                    )
+                    .await;
+                    toggle.await.unwrap();
+                    server.join().unwrap();
+                    if cancel_while_paused {
+                        assert!(result.is_err());
+                        assert!(!tmp.path().join("pause.part").exists());
+                    } else {
+                        result.unwrap();
+                        assert_eq!(
+                            std::fs::read(tmp.path().join("pause.part")).unwrap(),
+                            vec![42; 100_000]
+                        );
+                        std::fs::remove_file(tmp.path().join("pause.part")).unwrap();
+                    }
+                }
+            });
+    }
+    #[test]
     fn streams_bounded_files_and_cleans_cancelled_and_oversized_resources() {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -337,7 +450,7 @@ mod tests {
                     "good.part",
                     100_000,
                     &state,
-                    &AtomicBool::new(false),
+                    (&AtomicBool::new(false), &AtomicBool::new(false)),
                 )
                 .await
                 .unwrap();
@@ -356,7 +469,7 @@ mod tests {
                     "large.part",
                     99,
                     &state,
-                    &AtomicBool::new(false)
+                    (&AtomicBool::new(false), &AtomicBool::new(false))
                 )
                 .await
                 .unwrap_err()
@@ -378,7 +491,7 @@ mod tests {
                     "cancel.part",
                     100_000,
                     &state,
-                    &cancel
+                    (&cancel, &AtomicBool::new(false))
                 )
                 .await
                 .is_err());
@@ -400,7 +513,7 @@ mod tests {
                     "revoke.part",
                     100_000,
                     &state,
-                    &AtomicBool::new(false)
+                    (&AtomicBool::new(false), &AtomicBool::new(false))
                 )
                 .await
                 .is_err());

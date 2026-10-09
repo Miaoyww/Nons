@@ -8,6 +8,8 @@
 
 插件 React SDK 仍通过 `nativeCall` 调用 scoped IPC，封面沿用 `useCoverSource`／`runtime_cover`。方法调用、权限检查、生命周期、存储与插件列表不加入查询缓存：每次必须验证当前加载代次，不能由缓存绕过禁用或权限判断。
 
+`netease.account-credentials` 仅交付给显式授权 `account:credentials` 的活跃插件，实时读取当前 Cookie 和账号代次，不缓存、不写插件存储。下载插件每次解析资源前读取，并在发布前核对账号代次；切换账号或退出后旧下载结果不得发布。`files.resolve/play/open-directory` 每次核对根目录授权与路径；已下载文件继续独立于播放缓存，列表复用宿主组件与封面缓存，不自动添加曲库目录。
+
 插件设置的 ZIP 拖入与文件选择共用 `plugin_install`，安装后沿用 `plugins-changed` 更新列表；搜索仅筛选当前已安装列表。`plugin_open_folder` 由宿主直接打开插件管理器的安装目录，不接受前端路径参数，不加入查询缓存。
 
 WASM 无法调用 WebUI 的 `nativeCall`，因此 `plugins/netease.rs` 的 `SongService` 为 `netease.get-song` 提供独立、共享的 Rust 运行时缓存，底层继续使用同一网易云 Client；`music.get-song` 为兼容别名。成功结果 TTL 10 分钟，不延长命中 TTL；128 条上限，每个公开 DTO 最多 64KiB，有效载荷估算上限约 8MiB。查询串行合并重复请求，失败不缓存、不持久化，单次网络预算 3 秒。

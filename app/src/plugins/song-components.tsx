@@ -1,5 +1,7 @@
 import { ArtistLinks } from '@/components/music/music-links'
 import { CurrentTrackLike } from '@/features/playback/current-track-like'
+import { TrackIdentity } from '@/components/music/track-identity'
+import type { PluginMenuSong } from './sdk'
 import type { Track } from '@/lib/player'
 import { useScope, checkScope } from './scope'
 import type { PluginSong } from './types'
@@ -7,6 +9,16 @@ import type { PluginSong } from './types'
 export function SongArtists({ song }: { song: PluginSong }) {
   useScope('ui')
   return <ArtistLinks artists={song.artists} name={song.artist} />
+}
+
+export function SongIdentity({ song }: { song: PluginMenuSong }) {
+  useScope('ui')
+  const track: Track = {
+    ...song,
+    source:
+      song.source.kind === 'netease' ? song.source : { kind: 'local', path: '', neteaseId: null }
+  }
+  return <TrackIdentity track={track} />
 }
 
 export function SongLikeButton({

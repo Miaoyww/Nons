@@ -10,8 +10,19 @@ export type { ConfigSnapshot } from './configuration-types'
 import { pluginPath, resolvePluginPath } from './types'
 export { Button } from '@/components/ui/button'
 export { Progress } from '@/components/ui/progress'
+export { Input } from '@/components/ui/input'
+export { Icon } from './icon'
+export {
+  Tabs,
+  TabsList,
+  TabsTab,
+  TabsPanel,
+  TabsPanels
+} from '@/components/animate-ui/components/base/tabs'
+export { DownloadedSongList } from './downloaded-song-list'
 export type { PluginSong } from './types'
-export { SongArtists, SongLikeButton } from './song-components'
+export type PluginMenuSong = ReturnType<typeof import('./song-menu-context').publicMenuSong>
+export { SongArtists, SongLikeButton, SongIdentity } from './song-components'
 
 export function useSongPlayback() {
   const scope = useScope('player:control')

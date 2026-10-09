@@ -10,6 +10,9 @@ export function publicMenuSong(track: Track) {
   return {
     key: track.key,
     title: track.title,
+    aliases: track.aliases,
+    artists: track.artists,
+    albumId: track.albumId,
     artist: track.artist,
     album: track.album,
     durationMs: track.durationMs,

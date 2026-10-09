@@ -265,6 +265,10 @@ test('SDK keeps configuration navigation local and rejects stale configuration r
       './song-components': {},
       '@/components/ui/button': { Button },
       '@/components/ui/progress': {},
+      '@/components/ui/input': {},
+      '@/components/animate-ui/components/base/tabs': {},
+      './downloaded-song-list': {},
+      './icon': {},
       '@tauri-apps/api/event': {
         listen: async (_event, callback) => {
           listener = callback

@@ -34,6 +34,20 @@ pub struct Context {
     pub requests: Arc<tokio::sync::Semaphore>,
 }
 impl Context {
+    async fn file_location(&self, args: Value) -> AppResult<Value> {
+        let context = self.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            context.files.call(
+                &context.id,
+                context.generation,
+                "files.resolve",
+                &args,
+                &context.active,
+            )
+        })
+        .await
+        .map_err(|_| "文件路径解析失败")?
+    }
     pub fn check(&self, permission: Option<&str>) -> AppResult<()> {
         if !self.active.load(Ordering::SeqCst) {
             return Err("插件已卸载或禁用".into());
@@ -49,6 +63,10 @@ impl Context {
         }
         let args: Value = serde_json::from_str(args).map_err(|_| "插件参数必须为 JSON")?;
         let result = match operation {
+            "netease.account-credentials" => {
+                self.check(Some("account:credentials"))?;
+                self.songs.account_credentials()?
+            }
             "clipboard.read-text" => {
                 self.check(Some("clipboard:read"))?;
                 let text = tauri::async_runtime::spawn_blocking(super::clipboard::read_text)
@@ -77,7 +95,8 @@ impl Context {
                 .await
                 .map_err(|_| "凭据操作失败")??
             }
-            "transfers.start" | "transfers.get" | "transfers.cancel" => {
+            "transfers.start" | "transfers.get" | "transfers.cancel" | "transfers.pause"
+            | "transfers.resume" => {
                 self.check(Some("http:transfer"))?;
                 self.transfers.call(self.clone(), operation, &args)?
             }
@@ -129,7 +148,35 @@ impl Context {
                         },
                     ))?;
                 }
-                if op == "files.roots" {
+                if op == "files.play" {
+                    self.check(Some("player:control"))?;
+                    let location = self.file_location(args.clone()).await?;
+                    let mut track: crate::model::Track =
+                        serde_json::from_value(args.get("track").ok_or("缺少歌曲信息")?.clone())
+                            .map_err(|_| "歌曲信息无效")?;
+                    let path = location["path"]
+                        .as_str()
+                        .ok_or("文件路径不可用")?
+                        .to_string();
+                    use sha2::{Digest, Sha256};
+                    track.key = format!("local:{:x}", Sha256::digest(path.as_bytes()));
+                    track.source = crate::model::TrackSource::Local {
+                        path,
+                        netease_id: None,
+                    };
+                    self.check(Some("player:control"))?;
+                    self.player.send(Command::Queue(vec![track], 0))?;
+                    Value::Null
+                } else if op == "files.open-directory" {
+                    let location = self
+                        .file_location(json!({"root":args.get("root"),"path":""}))
+                        .await?;
+                    self.check(None)?;
+                    tauri_plugin_opener::OpenerExt::opener(&self.app)
+                        .open_path(location["path"].as_str().ok_or("目录不可用")?, None::<&str>)
+                        .map_err(|e| e.to_string())?;
+                    Value::Null
+                } else if op == "files.roots" {
                     let mut roots = Vec::new();
                     if self.permissions.contains("files:data") {
                         roots.push(serde_json::json!({"id":"data","writable":true}));

@@ -1,14 +1,15 @@
 {
   "id": "netease-download",
   "name": "网易云下载",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "frontend": "ui.mjs",
   "configuration": "configuration.json",
   "permissions": [
     "ui",
     "config",
     "storage",
-    "secrets",
+    "account:credentials",
+    "player:control",
     "http:request",
     "http:transfer",
     "files:selected"
@@ -39,8 +40,8 @@
   ],
   "engines": {
     "app": "^1.0.0",
-    "pluginApi": "^1.1.0",
-    "uiApi": "^1.1.0"
+    "pluginApi": "^1.2.0",
+    "uiApi": "^1.2.0"
   },
   "contributes": {
     "contextMenus": [
@@ -63,7 +64,7 @@
     "navigation": [
       {
         "id": "downloads-entry",
-        "label": "下载任务",
+        "label": "下载管理",
         "page": "downloads"
       }
     ]

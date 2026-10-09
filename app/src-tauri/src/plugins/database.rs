@@ -243,6 +243,20 @@ mod tests {
         assert!(!db.enabled("a", "old").unwrap());
     }
     #[test]
+    fn account_credentials_permission_requires_new_authorization() {
+        let db = Database::open(Path::new(":memory:")).unwrap();
+        let new: super::super::manifest::Manifest = serde_json::from_str(include_str!(
+            "../../../../plugins/netease-download/manifest.json"
+        ))
+        .unwrap();
+        let mut old = new.clone();
+        old.permissions.retain(|p| p != "account:credentials");
+        db.authorize(&new.id, &old.authorization()).unwrap();
+        assert!(!db.enabled(&new.id, &new.authorization()).unwrap());
+        db.authorize(&new.id, &new.authorization()).unwrap();
+        assert!(db.enabled(&new.id, &new.authorization()).unwrap());
+    }
+    #[test]
     fn storage_isolation_and_quota() {
         let db = Database::open(Path::new(":memory:")).unwrap();
         db.set("a", "key", "123").unwrap();

@@ -23,6 +23,7 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
   let listener, finishInstall
   let cleanups = 0
   const calls = []
+  let plugins = []
   const modules = {
     '../plugins/configuration-page': { PluginConfigurationPage: 'div' },
     react: React,
@@ -47,7 +48,7 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
     },
     '@/components/ui/input': { Input: 'input' },
     '@/components/ui/switch': { Switch: 'input' },
-    '@/plugins/host': { usePlugins: () => ({ plugins: [] }) },
+    '@/plugins/host': { usePlugins: () => ({ plugins }) },
     '@/lib/player': {
       errorText: (error) => error.message,
       nativeCall: async (command, args) => {
@@ -111,6 +112,29 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
         .click()
     )
     assert.equal(calls.at(-1)[0], 'plugin_open_folder')
+    plugins = [
+      {
+        manifest: {
+          id: 'download',
+          name: '下载管理',
+          version: '1.1.0',
+          permissions: ['ui', 'account:credentials']
+        },
+        enabled: false,
+        loaded: false
+      }
+    ]
+    await React.act(async () => root.render(React.createElement(exports.PluginsPage)))
+    await React.act(async () =>
+      [...document.querySelectorAll('button')]
+        .find((button) => button.textContent === '启用')
+        .click()
+    )
+    assert.match(document.body.textContent, /敏感权限：读取 NonsPlayer 的网易云账户凭证/)
+    const warning = [...document.querySelectorAll('[role="alert"]')].find((element) =>
+      element.textContent.includes('登录 Cookie')
+    )
+    assert.ok(warning.className.includes('text-destructive'))
     await React.act(async () => root.unmount())
     assert.equal(cleanups, 1)
     await emit('drop', ['after-unmount.zip'])

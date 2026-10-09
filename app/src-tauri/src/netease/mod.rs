@@ -57,6 +57,12 @@ pub struct SongCredit {
 }
 
 impl Netease {
+    pub(crate) fn account_credentials(&self) -> AppResult<Option<String>> {
+        self.cookie
+            .lock()
+            .map(|cookie| cookie.clone())
+            .map_err(|_| "登录状态锁不可用".into())
+    }
     pub async fn song(&self, id: u64) -> AppResult<Track> {
         if id == 0 || id > 9_007_199_254_740_991 {
             return Err("歌曲 ID 无效".into());

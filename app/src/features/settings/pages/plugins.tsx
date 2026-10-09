@@ -17,6 +17,7 @@ const permissionLabels: Record<string, string> = {
   'http:request': '请求已声明的网络域名',
   'http:transfer': '将授权域名的资源传输到授权目录',
   secrets: '管理插件自己的系统凭据',
+  'account:credentials': '敏感权限：读取 NonsPlayer 的网易云账户凭证',
   'music:metadata': '读取网易云歌曲信息',
   'player:read': '读取播放状态',
   'player:control': '控制播放',
@@ -298,12 +299,26 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
               <h4 className="font-semibold">启用前确认</h4>
               <ul className="my-3 list-disc space-y-1 pl-5">
                 {plugin.manifest.permissions.map((p) => (
-                  <li key={p}>
+                  <li
+                    key={p}
+                    className={
+                      p === 'account:credentials' ? 'font-semibold text-destructive' : undefined
+                    }
+                  >
                     {permissionLabels[p] ?? p}
                     {p === 'http:request' && `：${plugin.manifest.httpHosts?.join('、') ?? ''}`}
                   </li>
                 ))}
               </ul>
+              {plugin.manifest.permissions.includes('account:credentials') && (
+                <p
+                  role="alert"
+                  className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+                >
+                  此插件可以读取当前账号的登录
+                  Cookie，并以你的账号身份请求网易云服务。请仅授权你信任的插件。
+                </p>
+              )}
               <p className="leading-6 text-muted-foreground">
                 前端插件与播放器运行在同一界面环境，能够执行代码。只启用你信任的插件；WASM
                 权限限制不代表前端沙箱。

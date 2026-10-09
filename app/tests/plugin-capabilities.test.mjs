@@ -46,7 +46,11 @@ function harness(
     '@/components/music/use-cover-source': {},
     '@/features/workspace/music-navigation': {},
     '@/components/ui/button': {},
-    '@/components/ui/progress': {}
+    '@/components/ui/progress': {},
+    '@/components/ui/input': {},
+    '@/components/animate-ui/components/base/tabs': {},
+    './downloaded-song-list': {},
+    './icon': {}
   })
   return { scope, sdk }
 }

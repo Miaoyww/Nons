@@ -19,6 +19,11 @@ pub struct SongService {
     cache: tokio::sync::Mutex<HashMap<u64, (u64, Instant, Track)>>,
 }
 impl SongService {
+    pub(super) fn account_credentials(&self) -> AppResult<Value> {
+        Ok(
+            json!({"cookie":self.netease.account_credentials()?,"generation":self.generation.load(Ordering::SeqCst)}),
+        )
+    }
     pub fn new(netease: Arc<Netease>) -> Self {
         Self {
             netease,

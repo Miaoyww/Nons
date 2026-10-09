@@ -1,13 +1,5 @@
 import type { ConfigSnapshot, PluginClient, PluginMenuSong, PluginTransfer } from '@app/plugin-sdk'
-import {
-  api,
-  audioFormat,
-  filename,
-  LoginRequired,
-  mergeCookies,
-  resolveResource,
-  type Quality
-} from './protocol'
+import { audioFormat, filename, LoginRequired, resolveResource, type Quality } from './protocol'
 
 type Options = {
   quality: Quality
@@ -19,28 +11,35 @@ export interface DownloadTask {
   id: number
   song: PluginMenuSong
   state:
-    'waiting' | 'setup' | 'resolving' | 'running' | 'saving' | 'completed' | 'failed' | 'cancelled'
+    | 'waiting'
+    | 'setup'
+    | 'resolving'
+    | 'running'
+    | 'paused'
+    | 'saving'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
   options?: Options
   quality?: Quality
   bytes: number
   total?: number
   path?: string
   error?: string
+  completedAt?: number
   transfer?: number
 }
 let client: PluginClient
 let active = false
-let pumping = false
-let cookie = ''
-let loginKey: string | undefined
+const inFlight = new Set<number>()
+
 let tasks: DownloadTask[] = []
-let view = { tasks, loggedIn: false, message: '' }
+let view = { tasks, message: '' }
 const adding = new Set<number>()
-const setupShown = new Set<number>()
 const listeners = new Set<() => void>()
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const changed = () => {
-  view = { tasks: [...tasks], loggedIn: /(?:^|;\s*)MUSIC_U=/.test(cookie), message: view.message }
+  view = { tasks: [...tasks], message: view.message }
   listeners.forEach((fn) => fn())
 }
 export const subscribe = (fn: () => void) => {
@@ -63,7 +62,6 @@ export async function activate(next: PluginClient) {
   client = next
   active = true
   try {
-    cookie = (await client.call<string | null>('secrets.get', { key: 'account' })) || ''
     const saved = await client.call<DownloadTask[] | null>('storage.get', { key: 'tasks' })
     tasks = (Array.isArray(saved) ? saved : []).slice(-32).map((task) => {
       if (task.state === 'running' || task.state === 'resolving' || task.state === 'saving')
@@ -79,12 +77,10 @@ export async function activate(next: PluginClient) {
   }, 2000)
   return () => {
     active = false
-    cookie = ''
-    loginKey = undefined
     clearInterval(timer)
     listeners.clear()
     adding.clear()
-    setupShown.clear()
+    inFlight.clear()
     tasks = []
     changed()
   }
@@ -103,7 +99,7 @@ export async function downloadSong(song: PluginMenuSong) {
       (task) =>
         task.song.source.kind === 'netease' &&
         task.song.source.id === id &&
-        ['waiting', 'setup', 'resolving', 'running', 'saving'].includes(task.state)
+        ['waiting', 'setup', 'resolving', 'running', 'paused', 'saving'].includes(task.state)
     )
   ) {
     view.message = '该歌曲已在下载队列中'
@@ -128,7 +124,7 @@ export async function downloadSong(song: PluginMenuSong) {
         title: Array.from(song.title).slice(0, 80).join(''),
         artist: Array.from(song.artist).slice(0, 80).join(''),
         album: Array.from(song.album).slice(0, 80).join(''),
-        cover: ''
+        cover: /^https?:/.test(song.cover) ? song.cover.slice(0, 512) : ''
       },
       state: 'waiting',
       options: { ...options },
@@ -139,10 +135,7 @@ export async function downloadSong(song: PluginMenuSong) {
     changed()
     await persist()
     if (!options.directory) client.openConfiguration()
-    else if (!snapshot().loggedIn) {
-      setupShown.add(tasks[tasks.length - 1].id)
-      client.openPage()
-    }
+    else client.openPage()
     void pump()
     return notice
   } finally {
@@ -150,10 +143,17 @@ export async function downloadSong(song: PluginMenuSong) {
   }
 }
 async function pump() {
-  if (!active || pumping) return
-  const task = tasks.find((task) => task.state === 'waiting' || task.state === 'setup')
+  if (
+    !active ||
+    inFlight.size >= 2 ||
+    tasks.some((task) => inFlight.has(task.id) && task.state !== 'paused')
+  )
+    return
+  const task = tasks.find(
+    (task) => !inFlight.has(task.id) && (task.state === 'waiting' || task.state === 'setup')
+  )
   if (!task) return
-  pumping = true
+  inFlight.add(task.id)
   const previous = JSON.stringify(task)
   let temporary: string | undefined
   let root: string | undefined
@@ -165,21 +165,17 @@ async function pump() {
     }
     root = task.options!.directory
     const roots = await client.call<{ id: string; writable: boolean }[]>('files.roots')
-    if (!root || !roots.some((r) => r.id === root && r.writable) || !snapshot().loggedIn) {
-      if (
-        root &&
-        roots.some((r) => r.id === root && r.writable) &&
-        !snapshot().loggedIn &&
-        !setupShown.has(task.id)
-      ) {
-        setupShown.add(task.id)
-        client.openPage()
-      }
+    const account = await client.call<{ cookie: string | null; generation: number }>(
+      'netease.account-credentials'
+    )
+    if (!active || task.state === ('cancelled' as string) || task.state === ('paused' as string))
+      return
+    if (!root || !roots.some((r) => r.id === root && r.writable) || !account.cookie) {
       task.state = 'setup'
       task.error =
         !root || !roots.some((r) => r.id === root && r.writable)
           ? '请选择并授权保存目录'
-          : '请扫码登录插件下载账号'
+          : '请先在 NonsPlayer 中登录网易云账号'
       if (JSON.stringify(task) !== previous) changed()
       return
     }
@@ -194,9 +190,10 @@ async function pump() {
       task.options!.quality,
       task.options!.allowFallback,
       task.options!.minimumQuality,
-      cookie
+      account.cookie
     )
-    if (!active || task.state === ('cancelled' as string)) return
+    if (!active || task.state === ('cancelled' as string) || task.state === ('paused' as string))
+      return
     task.quality = resource.quality
     task.total = resource.size
     temporary = `${filename(task.song.title, task.song.artist, task.song.source.id)}-${Math.floor(task.id)}-${Date.now()}-${Math.floor(Math.random() * 1e9)}.part`
@@ -209,6 +206,8 @@ async function pump() {
     task.transfer = started.id
     if (task.state === ('cancelled' as string))
       await client.call('transfers.cancel', { id: started.id })
+    else if (task.state === ('paused' as string))
+      await client.call('transfers.pause', { id: started.id })
     else task.state = 'running'
     changed()
     await persist()
@@ -218,7 +217,7 @@ async function pump() {
       const state = await client.call<PluginTransfer>('transfers.get', { id: task.transfer })
       task.bytes = state.bytes
       changed()
-      if (state.state === 'running') continue
+      if (state.state === 'running' || state.state === 'paused') continue
       if (state.state !== 'completed') throw new Error(state.error || '下载已取消')
       if (task.state === ('cancelled' as string)) throw new Error('下载已取消')
       if (state.bytes !== resource.size) throw new Error('实际文件大小与资源信息不符，请重试')
@@ -245,15 +244,17 @@ async function pump() {
     if (!format) throw new Error('资源不是受支持的音频文件，已拒绝保存')
     if (task.state === ('cancelled' as string)) throw new Error('下载已取消')
     const target = `${filename(task.song.title, task.song.artist, task.song.source.id)}.${format}`
+    const current = await client.call<{ generation: number }>('netease.account-credentials')
+    if (current.generation !== account.generation) throw new Error('下载期间账号已变化，请重试')
     await client.call('files.publish', { root, path: temporary, to: target })
     temporary = undefined
     task.path = target
     task.state = 'completed'
+    task.completedAt = Date.now()
     changed()
   } catch (error) {
     if (error instanceof LoginRequired) {
-      cookie = ''
-      await client.call('secrets.delete', { key: 'account' }).catch(() => {})
+      view.message = '网易云登录已失效，请在 NonsPlayer 中重新登录后重试'
     }
     if (active && task.state !== 'cancelled') {
       task.state = 'failed'
@@ -268,7 +269,7 @@ async function pump() {
         view.message = `保存下载记录失败：${String(error)}`
         changed()
       })
-    pumping = false
+    inFlight.delete(task.id)
     if (active && task.state !== 'setup') void pump()
   }
 }
@@ -292,41 +293,59 @@ export async function retryTask(id: number) {
   changed()
   await persist()
   if (!task.options.directory) client.openConfiguration()
-  else if (!snapshot().loggedIn) client.openPage()
+  else client.openPage()
   void pump()
 }
 export function configure() {
   client.openConfiguration()
 }
-export async function createLogin() {
-  const { body } = await api(client, '/api/login/qrcode/unikey', { type: 3 }, '')
-  if (body.code !== 200 || typeof body.unikey !== 'string')
-    throw new Error('无法生成登录二维码，请重试')
-  loginKey = body.unikey
-  return body.unikey as string
-}
-export async function checkLogin(key: string) {
-  const { body, cookies } = await api(
-    client,
-    '/api/login/qrcode/client/login',
-    { key, type: 3 },
-    ''
-  )
-  if (!active || loginKey !== key) return 800
-  if (body.code === 803) {
-    const next = mergeCookies('', cookies)
-    if (!/(?:^|;\s*)MUSIC_U=/.test(next)) throw new Error('登录响应缺少账号凭据，请重新生成二维码')
-    await client.call('secrets.set', { key: 'account', value: next })
-    cookie = next
-    view.message = '插件下载账号已登录'
-    changed()
-    void pump()
+export async function pauseTask(id: number) {
+  const task = tasks.find((task) => task.id === id)
+  if (!task || !['waiting', 'setup', 'resolving', 'running'].includes(task.state)) return
+  if (task.transfer) {
+    const transfer = await client.call<PluginTransfer>('transfers.pause', { id: task.transfer })
+    if (transfer && transfer.state !== 'paused') return
   }
-  return body.code as number
-}
-export async function logout() {
-  loginKey = undefined
-  await client.call('secrets.delete', { key: 'account' })
-  cookie = ''
+  task.state = 'paused'
   changed()
+  await persist()
+  void pump()
+}
+export async function resumeTask(id: number) {
+  const task = tasks.find((task) => task.id === id)
+  if (!task || task.state !== 'paused') return
+  if (task.transfer) {
+    const state = await client.call<PluginTransfer>('transfers.get', { id: task.transfer })
+    if (state.state === 'paused' || state.state === 'running') {
+      await client.call('transfers.resume', { id: task.transfer })
+      task.state = 'running'
+    } else if (state.state === 'completed') task.state = 'running'
+    else {
+      task.state = 'failed'
+      task.error = state.error || '传输已中断，请重试'
+    }
+  } else {
+    task.state = 'waiting'
+    task.bytes = 0
+  }
+  changed()
+  await persist()
+  void pump()
+}
+export async function deleteTask(id: number) {
+  const task = tasks.find((task) => task.id === id)
+  if (!task || task.state === 'saving' || task.state === 'completed') return
+  await cancelTask(id)
+  tasks = tasks.filter((task) => task.id !== id)
+  changed()
+  await persist()
+}
+export async function openDirectory() {
+  const config = await client.call<ConfigSnapshot>('config.get')
+  const root = String(config.values.directory || '')
+  if (!root) {
+    client.openConfiguration()
+    return
+  }
+  await client.call('files.open-directory', { root })
 }
