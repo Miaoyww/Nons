@@ -47,7 +47,15 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
       Button: ({ variant: _variant, size: _size, ...props }) => React.createElement('button', props)
     },
     '@/components/ui/input': { Input: 'input' },
-    '@/components/ui/switch': { Switch: 'input' },
+    '@/components/ui/switch': {
+      Switch: ({ onCheckedChange, ...props }) =>
+        React.createElement('input', {
+          ...props,
+          type: 'checkbox',
+          role: 'switch',
+          onChange: (event) => onCheckedChange(event.target.checked)
+        })
+    },
     '@/plugins/host': { usePlugins: () => ({ plugins }) },
     '@/lib/player': {
       errorText: (error) => error.message,
@@ -135,10 +143,32 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
       element.textContent.includes('登录 Cookie')
     )
     assert.ok(warning.className.includes('text-destructive'))
+    const clickButton = async (text) =>
+      React.act(async () =>
+        [...document.querySelectorAll('button')]
+          .find((button) => button.textContent === text)
+          .click()
+      )
+    const beginUninstall = async () =>
+      React.act(async () => document.querySelector('[aria-label="卸载 下载管理"]').click())
+    await clickButton('取消')
+    await beginUninstall()
+    assert.equal(document.querySelector('[role="switch"]').checked, true)
+    await React.act(async () => document.querySelector('[role="switch"]').click())
+    await clickButton('取消')
+    await beginUninstall()
+    assert.equal(document.querySelector('[role="switch"]').checked, true)
+    await clickButton('确认卸载')
+    assert.equal(calls.at(-1)[1].action, 'uninstall-keep-data')
+    await beginUninstall()
+    await React.act(async () => document.querySelector('[role="switch"]').click())
+    await clickButton('确认卸载')
+    assert.equal(calls.at(-1)[1].action, 'uninstall')
+    const finalCall = calls.at(-1)
     await React.act(async () => root.unmount())
     assert.equal(cleanups, 1)
     await emit('drop', ['after-unmount.zip'])
-    assert.equal(calls.at(-1)[0], 'plugin_open_folder')
+    assert.equal(calls.at(-1), finalCall)
   } finally {
     await React.act(async () => root.unmount())
     dom.window.close()

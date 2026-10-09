@@ -34,7 +34,7 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
   const [review, setReview] = useState<PluginDescriptor>()
   const [trusted, setTrusted] = useState(false)
   const [removing, setRemoving] = useState<string>()
-  const [keepData, setKeepData] = useState(false)
+  const [keepData, setKeepData] = useState(true)
   const [configuring, setConfiguring] = useState<string | undefined>(initialPluginId)
   useEffect(() => {
     if (initialPluginId) setConfiguring(initialPluginId)
@@ -287,7 +287,7 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
                 title="卸载插件"
                 onClick={() => {
                   setRemoving(plugin.manifest.id)
-                  setKeepData(false)
+                  setKeepData(true)
                 }}
               >
                 <Trash2 aria-hidden="true" />
@@ -345,7 +345,9 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
           )}
           {removing === plugin.manifest.id && (
             <div className="mt-4 rounded-lg bg-muted/50 p-4 text-sm">
-              <p>默认清理插件配置、独立存储和专属数据目录；外部授权目录不会被清理。</p>
+              <p>
+                默认保留插件配置、独立存储和专属数据目录，重新安装时恢复；关闭下方选项后清理这些数据。外部授权目录不会被清理。
+              </p>
               <label className="mt-3 flex items-center gap-2">
                 <Switch checked={keepData} onCheckedChange={setKeepData} disabled={busy} />
                 保留插件数据，重新安装时恢复
