@@ -2,7 +2,12 @@
   "bundle": {
     "windows": {
       "wix": {
-        "language": "zh-CN"
+        "language": "zh-CN",
+        "fragmentPaths": ["windows/autostart.wxs"],
+        "componentRefs": ["NonsAutostartCleanup"]
+      },
+      "nsis": {
+        "installerHooks": "windows/autostart-hooks.nsh"
       }
     },
     "resources": {

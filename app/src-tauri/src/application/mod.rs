@@ -3,7 +3,7 @@ use crate::{
     netease, player, plugins, storage, ttml_cache,
 };
 
-use crate::platform::{desktop, main_webview};
+use crate::platform::{autostart, desktop, main_webview};
 use model::{AppResult, Lyrics, OutputDevice, PlayerSnapshot, Track, TrackSource};
 use netease::{
     AccountProfile, CollectionPage, LibrarySummary, LoginStatus, Netease, QrLogin, TrackPage,
@@ -693,6 +693,14 @@ async fn logout(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(windows)]
+    if std::env::args().any(|arg| arg == "--remove-autostart") {
+        if let Err(error) = autostart::cleanup() {
+            eprintln!("清理开机自启失败：{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     #[cfg(not(feature = "plugin-probe"))]
     let context = tauri::generate_context!();
     #[cfg(feature = "plugin-probe")]
@@ -702,6 +710,11 @@ pub fn run() {
         context
     };
     let app = tauri::Builder::default()
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .app_name(autostart::ENTRY_NAME)
+                .build(),
+        )
         .register_uri_scheme_protocol("plugin", plugins::protocol)
         .plugin(tauri_plugin_opener::init())
         .plugin(
@@ -791,6 +804,8 @@ pub fn run() {
         })
         .on_window_event(desktop::on_window_event)
         .invoke_handler(tauri::generate_handler![
+            autostart::autostart_status,
+            autostart::set_autostart,
             desktop::close_behavior,
             desktop::set_close_behavior,
             main_webview::main_webview_ready,

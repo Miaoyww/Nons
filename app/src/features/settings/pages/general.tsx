@@ -4,6 +4,7 @@ import { SettingsCard } from '@/features/settings/settings-card'
 import { FontPicker } from '@/features/settings/font-picker'
 import { useFontSettings } from '@/features/settings/use-font-settings'
 import { CloseBehaviorSelect } from '@/features/settings/close-behavior-select'
+import { AutostartSwitch } from '@/features/settings/autostart-switch'
 
 const themes = [
   { value: 'light', label: '浅色', icon: Sun },
@@ -54,6 +55,7 @@ export function GeneralPage({
         />
       </SettingsCard>
       <CloseBehaviorSelect />
+      <AutostartSwitch />
     </div>
   )
 }

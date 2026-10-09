@@ -10,3 +10,5 @@
 app/src-tauri/gen/
 app/src-tauri/bundled-plugins/
 .local/
+# WiX XML shares an extension with WXS JavaScript; Prettier selects the wrong parser.
+app/src-tauri/windows/*.wxs

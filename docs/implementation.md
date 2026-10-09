@@ -27,6 +27,14 @@ pnpm tauri dev
 
 Tauri 在 Linux 不提供托盘指针事件，恢复窗口通过原生菜单的“打开”完成。macOS/Linux 的完整桌面交互仍需在对应平台进行实机验收。
 
+## 开机自启
+
+常规设置的“开机自启”默认关闭，登录系统后启动应用。复用 Tauri 官方 autostart 插件；Windows 额外修正带空格路径的引号，并核对 Run 项是否指向当前可执行文件、读取 StartupApproved 审批状态。状态查询与正常启动只读；只有用户主动切换开关才修改注册和审批记录。设置页挂载和窗口重新获得焦点时刷新，系统禁用显示关闭与恢复提示，未知审批格式或访问失败显示错误。
+
+Windows EXE 卸载钩子只删除当前用户的 NonsPlayer Run 项和审批值；MSI 在删除程序文件前以卸载用户身份运行 `Nons.exe --remove-autostart`，此入口不初始化播放器或界面。NSIS 的 `/UPDATE` 和 MSI 的 `UPGRADINGPRODUCTCODE` 路径保留自启选择。清理不删除整个共享注册表键。便携版删除文件前应先关闭自启；以不同账户卸载无法清理原账户的 HKCU 注册项。
+
+发布前实机验收：安装到含空格路径，开启后注销并重新登录，确认启动；在任务管理器禁用后返回设置确认关闭与提示，主动重新开启并重新登录确认恢复；分别用 MSI／EXE 卸载，确认 Run 和 StartupApproved 中的 NonsPlayer 值删除，其他启动项保留；升级确认自启选择与系统禁用状态保留。macOS/Linux 使用插件的平台实现，仍需对应平台编译与登录启动验收。
+
 ## 格式化与验收
 
 在仓库根目录执行 `pnpm --dir app verify`，按顺序完成格式化、前端测试、生产构建和最终格式检查。Rust 或其他功能仍需补充对应验收；这条命令不替代原生编译与播放验证。单独执行 `pnpm --dir app format` 可格式化代码，`pnpm --dir app format:check` 只检查格式。

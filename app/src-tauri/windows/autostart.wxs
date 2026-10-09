@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="NonsAutostartCleanup" Guid="B5277E88-61DD-4D20-89E1-B19B8AB64679" Win64="yes">
+        <RegistryValue Root="HKCU" Key="Software\Nons\Installer" Name="AutostartCleanup" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <!-- Run before files/DLLs are removed, under the uninstalling user's identity.
+         Upgrades preserve both registration and the user's Task Manager decision. -->
+    <CustomAction Id="CleanupNonsAutostart" FileKey="Path" ExeCommand="--remove-autostart" Execute="deferred" Impersonate="yes" Return="check" />
+    <InstallExecuteSequence>
+      <Custom Action="CleanupNonsAutostart" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+  </Fragment>
+</Wix>
