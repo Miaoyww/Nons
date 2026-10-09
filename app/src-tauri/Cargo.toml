@@ -2,8 +2,8 @@
 name = "nons"
 default-run = "Nons"
 version = "1.0.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "A Multiple music streaming services & High performance supported music player."
+authors = ["Miaoyww"]
 edition = "2021"
 rust-version = "1.95"
 
