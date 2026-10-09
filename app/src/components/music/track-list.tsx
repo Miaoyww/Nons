@@ -1,10 +1,3 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { TrackAlbum } from '@/components/music/music-links'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -20,12 +13,41 @@ import { TrackIdentity } from '@/components/music/track-identity'
 import type { ReactNode } from 'react'
 import { useInterfaceDensity } from '@/features/settings/use-interface-density'
 
-const sortLabels: Record<string, string> = {
-  default: '默认排序',
-  title: '歌名',
-  artist: '艺术家',
-  album: '专辑',
-  duration: '时长'
+type SortKey = 'default' | 'title' | 'artist' | 'album' | 'duration'
+
+function SortHeader({
+  label,
+  active,
+  descending,
+  detail,
+  next,
+  onClick,
+  compact = false
+}: {
+  label: string
+  active: boolean
+  descending: boolean
+  detail: string
+  next: string
+  onClick: () => void
+  compact?: boolean
+}) {
+  const Icon = active ? (descending ? ArrowDown : ArrowUp) : ArrowUpDown
+  return (
+    <button
+      type="button"
+      className="track-sort-header"
+      data-active={active}
+      aria-label={`${label}排序：${next}`}
+      onClick={onClick}
+    >
+      <span>{label}</span>
+      <span className="track-sort-hint">
+        <Icon aria-hidden="true" />
+        <span className={compact ? 'sr-only' : undefined}>{detail}</span>
+      </span>
+    </button>
+  )
 }
 
 interface Props {
@@ -67,9 +89,38 @@ export const TrackList = memo(function TrackList({
   hasMore = false,
   showDuration = true
 }: Props) {
-  const [sort, setSort] = useState('default')
+  const [sort, setSort] = useState<SortKey>('default')
   const [descending, setDescending] = useState(false)
   const [query, setQuery] = useState('')
+  const sortCycle = (column: 'title' | 'album' | 'duration') => {
+    const keys: SortKey[] = column === 'title' ? ['title', 'artist'] : [column]
+    const states = [
+      { key: 'default' as SortKey, descending: false },
+      ...keys.flatMap((key) => [
+        { key, descending: false },
+        { key, descending: true }
+      ])
+    ]
+    const current = Math.max(
+      0,
+      states.findIndex((state) => state.key === sort && state.descending === descending)
+    )
+    return states[(current + 1) % states.length]
+  }
+  const nextLabel = (column: 'title' | 'album' | 'duration') => {
+    const next = sortCycle(column)
+    return next.key === 'default'
+      ? '恢复默认排序'
+      : `${{ title: '标题', artist: '歌手', album: '专辑', duration: '时长' }[next.key]}${next.descending ? '降序' : '升序'}`
+  }
+  const cycleSort = (column: 'title' | 'album' | 'duration') => {
+    const next = sortCycle(column)
+    setSort(next.key)
+    setDescending(next.descending)
+  }
+  const ariaSort = (active: boolean) =>
+    active ? (descending ? ('descending' as const) : ('ascending' as const)) : undefined
+  const titleActive = sort === 'title' || sort === 'artist'
   const entries = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase()
     const result = tracks
@@ -192,67 +243,41 @@ export const TrackList = memo(function TrackList({
             <th className="w-12 py-3 text-center" scope="col">
               序号
             </th>
-            <th
-              className="py-3"
-              scope="col"
-              aria-sort={
-                sortable && sort !== 'default'
-                  ? descending
-                    ? 'descending'
-                    : 'ascending'
-                  : undefined
-              }
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                歌曲
-                {sortable && (
-                  <>
-                    <Select
-                      value={sort}
-                      onValueChange={(value) => {
-                        if (value) {
-                          setSort(value)
-                          setDescending(false)
-                        }
-                      }}
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        aria-label="歌曲排序"
-                        className="border-0 bg-transparent px-2 shadow-none"
-                      >
-                        <ArrowUpDown aria-hidden="true" className="size-3.5" />
-                        <SelectValue>{sortLabels[sort]}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        {Object.entries(sortLabels).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {sort !== 'default' && (
-                      <ActionButton
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={descending ? '切换为升序' : '切换为降序'}
-                        title={descending ? '降序' : '升序'}
-                        onClick={() => setDescending((value) => !value)}
-                      >
-                        {descending ? (
-                          <ArrowDown aria-hidden="true" />
-                        ) : (
-                          <ArrowUp aria-hidden="true" />
-                        )}
-                      </ActionButton>
-                    )}
-                  </>
-                )}
-              </div>
+            <th className="py-3" scope="col" aria-sort={ariaSort(sortable && titleActive)}>
+              {sortable ? (
+                <SortHeader
+                  label="标题"
+                  active={titleActive}
+                  descending={descending}
+                  detail={
+                    titleActive
+                      ? `${sort === 'artist' ? '歌手' : '标题'}${descending ? '降序' : '升序'}`
+                      : '默认排序'
+                  }
+                  next={nextLabel('title')}
+                  onClick={() => cycleSort('title')}
+                />
+              ) : (
+                '歌曲'
+              )}
             </th>
-            <th className="w-[22%] py-3" scope="col">
-              专辑
+            <th
+              className="w-[22%] py-3"
+              scope="col"
+              aria-sort={ariaSort(sortable && sort === 'album')}
+            >
+              {sortable ? (
+                <SortHeader
+                  label="专辑"
+                  active={sort === 'album'}
+                  descending={descending}
+                  detail={sort === 'album' ? (descending ? '降序' : '升序') : '默认'}
+                  next={nextLabel('album')}
+                  onClick={() => cycleSort('album')}
+                />
+              ) : (
+                '专辑'
+              )}
             </th>
             {showLikes && (
               <th className="w-12" scope="col">
@@ -260,8 +285,24 @@ export const TrackList = memo(function TrackList({
               </th>
             )}
             {showDuration && (
-              <th className="w-20 py-3" scope="col">
-                时长
+              <th
+                className="w-20 py-3"
+                scope="col"
+                aria-sort={ariaSort(sortable && sort === 'duration')}
+              >
+                {sortable ? (
+                  <SortHeader
+                    compact
+                    label="时长"
+                    active={sort === 'duration'}
+                    descending={descending}
+                    detail={sort === 'duration' ? (descending ? '降序' : '升序') : '默认'}
+                    next={nextLabel('duration')}
+                    onClick={() => cycleSort('duration')}
+                  />
+                ) : (
+                  '时长'
+                )}
               </th>
             )}
             {extraColumns.map((column) => (

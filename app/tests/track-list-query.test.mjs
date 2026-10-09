@@ -53,29 +53,6 @@ async function harness(run) {
       }
     },
     '@/components/music/infinite-load': { scrollParent: () => null },
-    '@/components/ui/select': {
-      Select: ({ value, onValueChange, children }) =>
-        React.createElement(
-          'div',
-          {},
-          React.createElement(
-            'select',
-            {
-              'aria-label': 'test sort',
-              value,
-              onChange: (event) => onValueChange(event.target.value)
-            },
-            ['default', 'title', 'artist', 'album', 'duration'].map((value) =>
-              React.createElement('option', { key: value, value }, value)
-            )
-          ),
-          children
-        ),
-      SelectContent: () => null,
-      SelectItem: () => null,
-      SelectTrigger: () => null,
-      SelectValue: () => null
-    },
     '@/components/ui/input': { Input: (props) => React.createElement('input', props) },
     '@/components/music/music-links': { TrackAlbum: ({ track }) => track.album },
     '@/components/music/action-button': {
@@ -189,12 +166,9 @@ test('filtered duplicate rows retain original removal indices', async () => {
 test('sorting preserves stable ties, filtered playback order and source indices', async () => {
   await harness(async ({ render, plays, removes, menus, tracks, search }) => {
     await render({ sortable: true })
-    const sort = async (value) => {
-      const element = document.querySelector('select')
-      const key = Object.keys(element).find((key) => key.startsWith('__reactProps'))
-      await act(async () => element[key].onChange({ target: { value } }))
-    }
-    await sort('duration')
+    const clickSort = async (column) =>
+      act(async () => document.querySelector(`[aria-label^="${column}排序："]`).click())
+    await clickSort('时长')
     await act(async () => document.querySelector('.track-cover').click())
     assert.deepEqual(
       plays.at(-1)[1].map((track) => track.key),
@@ -207,14 +181,14 @@ test('sorting preserves stable ties, filtered playback order and source indices'
     )
     menus.at(-1).onRemove()
     assert.equal(removes.at(-1)[1], 2)
-    await act(async () => document.querySelector('[aria-label="切换为降序"]').click())
+    await clickSort('时长')
     await act(async () => document.querySelectorAll('.track-cover')[2].click())
     assert.equal(plays.at(-1)[0], 2)
     assert.deepEqual(
       plays.at(-1)[1].map((track) => track.key),
       ['a', 'a', 'b']
     )
-    await sort('album')
+    await clickSort('专辑')
     await search('Beta')
     await act(async () => document.querySelector('.track-cover').click())
     assert.deepEqual(
@@ -222,11 +196,63 @@ test('sorting preserves stable ties, filtered playback order and source indices'
       ['b']
     )
     await search('')
-    await sort('default')
+    await clickSort('专辑')
+    await clickSort('专辑')
     await act(async () => document.querySelector('.track-cover').click())
     assert.deepEqual(
       plays.at(-1)[1].map((track) => track.key),
       ['a', 'b', 'a']
+    )
+  })
+})
+
+test('title header cycles title and artist directions then restores default, other headers reset the cycle', async () => {
+  await harness(async ({ render, plays }) => {
+    await render({ sortable: true })
+    const click = async (column) =>
+      act(async () => document.querySelector(`[aria-label^="${column}排序："]`).click())
+    for (const [next, expected, direction] of [
+      ['标题降序', ['b', 'a', 'a'], 'ascending'],
+      ['歌手升序', ['a', 'a', 'b'], 'descending'],
+      ['歌手降序', ['a', 'a', 'b'], 'ascending'],
+      ['恢复默认排序', ['b', 'a', 'a'], 'descending'],
+      ['标题升序', ['a', 'b', 'a'], null]
+    ]) {
+      await click('标题')
+      assert.equal(
+        document.querySelector('[aria-label^="标题排序："]').getAttribute('aria-label'),
+        `标题排序：${next}`
+      )
+      assert.equal(
+        document
+          .querySelector('[aria-label^="标题排序："]')
+          .closest('th')
+          .getAttribute('aria-sort'),
+        direction
+      )
+      await act(async () => document.querySelector('.track-cover').click())
+      assert.deepEqual(
+        plays.at(-1)[1].map((track) => track.key),
+        expected
+      )
+    }
+    await click('专辑')
+    assert.equal(
+      document.querySelector('[aria-label^="专辑排序："]').closest('th').getAttribute('aria-sort'),
+      'ascending'
+    )
+    assert.equal(
+      document.querySelector('[aria-label^="标题排序："]').closest('th').getAttribute('aria-sort'),
+      null
+    )
+    await click('标题')
+    assert.equal(
+      document.querySelector('[aria-label^="标题排序："]').closest('th').getAttribute('aria-sort'),
+      'ascending'
+    )
+    assert.equal(
+      document.querySelector('[aria-label^="专辑排序："]').closest('th').getAttribute('aria-sort'),
+      null
     )
   })
 })
