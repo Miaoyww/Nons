@@ -5,6 +5,7 @@ import { FontPicker } from '@/features/settings/font-picker'
 import { useFontSettings } from '@/features/settings/use-font-settings'
 import { usePlaybackBarMode, type PlaybackBarMode } from '@/features/playback/use-playback-bar-mode'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useSongCardMode, type SongCardMode } from '@/features/settings/use-song-card-mode'
 
 const themes = [
   { value: 'light', label: '浅色', icon: Sun },
@@ -21,6 +22,7 @@ export function GeneralPage({
 }) {
   const { fonts, setFont } = useFontSettings()
   const [barMode, setBarMode] = usePlaybackBarMode()
+  const [songCardMode, setSongCardMode] = useSongCardMode()
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -61,6 +63,21 @@ export function GeneralPage({
           <ToggleGroupItem value="collapsible">折叠式</ToggleGroupItem>
           <ToggleGroupItem value="persistent">常驻式</ToggleGroupItem>
           <ToggleGroupItem value="off">关闭</ToggleGroupItem>
+        </ToggleGroup>
+      </SettingsCard>
+      <SettingsCard
+        title="歌曲卡片样式"
+        description="应用于歌曲列表和歌曲信息。紧凑式缩小封面与行间距，封面、歌名和艺术家仍一起显示在左侧。"
+      >
+        <ToggleGroup
+          aria-label="歌曲卡片样式"
+          value={[songCardMode]}
+          onValueChange={(values) => {
+            if (values[0]) setSongCardMode(values[0] as SongCardMode)
+          }}
+        >
+          <ToggleGroupItem value="standard">标准式</ToggleGroupItem>
+          <ToggleGroupItem value="compact">紧凑式</ToggleGroupItem>
         </ToggleGroup>
       </SettingsCard>
       <SettingsCard title="应用字体" description="选择已安装字体，缺失字符使用系统后备字体。">

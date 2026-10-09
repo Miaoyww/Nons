@@ -10,6 +10,7 @@ import { useAccount } from '@/features/account/account'
 import { SongContextMenu } from '@/components/music/song-actions'
 import { TrackIdentity } from '@/components/music/track-identity'
 import type { ReactNode } from 'react'
+import { useSongCardMode } from '@/features/settings/use-song-card-mode'
 
 interface Props {
   tracks: Track[]
@@ -44,6 +45,7 @@ export const TrackList = memo(function TrackList({
   extraColumns = [],
   showDuration = true
 }: Props) {
+  const [cardMode] = useSongCardMode()
   const { profile, likedIds, likesReady, likesError, pendingLikes, reloadLikes, toggleLike } =
     useAccount()
   const [likeError, setLikeError] = useState<string>()
@@ -52,11 +54,17 @@ export const TrackList = memo(function TrackList({
   const virtualizer = useVirtualizer({
     count: tracks.length,
     getScrollElement: () => (body.current ? scrollParent(body.current) : null),
-    estimateSize: () => 72,
+    estimateSize: () => (cardMode === 'compact' ? 52 : 72),
     scrollMargin,
     overscan: 8,
     measureElement: (element) => element.getBoundingClientRect().height + 4
   })
+  useLayoutEffect(() => {
+    virtualizer.measure()
+    body.current?.querySelectorAll<HTMLTableRowElement>('tr[data-index]').forEach((row) => {
+      virtualizer.measureElement(row)
+    })
+  }, [cardMode, virtualizer])
   useLayoutEffect(() => {
     const element = body.current
     const parent = element && scrollParent(element)
@@ -95,7 +103,7 @@ export const TrackList = memo(function TrackList({
           )}
         </div>
       )}
-      <table className="track-list w-full table-fixed text-left text-sm">
+      <table className="track-list w-full table-fixed text-left text-sm" data-mode={cardMode}>
         <caption className="sr-only">歌曲列表</caption>
         <thead className="bg-background text-xs text-muted-foreground">
           <tr className="border-b border-border">
@@ -170,9 +178,10 @@ export const TrackList = memo(function TrackList({
                 <td className="text-center tabular-nums text-muted-foreground">
                   {offset + index + 1}
                 </td>
-                <td className="py-3 pr-4">
+                <td className="track-identity-cell pr-4">
                   <TrackIdentity
                     track={track}
+                    mode={cardMode}
                     showSource
                     cover={
                       <button
@@ -182,7 +191,7 @@ export const TrackList = memo(function TrackList({
                         aria-label={`播放 ${track.title}`}
                         onClick={() => onPlay(index)}
                       >
-                        <Cover cover={track.cover} className="size-11" />
+                        <Cover cover={track.cover} className="track-identity-cover" />
                         <span className="track-cover-play">
                           <Play aria-hidden="true" />
                         </span>

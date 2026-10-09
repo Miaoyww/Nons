@@ -891,6 +891,35 @@
 }
 
 /* Keep row geometry stable across hover and keyboard focus. */
+.track-identity {
+  gap: 12px;
+}
+.track-identity-cover {
+  width: 44px;
+  height: 44px;
+}
+.track-identity-artist {
+  margin-top: 4px;
+}
+.track-identity[data-mode='compact'] {
+  gap: 10px;
+}
+.track-identity[data-mode='compact'] .track-identity-cover {
+  width: 36px;
+  height: 36px;
+}
+.track-identity[data-mode='compact'] .track-identity-artist {
+  margin-top: 0;
+}
+.track-list .track-identity-cell {
+  padding-block: 12px;
+}
+.track-list[data-mode='compact'] .track-identity-cell {
+  padding-block: 6px;
+}
+.track-list[data-mode='compact'] .track-cover {
+  border-radius: 8px;
+}
 .track-list {
   border-collapse: separate;
   border-spacing: 0 4px;
