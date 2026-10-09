@@ -263,6 +263,7 @@ mod tests {
             "../../../../plugins/netease-download/manifest.json"
         ))
         .unwrap();
+        manifest.http_hosts = vec!["interface.music.163.com".into()];
         db.authorize(&manifest.id, &manifest.authorization())
             .unwrap();
         manifest.http_hosts = vec!["*".into()];
