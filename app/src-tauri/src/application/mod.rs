@@ -788,7 +788,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             desktop::close_behavior,
             desktop::set_close_behavior,
-            desktop::tray_action,
             about::open_devtools,
             discovery_hitokoto,
             #[cfg(feature = "plugin-probe")]
