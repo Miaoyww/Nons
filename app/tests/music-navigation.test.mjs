@@ -15,7 +15,7 @@ function harness() {
     createContext: () => ({ Provider: 'provider' }),
     useState(initial) {
       const index = cursor++
-      if (!(index in slots)) slots[index] = initial
+      if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial
       return [
         slots[index],
         (value) => {

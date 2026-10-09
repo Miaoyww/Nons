@@ -140,6 +140,21 @@ impl Player {
             .map_err(|_| "播放状态不可用".into())
     }
 
+    pub(crate) fn needs_private_fm_frontend(&self) -> AppResult<bool> {
+        self.snapshot
+            .read()
+            .map(|state| {
+                state.private_fm_session.is_some()
+                    && matches!(
+                        state.status,
+                        PlaybackStatus::Loading
+                            | PlaybackStatus::Playing
+                            | PlaybackStatus::Buffering
+                    )
+            })
+            .map_err(|_| "播放状态不可用".into())
+    }
+
     pub fn devices(&self) -> AppResult<Vec<OutputDevice>> {
         let (sender, receiver) = mpsc::channel();
         self.send(Command::Devices(sender))?;

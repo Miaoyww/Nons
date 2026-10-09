@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { useAccount } from '@/features/account/account'
 import { nativeCall, usePlayer } from '@/lib/player'
@@ -13,6 +13,7 @@ export function usePlaybackShortcuts(onError: (cause: unknown) => void) {
   const state = usePlayer()
   const account = useAccount()
   const action = useRef<(action: ShortcutAction) => void>(() => {})
+  const [resumedShortcut, setResumedShortcut] = useState<ShortcutAction>()
   action.current = (name) => {
     if (!isTauri()) return
     const current = state.index === null ? undefined : state.queue[state.index]
@@ -43,6 +44,12 @@ export function usePlaybackShortcuts(onError: (cause: unknown) => void) {
     void operation.catch(onError)
   }
   useEffect(() => {
+    if (!resumedShortcut || state.index === null) return
+    if (resumedShortcut === 'like' && (!account.profile || !account.likesReady)) return
+    action.current(resumedShortcut)
+    setResumedShortcut(undefined)
+  }, [resumedShortcut, state.index, account.profile, account.likesReady])
+  useEffect(() => {
     setShortcutDispatcher((name) => action.current(name))
     void initializeShortcuts().catch(onError)
     let spacePressed = false
@@ -62,6 +69,10 @@ export function usePlaybackShortcuts(onError: (cause: unknown) => void) {
     const blur = () => {
       spacePressed = false
     }
+    const resumeShortcut = (event: Event) => {
+      setResumedShortcut((event as CustomEvent<ShortcutAction>).detail)
+    }
+    window.addEventListener('resume-playback-shortcut', resumeShortcut)
     window.addEventListener('keydown', keydown, true)
     window.addEventListener('keyup', keyup, true)
     window.addEventListener('blur', blur)
@@ -69,6 +80,7 @@ export function usePlaybackShortcuts(onError: (cause: unknown) => void) {
       window.removeEventListener('keydown', keydown, true)
       window.removeEventListener('keyup', keyup, true)
       window.removeEventListener('blur', blur)
+      window.removeEventListener('resume-playback-shortcut', resumeShortcut)
       setShortcutDispatcher(() => {})
     }
   }, [onError])

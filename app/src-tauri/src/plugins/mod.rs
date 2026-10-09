@@ -611,6 +611,12 @@ impl PluginManager {
         self.lock()?.get_mut(id).ok_or("插件未安装")?.ready = true;
         self.sync_watcher()
     }
+    pub(crate) fn frontend_detached(self: &Arc<Self>) -> AppResult<()> {
+        for record in self.lock()?.values_mut() {
+            record.ready = false;
+        }
+        self.sync_watcher()
+    }
     pub fn has_clipboard_subscribers(&self) -> bool {
         self.lock().is_ok_and(|records| {
             records.values().any(|r| {

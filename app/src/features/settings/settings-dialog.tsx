@@ -32,6 +32,7 @@ import { LyricsPage } from '@/features/settings/pages/lyrics'
 import { LocalCachePage } from '@/features/settings/pages/local-cache'
 import { PluginsPage } from '@/features/settings/pages/plugins'
 import { version } from '../../../package.json'
+import { nativeCall } from '@/lib/player'
 
 export function SettingsDialog() {
   const [open, setOpen] = useState(false)
@@ -40,14 +41,26 @@ export function SettingsDialog() {
     if (!isTauri()) return
     let disposed = false
     let stop: (() => void) | undefined
-    void listen('open-settings', () => {
+    const openSettings = () => {
       setPluginId(undefined)
       setSection('general')
       setOpen(true)
-    })
-      .then((unlisten) => {
+    }
+    void listen('open-settings', openSettings)
+      .then(async (unlisten) => {
         if (disposed) unlisten()
-        else stop = unlisten
+        else {
+          stop = unlisten
+          const pending = await nativeCall<{ settings: boolean; shortcut: string | null }>(
+            'main_webview_ready'
+          )
+          if (disposed) return
+          if (pending.settings) openSettings()
+          if (pending.shortcut)
+            window.dispatchEvent(
+              new CustomEvent('resume-playback-shortcut', { detail: pending.shortcut })
+            )
+        }
       })
       .catch(console.error)
     return () => {

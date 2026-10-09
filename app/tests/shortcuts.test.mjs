@@ -32,7 +32,7 @@ function session(saved) {
           : name === '@tauri-apps/api/core'
             ? { isTauri: () => true }
             : name === '@/lib/player'
-              ? { errorText: String }
+              ? { errorText: String, nativeCall: async () => {} }
               : {
                   async register(key, fn) {
                     if (key === 'Ctrl+Alt+N') throw Error('occupied')
@@ -138,6 +138,15 @@ function playbackHarness() {
   const modules = {
     react: {
       useRef: (value) => (refs[cursor++] ??= { current: value }),
+      useState: (value) => {
+        const state = (refs[cursor++] ??= { current: value })
+        return [
+          state.current,
+          (next) => {
+            state.current = next
+          }
+        ]
+      },
       useEffect: (fn) => effects.push(fn)
     },
     '@tauri-apps/api/core': { isTauri: () => true },

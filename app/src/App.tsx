@@ -4,11 +4,24 @@ import { MusicWorkspace } from '@/features/workspace/music-workspace'
 import { MusicOptionsProvider } from '@/features/playback/music-options'
 import { MusicNavigationProvider } from '@/features/workspace/music-navigation'
 import { AccountProvider } from '@/features/account/account'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PluginProvider, PluginSlot } from '@/plugins/host'
 
 function App() {
-  const [playerPhase, setPlayerPhase] = useState<'closed' | 'open' | 'closing'>('closed')
+  const [playerPhase, setPlayerPhase] = useState<'closed' | 'open' | 'closing'>(() => {
+    try {
+      return localStorage.getItem('nons-now-playing-open') === 'true' ? 'open' : 'closed'
+    } catch {
+      return 'closed'
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('nons-now-playing-open', String(playerPhase === 'open'))
+    } catch {
+      /* Storage may be unavailable. */
+    }
+  }, [playerPhase])
   const nowPlaying = playerPhase === 'open'
   const setNowPlaying = (value: boolean) =>
     setPlayerPhase((phase) => (value ? 'open' : phase === 'closed' ? 'closed' : 'closing'))

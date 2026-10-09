@@ -35,14 +35,15 @@ function harness(initialMode = 'collapsible') {
   const App = load('../src/App.tsx', {
     react: {
       useState(initial) {
-        phase ??= initial
+        phase ??= typeof initial === 'function' ? initial() : initial
         return [
           phase,
           (next) => {
             phase = typeof next === 'function' ? next(phase) : next
           }
         ]
-      }
+      },
+      useEffect() {}
     },
     'motion/react': { MotionConfig: 'MotionConfig' },
     '@/features/workspace/titlebar': { Titlebar: 'Titlebar' },

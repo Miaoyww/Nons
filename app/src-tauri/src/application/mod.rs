@@ -3,7 +3,7 @@ use crate::{
     netease, player, plugins, storage, ttml_cache,
 };
 
-use crate::platform::desktop;
+use crate::platform::{desktop, main_webview};
 use model::{AppResult, Lyrics, OutputDevice, PlayerSnapshot, Track, TrackSource};
 use netease::{
     AccountProfile, CollectionPage, LibrarySummary, LoginStatus, Netease, QrLogin, TrackPage,
@@ -704,7 +704,11 @@ pub fn run() {
     let app = tauri::Builder::default()
         .register_uri_scheme_protocol("plugin", plugins::protocol)
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(main_webview::background_shortcut)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             #[cfg(not(feature = "plugin-probe"))]
@@ -782,12 +786,15 @@ pub fn run() {
                 cover_requests: tokio::sync::Semaphore::new(8),
             });
             desktop::setup(app)?;
+            main_webview::setup(app)?;
             Ok(())
         })
         .on_window_event(desktop::on_window_event)
         .invoke_handler(tauri::generate_handler![
             desktop::close_behavior,
             desktop::set_close_behavior,
+            main_webview::main_webview_ready,
+            main_webview::main_sleep_shortcuts,
             about::open_devtools,
             discovery_hitokoto,
             #[cfg(feature = "plugin-probe")]
@@ -880,6 +887,7 @@ pub fn run() {
         .expect("无法启动 NonsPlayer");
     app.run(|app, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            main_webview::stop(app);
             app.state::<Arc<plugins::PluginManager>>().stop();
             app.state::<Backend>().player.shutdown();
         }

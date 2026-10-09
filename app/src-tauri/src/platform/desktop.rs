@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, Window, WindowEvent,
+    AppHandle, Manager, Window, WindowEvent,
 };
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -43,21 +43,15 @@ pub(crate) fn set_close_behavior(
     )
 }
 
-fn open_main(app: &AppHandle) -> tauri::Result<()> {
-    if let Some(window) = app.get_webview_window("main") {
-        window.unminimize()?;
-        window.show()?;
-        window.set_focus()?;
-    }
-    Ok(())
+fn open_main(app: &AppHandle) -> AppResult<()> {
+    super::main_webview::open(app, false)
 }
 
-fn menu_action(app: &AppHandle, action: &str) -> tauri::Result<()> {
+fn menu_action(app: &AppHandle, action: &str) -> AppResult<()> {
     match action {
         "open" => open_main(app)?,
         "settings" => {
-            open_main(app)?;
-            app.emit_to("main", "open-settings", ())?;
+            super::main_webview::open(app, true)?;
         }
         "exit" => app.exit(0),
         _ => {}

@@ -1,7 +1,7 @@
 import { normalizeShortcut } from '@/features/playback/shortcuts/shortcut-keys'
 import { isTauri } from '@tauri-apps/api/core'
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut'
-import { errorText } from '@/lib/player'
+import { errorText, nativeCall } from '@/lib/player'
 
 export const shortcutActions = [
   ['toggle', '播放/暂停音乐'],
@@ -87,6 +87,17 @@ export async function saveShortcuts(next: ShortcutSettings, persist = true) {
     if (registered.length) await unregister(registered)
     registered = []
   }
+  async function syncSleepBindings(value: ShortcutSettings) {
+    if (isTauri())
+      await nativeCall('main_sleep_shortcuts', {
+        bindings:
+          value.enabled && !recording
+            ? shortcutActions.flatMap(([action]) =>
+                value.bindings[action] ? [{ action, binding: value.bindings[action] }] : []
+              )
+            : []
+      })
+  }
   try {
     for (const [action, label] of shortcutActions) {
       const binding = normalizeShortcut(cleaned.bindings[action])
@@ -99,6 +110,7 @@ export async function saveShortcuts(next: ShortcutSettings, persist = true) {
     if (new Set(values).size !== values.length) throw new Error('同一快捷键不能用于多个操作。')
     await clear()
     await install(cleaned)
+    await syncSleepBindings(cleaned)
     if (persist) localStorage.setItem(key, JSON.stringify(cleaned))
     settings = cleaned
     return true
@@ -106,7 +118,10 @@ export async function saveShortcuts(next: ShortcutSettings, persist = true) {
     status.error = `快捷键保存失败：${errorText(cause)}`
     try {
       await clear()
-      if (persist) await install(previous)
+      if (persist) {
+        await install(previous)
+        await syncSleepBindings(previous)
+      }
     } catch (rollback) {
       status.error += `；恢复失败：${errorText(rollback)}。请重新保存。`
       try {

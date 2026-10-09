@@ -41,11 +41,53 @@ const NavigationContext = createContext<{
   forward: () => void
 } | null>(null)
 
+type NavigationHistory = { entries: Page[]; index: number }
+const historyKey = 'nons-workspace-history'
+function restoreHistory(): NavigationHistory {
+  try {
+    const saved = JSON.parse(localStorage.getItem(historyKey) ?? 'null') as NavigationHistory | null
+    const views: MusicView[] = [
+      'library',
+      'discover',
+      'local',
+      'search',
+      'queue',
+      'collection',
+      'artist',
+      'album',
+      'plugin',
+      'local-artist',
+      'local-album',
+      'local-playlist'
+    ]
+    if (
+      saved &&
+      Array.isArray(saved.entries) &&
+      saved.entries.length > 0 &&
+      saved.entries.length <= 100 &&
+      Number.isInteger(saved.index) &&
+      saved.index >= 0 &&
+      saved.index < saved.entries.length &&
+      saved.entries.every(
+        (page) => page && views.includes(page.view) && typeof page.query === 'string'
+      )
+    )
+      return saved
+  } catch {
+    /* A damaged snapshot starts at the library. */
+  }
+  return { entries: [{ view: 'library', query: '' }], index: 0 }
+}
+
 export function MusicNavigationProvider({ children }: { children: ReactNode }) {
-  const [history, setHistory] = useState<{ entries: Page[]; index: number }>({
-    entries: [{ view: 'library', query: '' }],
-    index: 0
-  })
+  const [history, setHistory] = useState<NavigationHistory>(restoreHistory)
+  useEffect(() => {
+    try {
+      localStorage.setItem(historyKey, JSON.stringify(history))
+    } catch {
+      /* Navigation still works without storage. */
+    }
+  }, [history])
   useEffect(() => {
     // Application history is independent of the WebView's document history.
     // Capture side buttons before card/menu handlers and suppress browser navigation.
