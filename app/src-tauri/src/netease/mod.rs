@@ -3,6 +3,7 @@ mod library;
 pub use library::{Collection, CollectionPage, EntityDetail, LibrarySummary, TrackPage};
 mod discovery;
 mod search;
+#[allow(unused_imports)] // Standalone probes do not use the Tauri command return type.
 pub use discovery::PlaylistCategory;
 
 use crate::model::{AppResult, Lyrics, ResolvedTrack, Track, TrackSource};
