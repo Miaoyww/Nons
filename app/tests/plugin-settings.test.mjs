@@ -127,7 +127,7 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
           name: '下载管理',
           version: '1.1.0',
           permissions: ['ui', 'account:credentials', 'http:request', 'http:transfer'],
-          httpHosts: ['*']
+          httpHosts: ['*', 'example.org', 'api.example.org']
         },
         enabled: false,
         loaded: false
@@ -144,10 +144,12 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
       element.textContent.includes('登录 Cookie')
     )
     assert.ok(warning.className.includes('text-destructive'))
-    assert.match(document.body.textContent, /敏感权限：请求任意网络域名/)
-    assert.match(document.body.textContent, /敏感权限：从任意网络域名传输资源到授权目录/)
+    assert.match(document.body.textContent, /敏感权限：会请求任意 URL/)
+    assert.match(document.body.textContent, /敏感权限：会请求任意 URL 并传输资源到授权目录/)
+    assert.ok(!document.body.textContent.includes('example.org'))
+    assert.ok(!document.body.textContent.includes('：*'))
     const networkWarning = [...document.querySelectorAll('[role="alert"]')].find((element) =>
-      element.textContent.includes('此插件可访问任意网络域名')
+      element.textContent.includes('此插件会请求任意 URL')
     )
     assert.ok(networkWarning.className.includes('text-destructive'))
     assert.match(networkWarning.textContent, /Cookie 也可能被发送到其他网站/)
