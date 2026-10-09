@@ -2,7 +2,6 @@
 .agents/
 AGENTS.md
 CONTEXT.md
-docs/adr/*
 
 # Logs
 logs
