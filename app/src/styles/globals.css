@@ -2520,12 +2520,16 @@
 :where(.music-workspace[data-density='compact']) .library-detail-title {
   font-size: clamp(26px, 2.5vw, 34px);
 }
+:where(.music-workspace[data-density='compact']) .library-detail-info {
+  padding-block: 0;
+}
 :where(.music-workspace[data-density='compact']) .library-detail-meta,
 :where(.music-workspace[data-density='compact']) .library-detail-description {
   margin-top: 12px;
 }
 :where(.music-workspace[data-density='compact']) .library-detail-actions {
-  margin-top: 16px;
+  margin-top: auto;
+  padding-top: 8px;
 }
 :where(.music-workspace[data-density='compact']) .library-heading {
   font-size: clamp(26px, 2.8vw, 34px);
