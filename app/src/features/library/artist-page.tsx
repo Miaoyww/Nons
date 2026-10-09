@@ -215,11 +215,13 @@ export default function ArtistPage({
         {songs.items.length ? (
           <TrackList
             tracks={songs.items}
+            searchable
+            hasMore={songs.more}
             currentKey={currentKey}
             busy={playing}
-            onPlay={(index) => {
+            onPlay={(index, tracks) => {
               void nativeCall('play_queue', {
-                keys: songs.items.map((track) => track.key),
+                keys: tracks.map((track) => track.key),
                 index
               }).catch(onError)
             }}

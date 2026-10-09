@@ -254,9 +254,11 @@ export default function MusicLibrary({
           ) : detail.tracks.length ? (
             <TrackList
               tracks={detail.tracks}
+              searchable
+              hasMore={detail.more}
               currentKey={currentKey}
               busy={playing}
-              onPlay={(index) => playPage(detail.tracks, index)}
+              onPlay={(index, tracks) => playPage(tracks, index)}
               onAppend={append}
               removeLabel={collection.kind === 'playlist' ? '从歌单删除' : '从列表删除'}
               onRemove={

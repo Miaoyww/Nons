@@ -108,11 +108,13 @@ export default function AlbumPage({
       ) : list.items.length ? (
         <TrackList
           tracks={list.items}
+          searchable
+          hasMore={list.more}
           currentKey={currentKey}
           busy={playing}
-          onPlay={(index) => {
+          onPlay={(index, tracks) => {
             void nativeCall('play_queue', {
-              keys: list.items.map((track) => track.key),
+              keys: tracks.map((track) => track.key),
               index
             }).catch(onError)
           }}

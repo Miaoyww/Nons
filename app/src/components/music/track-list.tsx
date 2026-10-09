@@ -1,8 +1,9 @@
+import { Input } from '@/components/ui/input'
 import { TrackAlbum } from '@/components/music/music-links'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { scrollParent } from '@/components/music/infinite-load'
-import { Heart, ListPlus, Play } from 'lucide-react'
-import { memo, useLayoutEffect, useRef, useState } from 'react'
+import { Heart, ListPlus, Play, Search } from 'lucide-react'
+import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { errorText, formatTime, type Track } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
 import { Cover } from '@/components/music/cover'
@@ -16,7 +17,7 @@ interface Props {
   tracks: Track[]
   currentKey?: string
   busy: boolean
-  onPlay: (index: number) => void
+  onPlay: (index: number, tracks: Track[]) => void
   onAppend?: (track: Track) => void
   offset?: number
   currentIndex?: number
@@ -28,6 +29,8 @@ interface Props {
     className?: string
     render: (track: Track, index: number) => ReactNode
   }[]
+  searchable?: boolean
+  hasMore?: boolean
   showDuration?: boolean
 }
 
@@ -43,8 +46,25 @@ export const TrackList = memo(function TrackList({
   onRemove,
   removeLabel,
   extraColumns = [],
+  searchable = false,
+  hasMore = false,
   showDuration = true
 }: Props) {
+  const [query, setQuery] = useState('')
+  const entries = useMemo(() => {
+    const keyword = query.trim().toLocaleLowerCase()
+    return tracks
+      .map((track, index) => ({ track, index }))
+      .filter(
+        ({ track }) =>
+          !searchable ||
+          !keyword ||
+          [track.title, track.artist, track.album, ...(track.aliases ?? [])].some((value) =>
+            value.toLocaleLowerCase().includes(keyword)
+          )
+      )
+  }, [tracks, query, searchable])
+  const visibleTracks = useMemo(() => entries.map(({ track }) => track), [entries])
   const [cardMode] = useInterfaceDensity()
   const { profile, likedIds, likesReady, likesError, pendingLikes, reloadLikes, toggleLike } =
     useAccount()
@@ -52,7 +72,7 @@ export const TrackList = memo(function TrackList({
   const body = useRef<HTMLTableSectionElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
   const virtualizer = useVirtualizer({
-    count: tracks.length,
+    count: entries.length,
     getScrollElement: () => (body.current ? scrollParent(body.current) : null),
     estimateSize: () => (cardMode === 'compact' ? 52 : 72),
     scrollMargin,
@@ -81,7 +101,10 @@ export const TrackList = memo(function TrackList({
   }, [])
   useLayoutEffect(() => {
     if (locateRequest === undefined || currentIndex === undefined || currentIndex < 0) return
-    virtualizer.scrollToIndex(currentIndex, { align: 'center' })
+    virtualizer.scrollToIndex(
+      entries.findIndex((entry) => entry.index === currentIndex),
+      { align: 'center' }
+    )
   }, [locateRequest, scrollMargin, virtualizer])
   const showLikes = tracks.some((track) => track.source.kind === 'netease')
   const columns =
@@ -93,6 +116,34 @@ export const TrackList = memo(function TrackList({
     : 0
   return (
     <>
+      {searchable && (
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
+          {hasMore && (
+            <span className="text-xs text-muted-foreground">
+              搜索已加载歌曲，滚动到底部继续加载
+            </span>
+          )}
+          <label className="relative w-64 max-w-full">
+            <span className="sr-only">搜索列表歌曲</span>
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground"
+            />
+            <Input
+              type="search"
+              className="pl-9"
+              placeholder="搜索歌曲、艺术家、专辑"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        </div>
+      )}
+      {searchable && !entries.length && (
+        <p role="status" className="py-8 text-center text-sm text-muted-foreground">
+          没有匹配的歌曲。
+        </p>
+      )}
       {(likeError || likesError) && (
         <div role="alert" className="mb-3 flex items-center gap-2 text-sm text-destructive">
           <p>{likeError ?? likesError}</p>
@@ -145,20 +196,19 @@ export const TrackList = memo(function TrackList({
             </tr>
           )}
           {rows.map((row) => {
-            const index = row.index
-            const track = tracks[index]
+            const { index, track } = entries[row.index]
             return (
               <SongContextMenu
                 key={`${track.key}:${index}`}
                 track={track}
-                onPlay={() => onPlay(index)}
+                onPlay={() => onPlay(row.index, visibleTracks)}
                 busy={busy}
                 onRemove={onRemove ? () => onRemove(track, index) : undefined}
                 removeLabel={removeLabel}
                 render={
                   <tr
                     ref={virtualizer.measureElement}
-                    data-index={index}
+                    data-index={row.index}
                     className="track-row group"
                     data-current={
                       currentIndex === undefined ? track.key === currentKey : index === currentIndex
@@ -176,7 +226,7 @@ export const TrackList = memo(function TrackList({
                 }
               >
                 <td className="text-center tabular-nums text-muted-foreground">
-                  {offset + index + 1}
+                  {offset + row.index + 1}
                 </td>
                 <td className="track-identity-cell pr-4">
                   <TrackIdentity
@@ -189,7 +239,7 @@ export const TrackList = memo(function TrackList({
                         className="track-cover"
                         disabled={busy}
                         aria-label={`播放 ${track.title}`}
-                        onClick={() => onPlay(index)}
+                        onClick={() => onPlay(row.index, visibleTracks)}
                       >
                         <Cover cover={track.cover} className="track-identity-cover" />
                         <span className="track-cover-play">
