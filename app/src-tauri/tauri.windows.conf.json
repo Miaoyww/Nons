@@ -1,5 +1,10 @@
 {
   "bundle": {
+    "windows": {
+      "wix": {
+        "language": "zh-CN"
+      }
+    },
     "resources": {
       "bundled-plugins/": "bundled-plugins/",
       "../../.local/gstreamer-bundle/root/": ""

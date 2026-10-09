@@ -14,7 +14,7 @@
     "config"
   ],
   "engines": {
-    "app": "^0.1.0",
+    "app": "^1.0.0",
     "pluginApi": "^1.0.0",
     "uiApi": "^1.0.0"
   },

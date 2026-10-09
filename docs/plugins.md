@@ -68,7 +68,7 @@ app/src-tauri/bundled-plugins/netease-island.zip
   "frontend": "ui.mjs",
   "permissions": ["clipboard:read", "http:request", "music:metadata", "ui"],
   "httpHosts": ["music.163.com", "y.music.163.com", "m.music.163.com", "163cn.tv"],
-  "engines": { "app": "^0.1.0", "pluginApi": "^1.0.0", "uiApi": "^1.0.0" },
+  "engines": { "app": "^1.0.0", "pluginApi": "^1.0.0", "uiApi": "^1.0.0" },
   "contributes": {
     "views": [{ "id": "island", "slot": "main.overlay", "export": "DynamicIsland" }],
     "pages": [],
