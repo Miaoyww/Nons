@@ -9,9 +9,16 @@ export function DetailHeader({ children }: { children: ReactNode }) {
     const measure = () =>
       element.style.setProperty('--detail-content-height', `${info.offsetHeight}px`)
     measure()
-    const observer = new ResizeObserver(measure)
+    let frame = 0
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(measure)
+    })
     observer.observe(info)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+    }
   }, [])
   return (
     <header ref={header} className="library-detail-header">

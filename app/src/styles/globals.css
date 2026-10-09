@@ -753,6 +753,7 @@
 }
 .library-detail-cover {
   width: max(var(--detail-cover-size), var(--detail-content-height, 0px));
+  max-width: 40%;
   aspect-ratio: 1;
   box-shadow: 0 8px 24px rgb(0 0 0 / 15%);
 }
@@ -2636,6 +2637,7 @@
     --music-page-inline: 24px;
   }
   :where(.music-workspace[data-density='compact']) .library-detail-header {
+    --detail-cover-size: 112px;
     flex-direction: row;
     gap: 16px;
   }
@@ -2689,5 +2691,11 @@
   }
   .library-detail-info {
     min-height: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  :where(.music-workspace[data-density='compact']) .library-detail-cover {
+    width: max(var(--detail-cover-size), var(--detail-content-height, 0px));
   }
 }
