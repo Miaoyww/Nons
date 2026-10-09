@@ -49,6 +49,7 @@
         "target": "song",
         "source": "netease",
         "label": "下载",
+        "icon": "download",
         "export": "downloadSong"
       }
     ],

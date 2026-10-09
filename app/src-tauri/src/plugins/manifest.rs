@@ -93,6 +93,8 @@ pub struct Navigation {
 pub struct ContextMenu {
     pub id: String,
     pub label: String,
+    #[serde(default)]
+    pub icon: Option<String>,
     pub target: String,
     pub source: String,
     pub export: String,
@@ -307,6 +309,7 @@ impl Manifest {
                     || !matches!(m.source.as_str(), "netease" | "local")
                     || m.label.trim().is_empty()
                     || m.label.len() > 128
+                    || m.icon.as_deref().is_some_and(|icon| !valid_id(icon))
             })
         {
             return Err("歌曲菜单贡献无效".into());
@@ -351,7 +354,12 @@ mod tests {
             .unwrap()
             .validate()
             .unwrap();
-        for (key, invalid) in [("target", "album"), ("source", "any"), ("export", "../run")] {
+        for (key, invalid) in [
+            ("target", "album"),
+            ("source", "any"),
+            ("export", "../run"),
+            ("icon", "../icon"),
+        ] {
             let mut candidate = value.clone();
             candidate["contributes"]["contextMenus"][0][key] = serde_json::json!(invalid);
             assert!(serde_json::from_value::<Manifest>(candidate)

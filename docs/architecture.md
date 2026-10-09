@@ -30,6 +30,7 @@
 - 新增工作区页面统一使用 `app/src/components/music/music-page.tsx` 的 `MusicPage` 作为 shell，复用页面间距、滚动区域和播放栏避让；标题优先使用同文件的 `MusicPageHeader`。
 - 宿主页面在页面根使用 `MusicPage`；插件页面由 `MusicWorkspace` 的插件入口统一包裹，插件只渲染内容，沿用宿主提供的标题样式。设置弹窗内嵌页面使用弹窗布局。
 - 页面内容沿 shell 的滚动区域自然展开，额外滚动区域仅用于需要独立滚动的控件。验收时用超出视口的内容确认末尾可达，并检查播放栏显示时底部操作仍可见。
+- 新增 ContextMenu 操作项时提供表达动作的图标，装饰图标设置 `aria-hidden`；没有专用图标时使用 `LayoutGrid`。插件菜单通过 manifest 的 `icon` 声明图标，宿主为省略或未知标识提供 `LayoutGrid` 回退。
 
 ## 已确认的首阶段功能范围
 

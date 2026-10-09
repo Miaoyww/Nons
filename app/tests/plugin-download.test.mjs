@@ -293,6 +293,7 @@ test('actual contributed menu invokes the plugin with a scoped client and reject
     'react/jsx-runtime': { jsx, jsxs: jsx },
     '@base-ui/react/context-menu': { ContextMenu: { Item: 'Item' } },
     '@tauri-apps/api/core': { isTauri: () => true },
+    'lucide-react': { Download: 'Download', LayoutGrid: 'LayoutGrid' },
     './host': {
       usePlugins: () => ({
         loaded: new Map([
@@ -331,7 +332,18 @@ test('actual contributed menu invokes the plugin with a scoped client and reject
     }
   })
   const item = render.props.children[0]
-  assert.equal(item.props.children, '下载')
+  assert.equal(item.props.children[1], '下载')
+  assert.equal(item.props.children[0].type, 'LayoutGrid')
+  assert.equal(item.props.children[0].props['aria-hidden'], 'true')
+  const contribution = scope.descriptor.manifest.contributes.contextMenus[0]
+  for (const [icon, expected] of [
+    ['download', 'Download'],
+    ['unknown-icon', 'LayoutGrid']
+  ]) {
+    contribution.icon = icon
+    const next = module.PluginSongMenuItems({ track: song, run: () => {} })
+    assert.equal(next.props.children[0].props.children[0].type, expected)
+  }
   item.props.onClick()
   await pending
   assert.equal(invocations, 1)

@@ -1,5 +1,6 @@
 import { ContextMenu } from '@base-ui/react/context-menu'
 import { isTauri } from '@tauri-apps/api/core'
+import { Download, LayoutGrid } from 'lucide-react'
 import { usePlugins } from './host'
 import { checkScope } from './scope'
 import { createPluginClient, type PluginClient } from './sdk'
@@ -44,6 +45,11 @@ export function PluginSongMenuItems({
                 )
               }
             >
+              {menu.icon === 'download' ? (
+                <Download aria-hidden="true" />
+              ) : (
+                <LayoutGrid aria-hidden="true" />
+              )}
               {menu.label}
             </ContextMenu.Item>
           ))

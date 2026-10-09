@@ -178,6 +178,10 @@
                 "minLength": 1,
                 "maxLength": 128
               },
+              "icon": {
+                "$ref": "#/$defs/id",
+                "description": "图标标识；当前支持 download、layout-grid，省略或未知标识使用 LayoutGrid。"
+              },
               "export": {
                 "$ref": "#/$defs/export"
               }

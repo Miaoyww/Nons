@@ -17,6 +17,7 @@ export interface PluginManifest {
       target: 'song'
       source: 'netease' | 'local'
       label: string
+      icon?: string | null
       export: string
     }[]
   }
