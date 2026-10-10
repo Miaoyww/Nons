@@ -29,6 +29,13 @@ function harness() {
       if (!old || deps.some((value, i) => value !== old.deps[i])) slots[index] = { deps, fn }
       return slots[index].fn
     },
+    useMemo(factory, deps) {
+      const index = cursor++,
+        old = slots[index]
+      if (!old || deps.some((value, i) => value !== old.deps[i]))
+        slots[index] = { deps, value: factory() }
+      return slots[index].value
+    },
     useEffect(fn, deps) {
       const index = cursor++,
         old = slots[index]

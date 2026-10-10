@@ -105,6 +105,20 @@ async function harness(run) {
     }
   )
   const root = createRoot(document.getElementById('root'))
+  const pagination = {}
+  runInNewContext(
+    ts.transpileModule(
+      readFileSync(new URL('../src/lib/use-paged-list.ts', import.meta.url), 'utf8'),
+      { compilerOptions: { module: ts.ModuleKind.CommonJS } }
+    ).outputText,
+    { exports: pagination, require: (name) => (name === 'react' ? React : modules['@/lib/player']) }
+  )
+  function PagedResults({ pageLoader, kind, ...props }) {
+    const list = pagination.usePagedList(pageLoader, kind === 'history' ? 100 : 30, true)
+    return kind === 'history'
+      ? React.createElement(exports.TrackList, { ...props, tracks: list.items })
+      : React.createElement('p', {}, list.items.map((item) => item.name).join(', '))
+  }
   const render = async (props = {}) => {
     menus.length = 0
     const { externalQuery, ...listProps } = props
@@ -113,7 +127,7 @@ async function harness(run) {
         React.createElement(
           trackSearchContext.Provider,
           { value: externalQuery },
-          React.createElement(exports.TrackList, {
+          React.createElement(props.pageLoader ? PagedResults : exports.TrackList, {
             tracks,
             busy: false,
             searchable: true,
@@ -161,6 +175,25 @@ test('list search matches aliases, artists and albums and plays the filtered que
     assert.match(document.body.textContent, /没有匹配的歌曲/)
     await search('')
     assert.equal(document.querySelectorAll('.track-cover').length, 3)
+  })
+})
+
+test('loaded collection cards can switch to history through real pagination and TrackList', async () => {
+  await harness(async ({ render, tracks, plays }) => {
+    const collections = async () => ({
+      items: [{ kind: 'playlist', id: 1, name: 'Collection without a track source' }],
+      more: true
+    })
+    let resolveHistory
+    const history = () => new Promise((resolve) => (resolveHistory = resolve))
+    await render({ pageLoader: collections, kind: 'playlist' })
+    assert.match(document.body.textContent, /Collection without a track source/)
+    await render({ pageLoader: history, kind: 'history' })
+    assert.equal(document.querySelectorAll('.track-cover').length, 0)
+    await act(async () => resolveHistory({ items: tracks, more: false }))
+    assert.equal(document.querySelectorAll('.track-cover').length, tracks.length)
+    await act(async () => document.querySelector('.track-cover').click())
+    assert.deepEqual(plays.at(-1)[1], tracks)
   })
 })
 
