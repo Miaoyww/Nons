@@ -18,6 +18,8 @@ Nons 在现有播放器上增量提供 `Manifest + WASM Backend + React Frontend
 
 职责归属见 [插件职责边界](adr/0005-plugin-capability-boundary.md)。通用能力提供系统操作；播放器领域能力复用已有业务服务；插件组合这些能力完成自己的业务。下面列出的接口为当前实现，不代表提前实现所有系统能力。
 
+[ADR 0006](adr/0006-music-provider-adapters.md) 阶段一已定义独立音乐适配器契约，规格与迁移注意事项见 [音乐适配器契约与迁移记录](music-adapters.md)。当前尚未开放音乐适配器包格式、运行管理入口或统一 SDK；本文的 `netease.*` 与兼容别名仍是现有功能插件接口，不能用功能插件 Manifest 注册音乐适配器。
+
 ## 构建与安装
 
 一次性准备：项目仍要求 Rust 1.95、Node/pnpm、Python 和原 GStreamer 开发运行时。另安装：

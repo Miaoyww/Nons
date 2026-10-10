@@ -1,5 +1,13 @@
 # 初始框架实现与验证
 
+## 统一音乐适配器：ADR 0006 阶段一（2026-10-10）
+
+- 在 `feat/adapter` 分支新增 `app/src-tauri/src/music/`，定义统一标识/曲目、能力组、错误、会话、分页、缓存作用域、基础适配器 trait、后端账号凭据与播放资源契约；`lib.rs` 导出模块。没有新增依赖、通用 IPC 或运行时管理器，既有网易云、账号、缓存、播放与功能插件仍走原路径。
+- 提供旧曲目、混合队列和公开账号 profile 的只读转换，保留非 JS 安全整数 ID、重复队列项、顺序及本地歌词关联；本地路径/封面绑定独立保存，公共 DTO 不交付文件路径。实际 SQLite 与系统凭据库迁移尚未启用，事务、失败恢复与系统凭据迁移顺序已记录。
+- 更新 [ADR 0006](adr/0006-music-provider-adapters.md) 与 ADR 索引的完成状态；规格、职责划分、修改记录与阶段二/三接线注意事项见 [音乐适配器契约与迁移记录](music-adapters.md)。插件文档注明这些契约尚未开放为 SDK。本机 `CONTEXT.md` 补充领域词汇，沿用仓库忽略规则，不强制加入版本控制；共享定义保存在契约记录。
+- Windows x64、Rust 1.95.0、项目私有 GStreamer 1.28.7：先运行 `pnpm --dir app format`；前端 187 项测试与 TypeScript/Vite 生产构建通过。串行 Rust 库单元测试 115 项通过、2 项既有在线 QQ/系统字体测试忽略，包含新增的 10 项契约测试。`native.ps1 -Task clippy` 的 `--all-targets --all-features --locked -- -D warnings` 和最终 `pnpm --dir app format:check` 通过。
+- 测试覆盖不透明标识、能力与账号限制、会话/来源/实例隔离、取消与期限、分页上限、资源代次与有效期、试听拒绝、凭据与传输 Debug 隐藏、历史数据转换及缓存作用域。未验证尚不存在的管理器授权、外部 ABI 或实际迁移；未运行本轮真实音频/WebView 探测、macOS/Linux 原生构建与基本播放，也未测性能。生产构建沿用现有大于 500kB chunk 提示。
+
 ## 开发运行
 
 Windows x64：需要 Rust 1.95、MSVC 工具链、Node/pnpm、Python，以及 Tauri 的 WebView2 环境。

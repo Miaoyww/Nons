@@ -4,6 +4,7 @@ mod infrastructure;
 mod local;
 mod lyrics;
 mod model;
+pub mod music;
 mod netease;
 mod platform;
 mod playback;
