@@ -928,6 +928,8 @@
   border-spacing: 0 4px;
 }
 .track-row {
+  --track-interaction-background: var(--background);
+  position: relative;
   border-radius: 12px;
   transition: box-shadow 160ms;
 }
@@ -940,27 +942,28 @@
 .track-row td:last-child {
   border-radius: 0 12px 12px 0;
 }
-.track-row[data-current='true'] td {
-  background: var(--secondary);
-}
 .track-row:hover,
-.track-row:focus-within {
-  box-shadow: 0 4px 16px rgb(0 0 0 / 16%);
+.track-row:focus-within,
+.track-row[data-selected='true'] {
+  z-index: 1;
+  box-shadow: 0 10px 10px -8px rgb(0 0 0 / 16%);
 }
 .track-row:hover td,
-.track-row:focus-within td {
-  background: var(--background);
+.track-row:focus-within td,
+.track-row[data-selected='true'] td {
+  background: var(--track-interaction-background);
 }
-.dark .track-row:hover td,
-.dark .track-row:focus-within td {
-  background: var(--muted);
+.dark .track-row {
+  --track-interaction-background: var(--muted);
 }
 .track-row:hover .track-title,
-.track-row:focus-within .track-title {
+.track-row:focus-within .track-title,
+.track-row[data-selected='true'] .track-title {
   color: oklch(0.54 0.23 264);
 }
 .dark .track-row:hover .track-title,
-.dark .track-row:focus-within .track-title {
+.dark .track-row:focus-within .track-title,
+.dark .track-row[data-selected='true'] .track-title {
   color: oklch(0.76 0.13 264);
 }
 .track-cover {
@@ -990,7 +993,8 @@
   fill: currentColor;
 }
 .track-row:hover .track-cover-play,
-.track-row:focus-within .track-cover-play {
+.track-row:focus-within .track-cover-play,
+.track-row[data-selected='true'] .track-cover-play {
   opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1502,6 +1506,7 @@
 /* Shared current-track treatment for the queue and library lists. */
 :root {
   --current-track-background: oklch(0.95 0.025 250);
+  --current-track-marker: oklch(0.6 0.2 250);
 }
 .dark {
   --current-track-background: oklch(0.3 0.055 250);
@@ -1510,6 +1515,9 @@
 .track-row[data-current='true']:hover td,
 .track-row[data-current='true']:focus-within td {
   background: var(--current-track-background);
+}
+.track-row[data-current='true'] td:first-child {
+  box-shadow: inset 3px 0 var(--current-track-marker);
 }
 .capsule-title[data-preview='true'] {
   color: var(--muted-foreground);
@@ -1569,7 +1577,7 @@
 }
 .queue-track-card[data-current='true'] {
   background: var(--current-track-background);
-  box-shadow: inset 3px 0 oklch(0.6 0.2 250);
+  box-shadow: inset 3px 0 var(--current-track-marker);
 }
 .queue-track-card:focus-visible {
   outline: 2px solid var(--ring);
@@ -2775,6 +2783,8 @@
 
 .track-table-container {
   overflow-x: auto;
+  padding: 0 12px 16px;
+  margin-inline: -12px;
 }
 .track-list th {
   position: relative;
@@ -2803,12 +2813,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.track-row[data-selected='true'] td {
-  background: var(--accent);
-}
-.track-row[data-selected='true'] td:first-child {
-  box-shadow: inset 3px 0 var(--primary);
 }
 .track-title-copy {
   display: block;

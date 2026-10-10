@@ -17,7 +17,12 @@ export function useTrackColumnSizing(specs: ColumnSpec[]) {
     const element = container.current
     if (!element) return
     const measure = () => {
-      if (element.clientWidth > 0) setWidth(element.clientWidth)
+      const style = element.ownerDocument.defaultView!.getComputedStyle(element)
+      const contentWidth =
+        element.clientWidth -
+        (parseFloat(style.paddingLeft) || 0) -
+        (parseFloat(style.paddingRight) || 0)
+      if (contentWidth > 0) setWidth(contentWidth)
     }
     measure()
     const observer = new ResizeObserver(measure)
