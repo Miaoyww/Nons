@@ -746,9 +746,9 @@
 }
 .library-detail-header {
   display: flex;
-  gap: clamp(28px, 3vw, 44px);
+  gap: clamp(32px, 3.2vw, 48px);
   align-items: flex-end;
-  --detail-cover-size: clamp(240px, 22vw, 280px);
+  --detail-cover-size: clamp(280px, 24vw, 336px);
   margin-bottom: 36px;
 }
 .library-detail-cover {
@@ -767,7 +767,7 @@
   min-height: var(--detail-cover-size);
 }
 .library-detail-title {
-  font-size: clamp(32px, 3.6vw, 48px);
+  font-size: clamp(36px, 4vw, 54px);
   line-height: 1.15;
   font-weight: 750;
   letter-spacing: -0.035em;
@@ -2524,15 +2524,15 @@
   --music-page-top: 64px;
 }
 :where(.music-workspace[data-density='compact']) .library-detail-header {
-  --detail-cover-size: clamp(144px, 14vw, 184px);
-  gap: 24px;
+  --detail-cover-size: clamp(168px, 17vw, 224px);
+  gap: 28px;
   margin-bottom: 24px;
 }
 :where(.music-workspace[data-density='compact']) .library-detail-cover {
   flex-shrink: 0;
 }
 :where(.music-workspace[data-density='compact']) .library-detail-title {
-  font-size: clamp(26px, 2.5vw, 34px);
+  font-size: clamp(28px, 2.8vw, 38px);
 }
 :where(.music-workspace[data-density='compact']) .library-detail-info {
   padding-block: 0;
