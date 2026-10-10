@@ -23,6 +23,7 @@ test('adapter settings wait for persistence, report failures and reject stale li
   let unsubscribed = false
   let invalidations = 0
   const modules = {
+    '@/components/music/loading': { TextSkeleton: 'div' },
     react: React,
     'react/jsx-runtime': jsx,
     '@tauri-apps/api/core': { isTauri: () => true },

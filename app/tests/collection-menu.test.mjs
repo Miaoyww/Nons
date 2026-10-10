@@ -22,6 +22,7 @@ function harness() {
   )
   const jsx = (type, props) => ({ type, props })
   const modules = {
+    '@/components/music/loading': { TextSkeleton: 'div' },
     react: {
       createContext: () => ({}),
       useContext: () => actions,
@@ -131,6 +132,7 @@ test('song favorite action precedes the divider and unavailable remove actions a
     ].map((key) => [key, key])
   )
   const modules = {
+    '@/components/music/loading': { TextSkeleton: 'div' },
     react: { createContext: () => ({}), useContext: () => ({}) },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     '@base-ui/react/context-menu': { ContextMenu: menu },

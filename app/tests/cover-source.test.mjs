@@ -68,6 +68,7 @@ function harness() {
   Object.assign(modules, {
     'react/jsx-runtime': { jsx, jsxs: jsx },
     'lucide-react': {},
+    '@/components/ui/skeleton': { Skeleton: 'skeleton' },
     '@/components/music/use-cover-source': exports
   })
   const componentText = ts.transpileModule(
@@ -90,11 +91,11 @@ function harness() {
   return {
     requests,
     deleted,
-    renderCover(cover) {
+    renderCover(cover, full = false) {
       cursor = 0
       const tree = components.Cover({ cover })
       effects.splice(0).forEach((fn) => fn())
-      return tree.props.children
+      return full ? tree : tree.props.children.find((child) => child?.type === 'img')
     },
     render(cover, enabled = true) {
       cursor = 0
@@ -155,4 +156,30 @@ test('request errors fall back, reactivation retries, and late previous-cover re
   h.requests[2].resolve('data:image/jpeg;base64,new')
   await settle()
   assert.equal(h.render(next).source, 'data:image/jpeg;base64,new')
+})
+
+test('Cover keeps its skeleton until image load, shows it again for a new source, and clears it after final failure', async () => {
+  const h = harness()
+  h.renderCover(cover)
+  assert.equal(h.renderCover(cover, true).props.children[0].type, 'skeleton')
+  h.requests[0].resolve('data:image/jpeg;base64,ready')
+  await settle()
+  let tree = h.renderCover(cover, true)
+  let image = tree.props.children[1]
+  assert.equal(tree.props.children[0].type, 'skeleton')
+  assert.match(image.props.className, /opacity-0/)
+  image.props.onLoad()
+  tree = h.renderCover(cover, true)
+  assert.equal(tree.props.children[0], false)
+  assert.match(tree.props.children[1].props.className, /opacity-100/)
+  const next = `${cover}?next=1`
+  tree = h.renderCover(next, true)
+  assert.equal(tree.props.children[0].type, 'skeleton')
+  h.requests[1].reject(Error('offline'))
+  await settle()
+  image = h.renderCover(next)
+  image.props.onError()
+  tree = h.renderCover(next, true)
+  assert.equal(tree.props.children[0], false)
+  assert.equal(h.requests.length, 2)
 })

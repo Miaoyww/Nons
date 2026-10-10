@@ -1,3 +1,4 @@
+import { TextSkeleton } from '@/components/music/loading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -121,11 +122,7 @@ export function AdaptersPage() {
           {error}
         </p>
       )}
-      {loading && (
-        <p role="status" className="text-sm text-muted-foreground">
-          正在读取适配器…
-        </p>
-      )}
+      {loading && <TextSkeleton />}
       {adapters.map(({ descriptor, enabled }) => (
         <div key={descriptor.source} className="flex flex-col gap-3">
           <SettingsCard

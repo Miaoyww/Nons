@@ -1,3 +1,4 @@
+import { TextSkeleton } from '@/components/music/loading'
 import { useLocalPreferences } from '@/features/local/use-local-preferences'
 import { useEffect, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
@@ -66,6 +67,7 @@ export function LyricExcerpt({ tracks, enabled = true }: { tracks?: Track[]; ena
     }
   }, [tracks?.[0]?.key, tracks?.[1]?.key, sources, enabled, localPreferences])
   if (!enabled) return <Heart className="size-10 opacity-30" aria-hidden="true" />
+  if (!error && !lines.length) return <TextSkeleton />
   return (
     <p className="library-lyric-excerpt" aria-live="polite" data-error={!!error}>
       {error ||

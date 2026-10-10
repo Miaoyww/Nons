@@ -35,6 +35,7 @@ const Switch = ({ checked, onCheckedChange, ...props }) =>
     onClick: () => onCheckedChange(!checked)
   })
 const base = {
+  '@/components/music/loading': { TextSkeleton: 'div' },
   react: React,
   'react/jsx-runtime': jsx,
   '@/components/music/music-page': { MusicPageHeader: 'header' },

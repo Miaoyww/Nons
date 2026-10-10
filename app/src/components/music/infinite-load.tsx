@@ -1,3 +1,4 @@
+import { Skeleton } from '@/components/ui/skeleton'
 import { useEffect, useRef } from 'react'
 import { ActionButton } from '@/components/music/action-button'
 
@@ -46,7 +47,11 @@ export function InfiniteLoad({
           </ActionButton>
         </>
       ) : busy ? (
-        <span role="status">正在加载…</span>
+        <div role="status" aria-label="正在加载更多" className="flex w-32 gap-2">
+          <Skeleton className="h-2 flex-1" />
+          <Skeleton className="h-2 flex-1" />
+          <Skeleton className="h-2 flex-1" />
+        </div>
       ) : more ? (
         <span className="sr-only">滚动到底部自动加载更多</span>
       ) : null}

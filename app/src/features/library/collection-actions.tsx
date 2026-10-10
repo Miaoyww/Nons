@@ -1,3 +1,4 @@
+import { TextSkeleton } from '@/components/music/loading'
 import { ContextMenu } from '@base-ui/react/context-menu'
 import { Copy, ListPlus, Pencil, Play, Trash2 } from 'lucide-react'
 import {
@@ -198,7 +199,7 @@ export function CollectionActionsProvider({
                 </label>
               </>
             )}
-            {loading && <p role="status">正在读取歌单信息…</p>}
+            {loading && <TextSkeleton />}
             {error && (
               <div role="alert" className="text-sm text-destructive">
                 {error}

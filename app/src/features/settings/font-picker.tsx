@@ -1,3 +1,4 @@
+import { TextSkeleton } from '@/components/music/loading'
 import { useEffect, useMemo, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { Button } from '@/components/ui/button'
@@ -95,11 +96,7 @@ export function FontPicker({
           </ComboboxList>
         </ComboboxContent>
       </Combobox>
-      {loading && (
-        <p role="status" className="text-xs text-muted-foreground">
-          正在读取系统字体…
-        </p>
-      )}
+      {loading && <TextSkeleton />}
       {error && (
         <div className="text-xs">
           <p role="alert" className="text-destructive">

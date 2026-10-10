@@ -1,3 +1,4 @@
+import { MusicPageSkeleton } from '@/components/music/loading'
 import { usePlaybackShortcuts } from '@/features/playback/shortcuts/use-playback-shortcuts'
 import { CollectionActionsProvider } from '@/features/library/collection-actions'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
@@ -200,13 +201,7 @@ export function MusicWorkspace({
           data-playback-bar={barMode}
           data-density={density}
         >
-          <Suspense
-            fallback={
-              <div role="status" className="m-auto">
-                正在加载播放器…
-              </div>
-            }
-          >
+          <Suspense fallback={<MusicPageSkeleton tracks />}>
             <AnimatePresence onExitComplete={onPlayerExitComplete}>
               {nowPlaying && <LyricsView key="now-playing" onQueue={openQueue} />}
             </AnimatePresence>
@@ -244,13 +239,7 @@ export function MusicWorkspace({
                 </div>
               )}
               {(view === 'artist' || view === 'album') && page.collection ? (
-                <Suspense
-                  fallback={
-                    <p role="status" className="m-auto">
-                      正在加载音乐详情…
-                    </p>
-                  }
-                >
+                <Suspense fallback={<MusicPageSkeleton />}>
                   {view === 'artist' ? (
                     <ArtistPage
                       key={page.collection.id}
@@ -268,13 +257,7 @@ export function MusicWorkspace({
                   )}
                 </Suspense>
               ) : view === 'accounts' ? (
-                <Suspense
-                  fallback={
-                    <p role="status" className="m-auto">
-                      正在加载登录页…
-                    </p>
-                  }
-                >
+                <Suspense fallback={<MusicPageSkeleton />}>
                   <AccountLoginPage />
                 </Suspense>
               ) : view === 'tools' ? (
@@ -286,43 +269,19 @@ export function MusicWorkspace({
               ) : view === 'queue' ? (
                 <QueuePage key={queueVisit} onError={onError} />
               ) : view === 'search' ? (
-                <Suspense
-                  fallback={
-                    <p role="status" className="m-auto">
-                      正在加载搜索页…
-                    </p>
-                  }
-                >
+                <Suspense fallback={<MusicPageSkeleton />}>
                   <SearchPage key={page.query} onError={onError} onNotice={showNotice} />
                 </Suspense>
               ) : view === 'discover' ? (
-                <Suspense
-                  fallback={
-                    <p role="status" className="m-auto">
-                      正在加载发现页…
-                    </p>
-                  }
-                >
+                <Suspense fallback={<MusicPageSkeleton />}>
                   <Discovery onError={onError} onNotice={showNotice} />
                 </Suspense>
               ) : view === 'library' || view === 'collection' ? (
-                <Suspense
-                  fallback={
-                    <p role="status" className="m-auto">
-                      正在加载音乐库…
-                    </p>
-                  }
-                >
+                <Suspense fallback={<MusicPageSkeleton />}>
                   <MusicLibrary onError={onError} onNotice={showNotice} />
                 </Suspense>
               ) : (
-                <Suspense
-                  fallback={
-                    <p role="status" className="m-auto">
-                      正在加载本地音乐…
-                    </p>
-                  }
-                >
+                <Suspense fallback={<MusicPageSkeleton />}>
                   <LocalPage
                     refresh={refresh}
                     importing={importing}

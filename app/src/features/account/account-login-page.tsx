@@ -1,3 +1,4 @@
+import { TextSkeleton } from '@/components/music/loading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { Check, ChevronRight, QrCode, RefreshCw, UserPlus } from 'lucide-react'
@@ -202,9 +203,7 @@ export default function AccountLoginPage() {
         </div>
       )}
       {loading && !adapters.length ? (
-        <p role="status" className="py-6 text-sm text-muted-foreground">
-          正在读取音乐来源…
-        </p>
+        <TextSkeleton />
       ) : !adapters.length ? (
         <p className="py-6 text-sm text-muted-foreground">暂无支持账号登录的音乐适配器。</p>
       ) : (

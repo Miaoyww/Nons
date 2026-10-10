@@ -54,6 +54,7 @@ function harness(initialMode = 'collapsible') {
     '@/plugins/host': { PluginProvider: 'PluginProvider', PluginSlot: 'PluginSlot' }
   }).default
   const MusicWorkspace = load('../src/features/workspace/music-workspace.tsx', {
+    '@/components/music/loading': { MusicPageSkeleton: 'div' },
     react: {
       useState: (value) => [value, () => {}],
       useRef: (current) => ({ current }),

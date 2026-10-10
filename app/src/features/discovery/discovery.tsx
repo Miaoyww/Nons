@@ -1,3 +1,5 @@
+import { Skeleton } from '@/components/ui/skeleton'
+import { TrackListSkeleton, CollectionGridSkeleton, TextSkeleton } from '@/components/music/loading'
 import { Tabs, TabsList, TabsTab, TabsPanel } from '@/components/animate-ui/components/base/tabs'
 import { MusicPage, MusicPageHeader } from '@/components/music/music-page'
 import { CollectionContextMenu } from '@/features/library/collection-actions'
@@ -121,9 +123,11 @@ function CategoryPicker({ value, onChange }: { value: string; onChange: (value: 
               </Button>
             </div>
           ) : !categories.length ? (
-            <p role="status" className="mt-5 text-sm text-muted-foreground">
-              {isTauri() ? '正在读取分类…' : '在桌面应用中查看歌单分类。'}
-            </p>
+            isTauri() ? (
+              <TextSkeleton />
+            ) : (
+              <p className="mt-5 text-sm text-muted-foreground">在桌面应用中查看歌单分类。</p>
+            )
           ) : (
             [...new Set(categories.map((item) => item.group))].map((group) => (
               <section key={group} className="mt-6">
@@ -244,18 +248,40 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
     }
   }
   return (
-    <article className="discover-fm">
-      <Cover cover={track?.cover} className="discover-fm-cover" />
+    <article className="discover-fm" aria-busy={busy && !track}>
+      {busy && !track ? (
+        <Skeleton className="discover-fm-cover" />
+      ) : (
+        <Cover cover={track?.cover} className="discover-fm-cover" />
+      )}
       <div className="discover-fm-info">
-        <h2 title={track?.title}>{track?.title ?? '你的下一首心动'}</h2>
-        <p>
+        <h2 title={track?.title}>
+          {busy && !track ? <Skeleton className="h-7 w-3/4" /> : (track?.title ?? '你的下一首心动')}
+        </h2>
+        <div className="discover-fm-meta">
           <UserRound aria-hidden="true" />
-          <span>{track ? <TrackArtists track={track} /> : '随你的音乐口味探索'}</span>
-        </p>
-        <p>
+          <div className="min-w-0">
+            {busy && !track ? (
+              <Skeleton className="h-4 w-36" />
+            ) : track ? (
+              <TrackArtists track={track} />
+            ) : (
+              '随你的音乐口味探索'
+            )}
+          </div>
+        </div>
+        <div className="discover-fm-meta">
           <Disc3 aria-hidden="true" />
-          <span>{track ? <TrackAlbum track={track} /> : '私人 FM'}</span>
-        </p>
+          <div className="min-w-0">
+            {busy && !track ? (
+              <Skeleton className="h-4 w-24" />
+            ) : track ? (
+              <TrackAlbum track={track} />
+            ) : (
+              '私人 FM'
+            )}
+          </div>
+        </div>
         {(error || (active && player.privateFmError)) && (
           <div role="alert" className="text-xs text-destructive">
             {error || player.privateFmError}
@@ -307,18 +333,16 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
             私人 FM
           </span>
         </div>
-        {profile && !track && !error && (
+        {profile && !track && !error && !busy && (
           <p role="status" className="mt-2 text-sm text-muted-foreground">
-            {busy ? (
-              '正在读取私人 FM…'
-            ) : (
+            {
               <>
                 暂时没有推荐歌曲。
                 <ActionButton variant="ghost" size="sm" onClick={() => setRevision((v) => v + 1)}>
                   重试
                 </ActionButton>
               </>
-            )}
+            }
           </p>
         )}
         {!profile && (
@@ -440,22 +464,26 @@ export default function Discovery({
             </div>
           ) : (
             <>
-              <TrackList
-                tracks={songs.items}
-                busy={playing}
-                currentKey={current?.key}
-                onPlay={(index) =>
-                  void nativeCall('play_queue', {
-                    keys: songs.items.map((t) => t.key),
-                    index
-                  }).catch(onError)
-                }
-                onAppend={(track) =>
-                  void nativeCall('append_queue', { keys: [track.key] })
-                    .then(() => onNotice(`已将「${track.title}」设为下一首播放。`))
-                    .catch(onError)
-                }
-              />
+              {songs.busy && !songs.items.length ? (
+                <TrackListSkeleton />
+              ) : (
+                <TrackList
+                  tracks={songs.items}
+                  busy={playing}
+                  currentKey={current?.key}
+                  onPlay={(index) =>
+                    void nativeCall('play_queue', {
+                      keys: songs.items.map((t) => t.key),
+                      index
+                    }).catch(onError)
+                  }
+                  onAppend={(track) =>
+                    void nativeCall('append_queue', { keys: [track.key] })
+                      .then(() => onNotice(`已将「${track.title}」设为下一首播放。`))
+                      .catch(onError)
+                  }
+                />
+              )}
               <InfiniteLoad
                 more={songs.more}
                 busy={songs.busy}
@@ -571,15 +599,7 @@ export default function Discovery({
                 </div>
               )}
               {list.busy && !list.items.length ? (
-                <div className="discover-playlist-grid" role="status" aria-label="正在加载歌单">
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <div className="library-cover-skeleton" key={i}>
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                  ))}
-                </div>
+                <CollectionGridSkeleton />
               ) : list.items.length ? (
                 <div className="discover-playlist-grid">
                   {list.items.map((item) => (

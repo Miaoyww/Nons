@@ -29,6 +29,7 @@ test('album cards fill missing list dates from visible album details and ignore 
     disconnect() {}
   }
   const modules = {
+    '@/components/ui/skeleton': { Skeleton: 'div' },
     react: React,
     'react/jsx-runtime': jsx,
     '@tauri-apps/api/core': { isTauri: () => true },
