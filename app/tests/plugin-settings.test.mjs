@@ -7,11 +7,14 @@ import * as jsx from 'react/jsx-runtime'
 import { createRoot } from 'react-dom/client'
 import { JSDOM } from 'jsdom'
 import ts from 'typescript'
+import { Tabs as BaseTabs } from '@base-ui/react/tabs'
 
 test('plugin settings scopes native drops, serializes ZIP installs and removes its listener', async () => {
   const dom = new JSDOM('<section aria-label="插件设置"><div id="root"></div></section>')
   globalThis.window = dom.window
   globalThis.document = dom.window.document
+  globalThis.HTMLElement = dom.window.HTMLElement
+  globalThis.Element = dom.window.Element
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   Object.defineProperty(window, 'devicePixelRatio', { value: 2 })
   document.querySelector('section').getBoundingClientRect = () => ({
@@ -25,6 +28,13 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
   const calls = []
   let plugins = []
   const modules = {
+    '@/components/animate-ui/components/base/tabs': {
+      Tabs: BaseTabs.Root,
+      TabsList: BaseTabs.List,
+      TabsTab: BaseTabs.Tab,
+      TabsPanel: ({ transition: _transition, ...props }) =>
+        React.createElement(BaseTabs.Panel, props)
+    },
     '../plugins/configuration-page': { PluginConfigurationPage: 'div' },
     react: React,
     'react/jsx-runtime': jsx,
@@ -39,9 +49,17 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
     },
     '@tauri-apps/plugin-dialog': { open: async () => 'chosen.zip' },
     'lucide-react': Object.fromEntries(
-      ['FolderOpen', 'RefreshCw', 'RotateCw', 'Search', 'Settings', 'Trash2', 'Upload'].map(
-        (name) => [name, 'svg']
-      )
+      [
+        'FolderOpen',
+        'Package',
+        'RefreshCw',
+        'RotateCw',
+        'Search',
+        'Settings',
+        'Store',
+        'Trash2',
+        'Upload'
+      ].map((name) => [name, 'svg'])
     ),
     '@/components/ui/button': {
       Button: ({ variant: _variant, size: _size, ...props }) => React.createElement('button', props)
@@ -91,6 +109,7 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
     React.act(async () => listener({ payload: { type, paths, position } }))
   try {
     await React.act(async () => root.render(React.createElement(exports.PluginsPage)))
+    assert.match(document.querySelector('[role=tab][aria-selected=true]').textContent, /已加载0/)
     await emit('drop', ['outside.zip'], { x: 20, y: 20 })
     assert.equal(calls.length, 0)
     await emit('enter', ['one.zip'])
@@ -134,6 +153,39 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
       }
     ]
     await React.act(async () => root.render(React.createElement(exports.PluginsPage)))
+    assert.match(document.querySelector('[role=tab][aria-selected=true]').textContent, /未加载1/)
+    const selectTab = async (value) =>
+      React.act(async () =>
+        [...document.querySelectorAll('[role=tab]')]
+          .find((button) => button.textContent.startsWith(value))
+          .click()
+      )
+    plugins.push({
+      manifest: { id: 'island', name: '灵动岛', version: '1.3.0', permissions: ['ui'] },
+      enabled: true,
+      loaded: true
+    })
+    await React.act(async () => root.render(React.createElement(exports.PluginsPage)))
+    assert.doesNotMatch(document.querySelector('[role=tabpanel]').textContent, /灵动岛/)
+    await selectTab('已加载')
+    assert.match(document.querySelector('[role=tabpanel]').textContent, /灵动岛/)
+    assert.doesNotMatch(document.querySelector('[role=tabpanel]').textContent, /下载管理/)
+    await selectTab('安装插件')
+    assert.match(document.querySelector('[role=tabpanel]').textContent, /插件商店/)
+    assert.ok(
+      [...document.querySelectorAll('button')].some((button) =>
+        button.textContent.includes('选择目录')
+      )
+    )
+    await React.act(async () =>
+      [...document.querySelectorAll('button')]
+        .find((button) => button.textContent.includes('选择 ZIP'))
+        .click()
+    )
+    assert.equal(calls.at(-1)[0], 'plugin_install')
+    assert.equal(calls.at(-1)[1].path, 'chosen.zip')
+    assert.match(document.querySelector('[role=tab][aria-selected=true]').textContent, /未加载/)
+    assert.equal(document.querySelector('[type=search]').value, '')
     await React.act(async () =>
       [...document.querySelectorAll('button')]
         .find((button) => button.textContent === '启用')
@@ -184,6 +236,8 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
     dom.window.close()
     delete globalThis.window
     delete globalThis.document
+    delete globalThis.HTMLElement
+    delete globalThis.Element
     delete globalThis.IS_REACT_ACT_ENVIRONMENT
   }
 })
