@@ -465,7 +465,7 @@ export default function Discovery({
           ) : (
             <>
               {songs.busy && !songs.items.length ? (
-                <TrackListSkeleton />
+                <TrackListSkeleton sortable={false} />
               ) : (
                 <TrackList
                   tracks={songs.items}

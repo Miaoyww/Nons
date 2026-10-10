@@ -101,7 +101,7 @@ function Results({ sectionTitle, kind, keyword, list, onError, onNotice }: Resul
     <>
       {list.busy && !list.items.length ? (
         kind === 'song' ? (
-          <TrackListSkeleton />
+          <TrackListSkeleton online={false} sortable={false} />
         ) : (
           <CollectionGridSkeleton artist={kind === 'artist'} />
         )
@@ -439,7 +439,7 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
             hasMore={list.more}
           >
             {list.busy && !list.items.length ? (
-              <TrackListSkeleton />
+              <TrackListSkeleton online={false} sortable={false} />
             ) : list.items.length > 0 ? (
               <TrackList
                 tracks={list.items}
@@ -476,7 +476,7 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
               !list.error && (
                 <div className="library-empty">
                   {list.busy ? (
-                    <TrackListSkeleton />
+                    <TrackListSkeleton online={false} sortable={false} />
                   ) : (
                     '还没有歌曲，在本地歌曲的右键菜单中添加到此歌单。'
                   )}

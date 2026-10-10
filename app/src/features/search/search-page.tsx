@@ -72,7 +72,7 @@ function Results({
     <>
       {list.busy && !list.items.length ? (
         kind === 'song' ? (
-          <TrackListSkeleton />
+          <TrackListSkeleton sortable={false} />
         ) : (
           <CollectionGridSkeleton artist={kind === 'artist'} />
         )

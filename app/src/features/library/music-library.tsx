@@ -273,12 +273,12 @@ export default function MusicLibrary({
                   登录账号
                 </ActionButton>
               </div>
-            ) : detailBusy && !detail.tracks.length ? (
-              <TrackListSkeleton />
-            ) : detail.tracks.length ? (
+            ) : detailBusy || detail.tracks.length ? (
               <TrackList
                 key={`${collection.kind}:${collection.id}`}
                 tracks={detail.tracks}
+                loading={detailBusy && !detail.tracks.length}
+                showLikes
                 sortable
                 searchable
                 hasMore={detail.more}
@@ -566,7 +566,7 @@ export default function MusicLibrary({
             </p>
           ) : listBusy && !list.items.length ? (
             tab === 'history' ? (
-              <TrackListSkeleton />
+              <TrackListSkeleton sortable={false} />
             ) : (
               <CollectionGridSkeleton artist={tab === 'artist'} />
             )

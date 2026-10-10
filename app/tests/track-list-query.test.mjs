@@ -46,6 +46,9 @@ async function harness(run) {
   }
   const trackSearchContext = React.createContext(undefined)
   const modules = {
+    '@/components/ui/skeleton': {
+      Skeleton: (props) => React.createElement('div', { 'data-slot': 'skeleton', ...props })
+    },
     react: React,
     '@tanstack/react-table': table,
     'react/jsx-runtime': jsx,
@@ -431,5 +434,33 @@ test('resizing redistributes adjacent columns, clamps minimums and restores defa
       separator().dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }))
     )
     assert.deepEqual(widths(), initial)
+  })
+})
+
+test('loading uses the same table, headers, columns and identity spacing as loaded songs', async () => {
+  await harness(async ({ render, tracks }) => {
+    const props = { sortable: true, onAppend: () => {}, showLikes: true, externalQuery: '' }
+    await render({
+      ...props,
+      tracks: tracks.map((t) => ({ ...t, source: { kind: 'netease', id: 1 } }))
+    })
+    const columns = [...document.querySelectorAll('col')].map((c) => c.style.width)
+    const headers = document.querySelector('thead').textContent
+    const table = document.querySelector('table')
+    await render({ ...props, tracks: [], loading: true })
+    assert.equal(document.querySelector('table'), table)
+    assert.deepEqual(
+      [...document.querySelectorAll('col')].map((c) => c.style.width),
+      columns
+    )
+    assert.equal(document.querySelector('thead').textContent, headers)
+    assert.equal(document.querySelectorAll('tbody .track-identity-cell').length, 8)
+    assert.equal(document.querySelector('tbody tr').children.length, 6)
+    assert.equal(document.querySelector('table').getAttribute('aria-busy'), 'true')
+    assert.doesNotMatch(document.body.textContent, /没有匹配/)
+    assert.equal(
+      document.querySelector('tbody .track-identity-cover')?.getAttribute('data-slot'),
+      'skeleton'
+    )
   })
 })

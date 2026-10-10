@@ -1,4 +1,4 @@
-import { MusicPageSkeleton } from '@/components/music/loading'
+import { MusicPageSkeleton, LibraryPageSkeleton } from '@/components/music/loading'
 import { usePlaybackShortcuts } from '@/features/playback/shortcuts/use-playback-shortcuts'
 import { CollectionActionsProvider } from '@/features/library/collection-actions'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
@@ -239,7 +239,9 @@ export function MusicWorkspace({
                 </div>
               )}
               {(view === 'artist' || view === 'album') && page.collection ? (
-                <Suspense fallback={<MusicPageSkeleton />}>
+                <Suspense
+                  fallback={<MusicPageSkeleton view="collection" collection={page.collection} />}
+                >
                   {view === 'artist' ? (
                     <ArtistPage
                       key={page.collection.id}
@@ -257,7 +259,7 @@ export function MusicWorkspace({
                   )}
                 </Suspense>
               ) : view === 'accounts' ? (
-                <Suspense fallback={<MusicPageSkeleton />}>
+                <Suspense fallback={<MusicPageSkeleton view="accounts" />}>
                   <AccountLoginPage />
                 </Suspense>
               ) : view === 'tools' ? (
@@ -269,19 +271,35 @@ export function MusicWorkspace({
               ) : view === 'queue' ? (
                 <QueuePage key={queueVisit} onError={onError} />
               ) : view === 'search' ? (
-                <Suspense fallback={<MusicPageSkeleton />}>
+                <Suspense fallback={<MusicPageSkeleton view="search" title={page.query} />}>
                   <SearchPage key={page.query} onError={onError} onNotice={showNotice} />
                 </Suspense>
               ) : view === 'discover' ? (
-                <Suspense fallback={<MusicPageSkeleton />}>
+                <Suspense
+                  fallback={
+                    <MusicPageSkeleton
+                      view="discover"
+                      tracks={page.query === 'daily'}
+                      title="每日推荐"
+                    />
+                  }
+                >
                   <Discovery onError={onError} onNotice={showNotice} />
                 </Suspense>
               ) : view === 'library' || view === 'collection' ? (
-                <Suspense fallback={<MusicPageSkeleton />}>
+                <Suspense
+                  fallback={
+                    view === 'library' ? (
+                      <LibraryPageSkeleton />
+                    ) : (
+                      <MusicPageSkeleton view="collection" collection={page.collection} />
+                    )
+                  }
+                >
                   <MusicLibrary onError={onError} onNotice={showNotice} />
                 </Suspense>
               ) : (
-                <Suspense fallback={<MusicPageSkeleton />}>
+                <Suspense fallback={<MusicPageSkeleton view="local" />}>
                   <LocalPage
                     refresh={refresh}
                     importing={importing}
