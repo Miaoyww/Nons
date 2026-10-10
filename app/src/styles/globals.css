@@ -1562,6 +1562,11 @@
 .queue-track-card:hover {
   background: var(--muted);
 }
+.queue-track-card[data-mode='compact'] {
+  height: 48px;
+  gap: 12px;
+  padding: 6px 12px;
+}
 .queue-track-card[data-current='true'] {
   background: var(--current-track-background);
   box-shadow: inset 3px 0 oklch(0.6 0.2 250);

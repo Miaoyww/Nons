@@ -1,4 +1,3 @@
-import { TrackArtists } from '@/components/music/music-links'
 import { Popover } from '@base-ui/react/popover'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowRight, ListMusic, Play } from 'lucide-react'
@@ -9,7 +8,9 @@ import { ActionButton } from '@/components/music/action-button'
 import { Cover } from '@/components/music/cover'
 import { SongContextMenu } from '@/components/music/song-actions'
 import { QueueControls } from '@/features/queue/queue-controls'
-import { TrackTitle, trackDisplayTitle } from '@/components/music/track-title'
+import { trackDisplayTitle } from '@/components/music/track-title'
+import { TrackIdentity } from '@/components/music/track-identity'
+import { useInterfaceDensity } from '@/features/settings/use-interface-density'
 
 export const QueueTrackCard = memo(function QueueTrackCard({
   track,
@@ -22,6 +23,7 @@ export const QueueTrackCard = memo(function QueueTrackCard({
   onPlay: () => void
   onRemove: () => Promise<unknown>
 }) {
+  const [density] = useInterfaceDensity()
   return (
     <SongContextMenu
       track={track}
@@ -44,38 +46,34 @@ export const QueueTrackCard = memo(function QueueTrackCard({
             }
           }}
           className="queue-track-card"
+          data-mode={density}
           data-current={current}
           aria-current={current ? 'true' : undefined}
           aria-label={`${current ? '当前播放：' : '播放：'}${trackDisplayTitle(track)}，${track.artist}`}
         />
       }
     >
-      <button
-        type="button"
-        disabled={!isTauri()}
-        aria-label={`播放 ${track.title}`}
-        onClick={onPlay}
-        className="queue-track-cover"
-      >
-        <Cover cover={track.cover} className="size-11 shrink-0 rounded-lg" />
-        <span className="queue-track-cover-play">
-          <Play aria-hidden="true" />
-        </span>
-      </button>
-      <span className="min-w-0 flex-1 text-left">
-        <button
-          type="button"
-          disabled={!isTauri()}
-          onClick={onPlay}
-          className="block w-full truncate text-left font-medium"
-          title={trackDisplayTitle(track)}
-        >
-          <TrackTitle track={track} />
-        </button>
-        <span className="mt-1 block truncate text-sm text-muted-foreground" title={track.artist}>
-          <TrackArtists track={track} />
-        </span>
-      </span>
+      <div className="min-w-0 flex-1 text-left text-sm">
+        <TrackIdentity
+          track={track}
+          mode={density}
+          showSource
+          cover={
+            <button
+              type="button"
+              disabled={!isTauri()}
+              aria-label={`播放 ${track.title}`}
+              onClick={onPlay}
+              className="queue-track-cover"
+            >
+              <Cover cover={track.cover} className="track-identity-cover" />
+              <span className="queue-track-cover-play">
+                <Play aria-hidden="true" />
+              </span>
+            </button>
+          }
+        />
+      </div>
       <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
         {formatTime(track.durationMs)}
       </span>
@@ -91,17 +89,21 @@ function QueueCardList({
   onPage: () => void
 }) {
   const state = usePlayer()
+  const [density] = useInterfaceDensity()
   const parent = useRef<HTMLDivElement>(null)
   const [locate, setLocate] = useState(0)
   const virtualizer = useVirtualizer({
     count: state.queue.length,
     getScrollElement: () => parent.current,
-    estimateSize: () => 72,
+    estimateSize: () => (density === 'compact' ? 52 : 72),
     overscan: 6
   })
   useLayoutEffect(() => {
+    virtualizer.measure()
+  }, [density, virtualizer])
+  useLayoutEffect(() => {
     if (state.index !== null) virtualizer.scrollToIndex(state.index, { align: 'center' })
-  }, [locate, virtualizer])
+  }, [locate, density, virtualizer])
   return (
     <>
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3">
