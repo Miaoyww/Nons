@@ -19,7 +19,12 @@ export function Titlebar({
   playerMode?: boolean
   onBack?: () => void
 }) {
-  const { plugins } = usePlugins()
+  const { plugins, loaded } = usePlugins()
+  const hasTools = plugins.some(
+    (plugin) =>
+      loaded.has(plugin.manifest.id) &&
+      plugin.manifest.contributes.navigation.some((item) => item.category === 'tool')
+  )
   const native = isTauri()
   const { page, navigate, back, forward, canBack, canForward } = useMusicNavigation()
   const [maximized, setMaximized] = useState(false)
@@ -149,44 +154,46 @@ export function Titlebar({
                 ['local', '本地'],
                 ['tools', '工具']
               ] as const
-            ).map(([view, label]) => (
-              <Button
-                key={view}
-                variant={
-                  page.view === view ||
-                  (view === 'library' && page.view === 'collection') ||
-                  (view === 'discover' && page.view === 'search') ||
-                  (view === 'local' && page.view.startsWith('local-')) ||
-                  (view === 'tools' &&
-                    page.view === 'plugin' &&
-                    plugins.some(
-                      (p) =>
-                        p.manifest.contributes.navigation.some((n) => n.category === 'tool') &&
-                        page.query.startsWith(`/plugins/${p.manifest.id}/`)
-                    ))
-                    ? 'secondary'
-                    : 'ghost'
-                }
-                aria-current={
-                  page.view === view ||
-                  (view === 'library' && page.view === 'collection') ||
-                  (view === 'discover' && page.view === 'search') ||
-                  (view === 'local' && page.view.startsWith('local-')) ||
-                  (view === 'tools' &&
-                    page.view === 'plugin' &&
-                    plugins.some(
-                      (p) =>
-                        p.manifest.contributes.navigation.some((n) => n.category === 'tool') &&
-                        page.query.startsWith(`/plugins/${p.manifest.id}/`)
-                    ))
-                    ? 'page'
-                    : undefined
-                }
-                onClick={() => navigate(view)}
-              >
-                {label}
-              </Button>
-            ))}
+            )
+              .filter(([view]) => view !== 'tools' || hasTools)
+              .map(([view, label]) => (
+                <Button
+                  key={view}
+                  variant={
+                    page.view === view ||
+                    (view === 'library' && page.view === 'collection') ||
+                    (view === 'discover' && page.view === 'search') ||
+                    (view === 'local' && page.view.startsWith('local-')) ||
+                    (view === 'tools' &&
+                      page.view === 'plugin' &&
+                      plugins.some(
+                        (p) =>
+                          p.manifest.contributes.navigation.some((n) => n.category === 'tool') &&
+                          page.query.startsWith(`/plugins/${p.manifest.id}/`)
+                      ))
+                      ? 'secondary'
+                      : 'ghost'
+                  }
+                  aria-current={
+                    page.view === view ||
+                    (view === 'library' && page.view === 'collection') ||
+                    (view === 'discover' && page.view === 'search') ||
+                    (view === 'local' && page.view.startsWith('local-')) ||
+                    (view === 'tools' &&
+                      page.view === 'plugin' &&
+                      plugins.some(
+                        (p) =>
+                          p.manifest.contributes.navigation.some((n) => n.category === 'tool') &&
+                          page.query.startsWith(`/plugins/${p.manifest.id}/`)
+                      ))
+                      ? 'page'
+                      : undefined
+                  }
+                  onClick={() => navigate(view)}
+                >
+                  {label}
+                </Button>
+              ))}
             {plugins
               .filter((p) => p.loaded)
               .flatMap((plugin) =>
