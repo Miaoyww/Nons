@@ -465,15 +465,16 @@ export default function Discovery({
           ) : (
             <>
               {songs.busy && !songs.items.length ? (
-                <TrackListSkeleton sortable={false} />
+                <TrackListSkeleton />
               ) : (
                 <TrackList
                   tracks={songs.items}
+                  sortable
                   busy={playing}
                   currentKey={current?.key}
-                  onPlay={(index) =>
+                  onPlay={(index, tracks) =>
                     void nativeCall('play_queue', {
-                      keys: songs.items.map((t) => t.key),
+                      keys: tracks.map((t) => t.key),
                       index
                     }).catch(onError)
                   }

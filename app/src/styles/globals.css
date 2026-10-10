@@ -2707,10 +2707,13 @@
   cursor: pointer;
 }
 .track-sort-header:hover,
-.track-sort-header:focus-visible {
+.track-sort-header:focus-visible,
+.track-sequence-header:hover,
+.track-sequence-header:focus-visible {
   background: var(--muted);
 }
-.track-sort-header:focus-visible {
+.track-sort-header:focus-visible,
+.track-sequence-header:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
@@ -2720,6 +2723,15 @@
   gap: 4px;
   white-space: nowrap;
   opacity: 0;
+}
+.track-sequence-header {
+  width: 100%;
+  min-height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.track-sort-hint[data-visible='true'] {
+  opacity: 1;
 }
 .track-sort-hint svg {
   width: 14px;

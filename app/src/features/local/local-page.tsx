@@ -101,7 +101,7 @@ function Results({ sectionTitle, kind, keyword, list, onError, onNotice }: Resul
     <>
       {list.busy && !list.items.length ? (
         kind === 'song' ? (
-          <TrackListSkeleton online={false} sortable={false} />
+          <TrackListSkeleton online={false} />
         ) : (
           <CollectionGridSkeleton artist={kind === 'artist'} />
         )
@@ -109,9 +109,10 @@ function Results({ sectionTitle, kind, keyword, list, onError, onNotice }: Resul
         kind === 'song' ? (
           <TrackList
             tracks={tracks}
+            sortable
             busy={!isTauri()}
             currentKey={player.index === null ? undefined : player.queue[player.index]?.key}
-            onPlay={(index) =>
+            onPlay={(index, tracks) =>
               void nativeCall('play_queue', {
                 keys: tracks
                   .slice(index >= 1000 ? index : 0, (index >= 1000 ? index : 0) + 1000)
@@ -439,7 +440,7 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
             hasMore={list.more}
           >
             {list.busy && !list.items.length ? (
-              <TrackListSkeleton online={false} sortable={false} />
+              <TrackListSkeleton online={false} />
             ) : list.items.length > 0 ? (
               <TrackList
                 tracks={list.items}
@@ -476,7 +477,7 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
               !list.error && (
                 <div className="library-empty">
                   {list.busy ? (
-                    <TrackListSkeleton online={false} sortable={false} />
+                    <TrackListSkeleton online={false} />
                   ) : (
                     '还没有歌曲，在本地歌曲的右键菜单中添加到此歌单。'
                   )}

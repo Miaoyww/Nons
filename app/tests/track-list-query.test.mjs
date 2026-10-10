@@ -284,6 +284,25 @@ test('inserting and deleting songs preserves existing row DOM and search state',
   })
 })
 
+test('sequence header restores source order directly after sorting and filtering', async () => {
+  await harness(async ({ render, plays, search }) => {
+    await render({ sortable: true })
+    const reset = () => document.querySelector('button[aria-label="按序排列"]')
+    assert.ok(reset(), 'original sequence has a dedicated header control')
+    await act(async () => document.querySelector('[aria-label^="时长排序："]').click())
+    await search('Zulu')
+    await act(async () => reset().click())
+    await search('')
+    await act(async () => document.querySelector('.track-cover').click())
+    assert.deepEqual(
+      plays.at(-1)[1].map((track) => track.key),
+      ['a', 'b', 'a']
+    )
+    assert.equal(reset().getAttribute('aria-pressed'), 'true')
+    assert.ok(document.querySelector('[aria-label^="标题排序："]').textContent.includes('按序排列'))
+  })
+})
+
 test('sorting preserves stable ties, filtered playback order and source indices', async () => {
   await harness(async ({ render, plays, removes, menus, tracks, search }) => {
     await render({ sortable: true })

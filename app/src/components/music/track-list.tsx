@@ -46,7 +46,7 @@ function SortHeader({
       onClick={onClick}
     >
       <span>{label}</span>
-      <span className="track-sort-hint">
+      <span className="track-sort-hint" data-visible={detail === '按序排列'}>
         <Icon aria-hidden="true" />
         <span className={compact ? 'sr-only' : undefined}>{detail}</span>
       </span>
@@ -297,7 +297,24 @@ export const TrackList = memo(function TrackList({
           <thead className="bg-background text-xs text-muted-foreground">
             <tr className="border-b border-border">
               <th className="py-3 text-center" scope="col">
-                # {columnSizing.handle('index')}
+                {sortable ? (
+                  <button
+                    type="button"
+                    className="track-sequence-header"
+                    aria-label="按序排列"
+                    title="按序排列"
+                    aria-pressed={sort === 'default'}
+                    onClick={() => {
+                      setSort('default')
+                      setDescending(false)
+                    }}
+                  >
+                    #
+                  </button>
+                ) : (
+                  '#'
+                )}
+                {columnSizing.handle('index')}
               </th>
               <th className="py-3" scope="col" aria-sort={ariaSort(sortable && titleActive)}>
                 {sortable ? (
@@ -308,13 +325,15 @@ export const TrackList = memo(function TrackList({
                     detail={
                       titleActive
                         ? `${sort === 'artist' ? '歌手' : '标题'}${descending ? '降序' : '升序'}`
-                        : '默认排序'
+                        : sort === 'default'
+                          ? '按序排列'
+                          : '未排序'
                     }
                     next={nextLabel('title')}
                     onClick={() => cycleSort('title')}
                   />
                 ) : (
-                  '歌曲'
+                  '标题'
                 )}
                 {columnSizing.handle('title')}
               </th>
