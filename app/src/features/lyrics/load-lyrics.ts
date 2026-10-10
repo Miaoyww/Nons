@@ -12,16 +12,14 @@ export async function loadLyrics<T>(
 ) {
   let skipAmll = !sources.amll,
     skipQq = !sources.qq,
-    skipLocal = false,
     skipQrc = false,
     skipNetease = false
-  for (let attempt = 0; attempt < 6; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const lyrics = await nativeCall<Lyrics | null>('track_lyrics', {
       key: track.key,
       refresh: attempt === 0 && refresh,
       skipAmll,
       skipQq,
-      skipLocal,
       skipQrc,
       skipNetease
     })
@@ -29,8 +27,7 @@ export async function loadLyrics<T>(
     try {
       return { lyrics, parsed: parse(lyrics) }
     } catch (cause) {
-      if (lyrics?.source === 'local') skipLocal = true
-      else if (lyrics?.source === 'amll') skipAmll = true
+      if (lyrics?.source === 'amll') skipAmll = true
       else if (lyrics?.source === 'qq' && lyrics.format === 'qrc' && !skipQrc) skipQrc = true
       else if (lyrics?.source === 'qq') skipQq = true
       else if (track.source.kind === 'local' && lyrics?.source === 'netease') skipNetease = true

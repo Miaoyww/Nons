@@ -2,10 +2,9 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { nativeCall } from '@/lib/player'
 export interface LocalPreferences {
-  lyricPriority: 'local' | 'online'
   artistSeparators: string[]
 }
-let options: LocalPreferences = { lyricPriority: 'local', artistSeparators: ['/', '、', ';'] }
+let options: LocalPreferences = { artistSeparators: ['/', '、', ';'] }
 let initial: Promise<void> | undefined
 const listeners = new Set<() => void>()
 const subscribe = (fn: () => void) => {

@@ -79,9 +79,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
         revision,
         lines: parsed,
         source: value
-          ? { amll: 'AMLL DB', qq: 'QQ 音乐', netease: '网易云音乐', local: '本地歌词' }[
-              value.source
-            ]
+          ? { amll: 'AMLL DB', qq: 'QQ 音乐', netease: '网易云音乐' }[value.source]
           : undefined
       })
     },

@@ -11,13 +11,11 @@ use tauri::{Emitter, State};
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LocalPreferences {
-    pub lyric_priority: String,
     pub artist_separators: Vec<String>,
 }
 impl Default for LocalPreferences {
     fn default() -> Self {
         Self {
-            lyric_priority: "local".into(),
             artist_separators: vec!["/".into(), "、".into(), ";".into()],
         }
     }
@@ -358,8 +356,7 @@ pub async fn set_local_preferences(
     app: tauri::AppHandle,
     backend: State<'_, Backend>,
 ) -> AppResult<()> {
-    if !["local", "online"].contains(&options.lyric_priority.as_str())
-        || options.artist_separators.len() > 16
+    if options.artist_separators.len() > 16
         || options
             .artist_separators
             .iter()

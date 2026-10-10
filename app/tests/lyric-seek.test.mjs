@@ -10,7 +10,7 @@ function lyricControl({ failure, desktop = true } = {}) {
   const jsx = (type, props) => ({ type, props })
   const modules = {
     '@/features/local/use-local-preferences': {
-      useLocalPreferences: () => ({ options: { lyricPriority: 'local', artistSeparators: [] } })
+      useLocalPreferences: () => ({ options: { artistSeparators: [] } })
     },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     react: {

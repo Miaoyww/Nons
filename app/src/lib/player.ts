@@ -55,7 +55,7 @@ export interface Progress {
   receivedAt: number
 }
 export interface Lyrics {
-  source: 'amll' | 'qq' | 'netease' | 'local'
+  source: 'amll' | 'qq' | 'netease'
   format: 'ttml' | 'yrc' | 'qrc' | 'lrc'
   content: string
   translation: string | null

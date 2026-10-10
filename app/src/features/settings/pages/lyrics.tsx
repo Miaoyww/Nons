@@ -83,7 +83,7 @@ export function LyricsPage() {
             歌词来源
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            本地歌词优先；在线依次尝试 AMLL DB、QQ 音乐、网易云音乐。
+            所有歌曲的歌词均在线获取，依次尝试 AMLL DB、QQ 音乐、网易云音乐。
           </p>
         </div>
         <SettingsCard title="AMLL DB" description="优先获取 TTML 逐字歌词，失败时尝试下一来源。">

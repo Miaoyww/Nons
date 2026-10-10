@@ -13,7 +13,7 @@ function harness() {
   const modules = {
     '@/components/music/loading': { TextSkeleton: 'div' },
     '@/features/local/use-local-preferences': {
-      useLocalPreferences: () => ({ options: { lyricPriority: 'local', artistSeparators: [] } })
+      useLocalPreferences: () => ({ options: { artistSeparators: [] } })
     },
     react: {
       useState(initial) {

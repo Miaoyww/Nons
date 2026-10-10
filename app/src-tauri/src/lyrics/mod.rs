@@ -15,7 +15,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -59,7 +58,6 @@ pub struct LyricSkips {
     pub amll: bool,
     pub qq: bool,
     pub qrc: bool,
-    pub local: bool,
     pub netease: bool,
 }
 
@@ -104,43 +102,13 @@ impl LyricService {
         skips: LyricSkips,
         app: tauri::AppHandle,
     ) -> AppResult<Option<Lyrics>> {
-        let local_path = match &track.source {
-            TrackSource::Local { path, .. } if !skips.local => Some(path.clone()),
-            _ => None,
-        };
-        let preferences = if matches!(track.source, TrackSource::Local { .. }) {
-            Some(crate::local_library::preferences(&self.store)?)
+        let separators = if matches!(track.source, TrackSource::Local { .. }) {
+            crate::local_library::preferences(&self.store)?.artist_separators
         } else {
-            None
+            vec![" / ".into()]
         };
-        let prefer_online = preferences
-            .as_ref()
-            .is_some_and(|value| value.lyric_priority == "online");
-        if !prefer_online {
-            if let Some(path) = &local_path {
-                if let Ok(Some(value)) = local_lyrics(path).await {
-                    return Ok(Some(value));
-                }
-            }
-        }
-        let separators = preferences
-            .as_ref()
-            .map(|options| options.artist_separators.clone())
-            .unwrap_or_else(|| vec![" / ".into()]);
-        let result = self
-            .get_online(track, refresh, skips, separators, app)
-            .await;
-        if matches!(result, Ok(Some(_))) {
-            return result;
-        }
-        if prefer_online {
-            if let Some(path) = &local_path {
-                if let Ok(Some(value)) = local_lyrics(path).await {
-                    return Ok(Some(value));
-                }
-            }
-        }
-        result
+        self.get_online(track, refresh, skips, separators, app)
+            .await
     }
 
     async fn get_online(
@@ -555,35 +523,6 @@ impl LyricService {
             .await
             .unwrap_or(Lookup::Failed)
     }
-}
-
-async fn local_lyrics(path: &str) -> AppResult<Option<Lyrics>> {
-    for extension in ["ttml", "yrc", "lrc"] {
-        let path = PathBuf::from(path).with_extension(extension);
-        let metadata = match tokio::fs::metadata(&path).await {
-            Ok(m) => m,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(_) => return Err("无法读取本地歌词文件".into()),
-        };
-        if metadata.len() > MAX_LYRIC_BYTES as u64 {
-            continue;
-        }
-        let Ok(content) = tokio::fs::read_to_string(path).await else {
-            continue;
-        };
-        if extension == "ttml" && !valid_ttml(&content) {
-            continue;
-        }
-        return Ok(Some(Lyrics {
-            match_score: None,
-            source: "local".into(),
-            format: extension.into(),
-            content,
-            translation: None,
-            romanization: None,
-        }));
-    }
-    Ok(None)
 }
 
 // This only validates the XML envelope. The AMLL parser owns lyric semantics.

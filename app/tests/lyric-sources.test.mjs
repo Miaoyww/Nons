@@ -36,33 +36,29 @@ function harness(responses, kind = 'netease') {
   }
 }
 
-test('semantic failures continue through local, AMLL, QQ and NetEase once', async () => {
+test('semantic failures continue through AMLL, QQ and NetEase once', async () => {
   const { load, calls } = harness(
-    ['local', 'amll', 'qq']
+    ['amll', 'qq']
       .map((source) => ({ source, content: 'broken' }))
       .concat([{ source: 'netease', content: 'usable' }])
   )
   assert.equal((await load()).parsed, 'usable')
   assert.deepEqual(
-    calls.map((c) => [c.skipLocal, c.skipAmll, c.skipQq, c.refresh]),
+    calls.map((c) => [c.skipAmll, c.skipQq, c.refresh]),
     [
-      [false, false, false, true],
-      [true, false, false, false],
-      [true, true, false, false],
-      [true, true, true, false]
+      [false, false, true],
+      [true, false, false],
+      [true, true, false]
     ]
   )
 })
 
-test('disabled sources are skipped for every combination and local files remain eligible', async () => {
+test('disabled online sources are skipped for every combination', async () => {
   for (const amll of [false, true])
     for (const qq of [false, true]) {
       const { load, calls } = harness([{ source: 'netease', content: 'usable' }])
       await load({ amll, qq })
-      assert.deepEqual(
-        [calls[0].skipAmll, calls[0].skipQq, calls[0].skipLocal],
-        [!amll, !qq, false]
-      )
+      assert.deepEqual([calls[0].skipAmll, calls[0].skipQq], [!amll, !qq])
     }
 })
 
@@ -92,20 +88,12 @@ test('invalid QRC tries QQ LRC before disabling QQ and requesting NetEase', asyn
   )
 })
 
-test('local tracks fall back to sidecar lyrics after online semantic failures', async () => {
-  const { load, calls } = harness(
-    [
-      { source: 'netease', content: 'broken' },
-      { source: 'local', content: 'usable' }
-    ],
-    'local'
-  )
-  assert.equal((await load()).parsed, 'usable')
+test('local tracks stop when online lyrics are exhausted', async () => {
+  const { load, calls } = harness([{ source: 'netease', content: 'broken' }, null], 'local')
+  assert.equal((await load()).lyrics, null)
   assert.deepEqual(
-    calls.map((c) => [c.skipNetease, c.skipLocal]),
-    [
-      [false, false],
-      [true, false]
-    ]
+    calls.map((c) => c.skipNetease),
+    [false, true]
   )
+  assert.ok(calls.every((c) => !('skipLocal' in c)))
 })

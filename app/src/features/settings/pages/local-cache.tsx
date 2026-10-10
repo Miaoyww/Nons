@@ -1,11 +1,3 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
-import { useLocalPreferences } from '@/features/local/use-local-preferences'
 import { Switch } from '@/components/ui/switch'
 import { useEffect, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
@@ -34,7 +26,6 @@ export function LocalCachePage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const [notice, setNotice] = useState<string>()
-  const { options: localPreferences, setOptions: setLocalPreferences } = useLocalPreferences()
   const { showCovers, setShowCovers } = useLocalOptions()
   const desktop = isTauri()
   async function reload() {
@@ -96,34 +87,6 @@ export function LocalCachePage() {
             />
             显示内嵌封面
           </label>
-        </SettingsCard>
-        <SettingsCard
-          title="本地歌曲歌词来源"
-          description="优先来源没有歌词、读取失败或格式不可用时，自动尝试另一来源。在线按已有歌词来源设置获取。"
-        >
-          <Select
-            value={localPreferences.lyricPriority}
-            disabled={busy || !desktop}
-            onValueChange={(value) => {
-              if (value)
-                void perform(() =>
-                  setLocalPreferences({
-                    ...localPreferences,
-                    lyricPriority: value as 'local' | 'online'
-                  })
-                )
-            }}
-          >
-            <SelectTrigger aria-label="本地歌曲歌词优先来源">
-              <SelectValue>
-                {localPreferences.lyricPriority === 'local' ? '优先本地歌词' : '优先在线歌词'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="local">优先本地歌词</SelectItem>
-              <SelectItem value="online">优先在线歌词</SelectItem>
-            </SelectContent>
-          </Select>
         </SettingsCard>
         <SettingsCard
           title="艺术家分隔符"
