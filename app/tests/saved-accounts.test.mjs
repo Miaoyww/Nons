@@ -52,12 +52,23 @@ test('saved accounts select references, confirm deletion and ignore responses af
   ).outputText
   runInNewContext(code, { exports, require: (name) => modules[name] })
   const root = createRoot(document.getElementById('root'))
-  const render = (open) =>
-    act(async () => root.render(React.createElement(exports.SavedAccounts, { open, current: 1 })))
+  const render = (open, source = 'netease', currentSource = source) =>
+    act(async () =>
+      root.render(
+        React.createElement(exports.SavedAccounts, {
+          open,
+          source,
+          sourceName: '网易云',
+          current: { source: currentSource, id: '1' }
+        })
+      )
+    )
   const click = (button) =>
     act(async () => button.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })))
   const button = (label) =>
-    [...document.querySelectorAll('button')].find((item) => item.textContent === label)
+    [...document.querySelectorAll('button')].find(
+      (item) => item.textContent === label + '网易云' || item.textContent === label
+    )
   const records = [1, 2].map((id) => ({
     reference: { source: 'netease', id: String(id) },
     displayName: `User ${id}`,
@@ -93,6 +104,20 @@ test('saved accounts select references, confirm deletion and ignore responses af
     await act(async () => requests[4].resolve([records[0]]))
     assert.ok(button('User 1'))
     assert.equal(button('User 2'), undefined)
+    await render(true, 'other', 'netease')
+    assert.equal(requests[5].reference, 'other')
+    const other = { ...records[0], reference: { source: 'other', id: '1' } }
+    await act(async () => requests[5].resolve([other]))
+    assert.equal(
+      button('User 1').disabled,
+      false,
+      'matching IDs from different sources are separate accounts'
+    )
+    await click(button('User 1'))
+    assert.equal(requests[6].reference.source, 'other')
+    await render(false)
+    await act(async () => requests[6].resolve())
+    assert.equal(document.body.textContent, '')
   } finally {
     await act(async () => root.unmount())
     dom.window.close()

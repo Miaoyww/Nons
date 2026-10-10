@@ -109,6 +109,18 @@ async fn music_account(
     result
 }
 #[tauri::command]
+fn music_current_account(
+    source: crate::music::identity::SourceId,
+    backend: State<'_, Backend>,
+) -> crate::music::MusicResult<Option<crate::music::account::AccountRecord>> {
+    backend
+        .music
+        .accounts
+        .as_ref()
+        .ok_or(crate::music::ErrorCode::Internal)?
+        .current_record(&source)
+}
+#[tauri::command]
 fn music_accounts(
     source: crate::music::identity::SourceId,
     backend: State<'_, Backend>,
@@ -977,6 +989,7 @@ pub fn run() {
             music_read_track,
             music_account,
             music_accounts,
+            music_current_account,
             music_select_account,
             music_remove_account,
             search_music,

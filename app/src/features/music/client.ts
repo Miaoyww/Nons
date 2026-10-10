@@ -29,6 +29,7 @@ async function scoped<T>(
 export const musicClient: MusicSourceClient & {
   sources(): Promise<SourceDescriptor[]>
   accounts(source: string): Promise<AccountRecord[]>
+  currentAccount(source: string): Promise<AccountRecord | null>
   account(source: string, request: AccountRequest): Promise<AccountPresentation>
   selectAccount(reference: AccountRef): Promise<void>
   removeAccount(reference: AccountRef): Promise<void>
@@ -51,6 +52,7 @@ export const musicClient: MusicSourceClient & {
     return response
   },
   accounts: (source) => nativeCall('music_accounts', { source }),
+  currentAccount: (source) => nativeCall('music_current_account', { source }),
   async account(source, request) {
     const result = await nativeCall<AccountPresentation>('music_account', { source, request })
     if (request.operation === 'logout' || (result.type === 'progress' && result.data.code === 803))

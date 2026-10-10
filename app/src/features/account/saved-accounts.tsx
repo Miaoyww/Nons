@@ -2,10 +2,24 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, RefreshCw, Trash2, UserRound } from 'lucide-react'
 import { ActionButton } from '@/components/music/action-button'
 import { musicClient } from '@/features/music/client'
-import type { AccountRecord } from '@/features/music/types'
+import type { AccountRecord, AccountRef } from '@/features/music/types'
 import { errorText } from '@/lib/player'
 
-export function SavedAccounts({ open, current }: { open: boolean; current?: number }) {
+export function SavedAccounts({
+  open,
+  source,
+  sourceName,
+  current,
+  enabled = true,
+  onChanged
+}: {
+  open: boolean
+  source: string
+  sourceName: string
+  current?: AccountRef
+  enabled?: boolean
+  onChanged?: () => void
+}) {
   const [records, setRecords] = useState<AccountRecord[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -18,8 +32,9 @@ export function SavedAccounts({ open, current }: { open: boolean; current?: numb
     setBusy(true)
     setError('')
     setRemoving(undefined)
+    setRecords([])
     void musicClient
-      .accounts('netease')
+      .accounts(source)
       .then((result) => {
         if (serial === generation.current) setRecords(result)
       })
@@ -32,7 +47,7 @@ export function SavedAccounts({ open, current }: { open: boolean; current?: numb
     return () => {
       generation.current++
     }
-  }, [open, current, revision])
+  }, [open, source, current?.source, current?.id, revision])
   async function change(record: AccountRecord, remove = false) {
     const serial = generation.current
     setBusy(true)
@@ -43,6 +58,7 @@ export function SavedAccounts({ open, current }: { open: boolean; current?: numb
       if (serial === generation.current) {
         setRemoving(undefined)
         setRevision((value) => value + 1)
+        onChanged?.()
       }
     } catch (cause) {
       if (serial === generation.current) setError(errorText(cause))
@@ -52,7 +68,7 @@ export function SavedAccounts({ open, current }: { open: boolean; current?: numb
   }
   if (!open) return null
   return (
-    <section aria-label="保存的网易云账号" className="mt-4 border-t border-border pt-3">
+    <section aria-label={`保存的${sourceName}账号`} className="mt-4 border-t border-border pt-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">保存的账号</p>
         <ActionButton
@@ -82,15 +98,25 @@ export function SavedAccounts({ open, current }: { open: boolean; current?: numb
               <ActionButton
                 variant="ghost"
                 className="min-w-0 flex-1 justify-start"
-                disabled={busy || record.reference.id === String(current)}
+                disabled={
+                  busy ||
+                  !enabled ||
+                  (record.reference.source === current?.source &&
+                    record.reference.id === current?.id)
+                }
+                aria-pressed={
+                  record.reference.source === current?.source && record.reference.id === current?.id
+                }
                 onClick={() => void change(record)}
               >
-                {record.reference.id === String(current) ? (
+                {record.reference.source === current?.source &&
+                record.reference.id === current?.id ? (
                   <Check aria-hidden="true" />
                 ) : (
                   <UserRound aria-hidden="true" />
                 )}
                 <span className="truncate">{record.displayName}</span>
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">{sourceName}</span>
               </ActionButton>
               <ActionButton
                 variant="ghost"

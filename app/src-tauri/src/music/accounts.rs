@@ -230,6 +230,18 @@ impl AccountManager {
             .cloned()
             .collect())
     }
+    pub fn current_record(&self, source: &SourceId) -> MusicResult<Option<AccountRecord>> {
+        let state = self.state.lock().map_err(|_| ErrorCode::Internal)?;
+        Ok(state
+            .saved
+            .records
+            .iter()
+            .find(|record| {
+                &record.reference.source == source
+                    && state.saved.selected.contains(&record.reference)
+            })
+            .cloned())
+    }
     pub fn select(&self, reference: &AccountRef) -> MusicResult<()> {
         let mut state = self.state.lock().map_err(|_| ErrorCode::Internal)?;
         if !state
@@ -425,19 +437,6 @@ impl AccountManager {
             return Err(ErrorCode::StaleContext.into());
         }
         let mut saved = state.saved.clone();
-        if let Some(id) = &expected.account {
-            let reference = AccountRef {
-                source: source.clone(),
-                id: id.clone(),
-            };
-            saved.records.retain(|a| a.reference != reference);
-            if !saved.pending_deletions.contains(&reference) {
-                if saved.pending_deletions.len() >= 100 {
-                    return Err(ErrorCode::RateLimited.into());
-                }
-                saved.pending_deletions.push(reference);
-            }
-        }
         saved.selected.retain(|r| &r.source != source);
         if source.as_str() == "netease" {
             saved.legacy_migrated = true;
@@ -445,8 +444,7 @@ impl AccountManager {
         self.persist(&saved)?;
         state.saved = saved;
         self.advance(&mut state, source);
-        drop(state);
-        self.retry_cleanup()
+        Ok(())
     }
     fn retry_cleanup(&self) -> MusicResult<()> {
         let mut state = self.state.lock().map_err(|_| ErrorCode::Internal)?;

@@ -352,8 +352,8 @@ fn failed_relogin_metadata_commit_preserves_existing_credential() {
     );
 }
 #[tokio::test]
-async fn logout_clears_local_state_even_when_remote_logout_is_unsupported() {
-    let (manager, _, _) = setup();
+async fn logout_preserves_credentials_and_can_reselect_after_restart() {
+    let (manager, records, secrets) = setup();
     let manager = Arc::new(manager);
     let adapters = Arc::new(super::super::manager::AdapterManager::default());
     manager.bind(&adapters);
@@ -393,12 +393,56 @@ async fn logout_clears_local_state_even_when_remote_logout_is_unsupported() {
     };
     assert!(report.local_cleared);
     assert!(report.local_error.is_none());
-    assert_eq!(report.remote_error.unwrap().code, ErrorCode::Unsupported);
-    assert!(manager.records(&source("test")).unwrap().is_empty());
+    assert!(report.remote_error.is_none());
+    assert_eq!(
+        manager.records(&source("test")).unwrap(),
+        vec![record("test", "a")]
+    );
+    assert!(manager.current_record(&source("test")).unwrap().is_none());
     assert!(manager
         .provider_credential(&source("test"))
         .unwrap()
         .is_none());
+    let restored = AccountManager::new(records, secrets).unwrap();
+    assert!(restored.session(&source("test")).account.is_none());
+    restored.select(&record("test", "a").reference).unwrap();
+    assert_eq!(
+        restored
+            .provider_credential(&source("test"))
+            .unwrap()
+            .unwrap()
+            .expose(),
+        b"credential"
+    );
+}
+
+#[test]
+fn logout_is_scoped_atomic_and_rejects_stale_sessions() {
+    let (manager, records, _) = setup();
+    for provider in ["test", "other"] {
+        manager
+            .accept(
+                &manager.session(&source(provider)),
+                record(provider, "a"),
+                secret(b"credential"),
+                false,
+            )
+            .unwrap();
+    }
+    let before = manager.session(&source("test"));
+    records.fail.store(true, Ordering::SeqCst);
+    assert!(manager.clear_expected(&before).is_err());
+    assert_eq!(manager.session(&source("test")), before);
+    records.fail.store(false, Ordering::SeqCst);
+    manager.clear_expected(&before).unwrap();
+    assert!(manager.session(&source("test")).account.is_none());
+    assert!(manager.session(&source("other")).account.is_some());
+    manager.select(&record("test", "a").reference).unwrap();
+    assert_eq!(
+        manager.clear_expected(&before).unwrap_err().code,
+        ErrorCode::StaleContext
+    );
+    assert!(manager.current_record(&source("test")).unwrap().is_some());
 }
 
 #[test]

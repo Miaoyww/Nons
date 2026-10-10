@@ -333,14 +333,9 @@ impl AdapterManager {
             }
         }
         if matches!(request, AccountRequest::Logout) {
-            let remote = self
-                .run(&entry, &context, entry.adapter.prepare_logout(&context))
-                .await;
-            // A remote preparation timeout must not prevent local logout, but a
-            // changed account or revoked instance must still reject the old operation.
-            let mut local_context = context.clone();
-            local_context.deadline = Instant::now() + Duration::from_secs(12);
-            entry.check(&local_context)?;
+            // Deselect locally. A platform logout could revoke the saved credential,
+            // preventing the user from selecting this account again.
+            entry.check(&context)?;
             let worker = accounts.clone();
             let expected = context.session.clone();
             let local_error = worker
@@ -356,16 +351,10 @@ impl AdapterManager {
                     remote_error: None,
                 }));
             }
-            let mut after = Self::context(&entry, Duration::from_secs(12));
-            after.deadline = context.deadline;
-            let remote_error = match remote {
-                Ok(future) => self.run(&entry, &after, future).await.err(),
-                Err(error) => Some(error),
-            };
             return Ok(AccountPresentation::Logout(LogoutReport {
                 local_cleared,
                 local_error,
-                remote_error,
+                remote_error: None,
             }));
         }
         let outcome = self

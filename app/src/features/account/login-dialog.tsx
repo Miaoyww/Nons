@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { Popover } from '@base-ui/react/popover'
 import { LogOut, UserRound, UserPlus } from 'lucide-react'
 import {
@@ -7,45 +8,117 @@ import {
   DialogClose,
   DialogDescription,
   DialogPopup,
-  DialogTitle,
-  DialogTrigger
+  DialogTitle
 } from '@/components/animate-ui/components/base/dialog'
 import { errorText, nativeCall } from '@/lib/player'
-import { useAccount, type AccountProfile } from '@/features/account/account'
+import { musicClient } from '@/features/music/client'
+import type { AccountRecord, SourceDescriptor } from '@/features/music/types'
 import { ActionButton } from '@/components/music/action-button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { SavedAccounts } from './saved-accounts'
 
+interface AdapterStatus {
+  descriptor: SourceDescriptor
+  enabled: boolean
+}
 interface Qr {
   key: string
   image: string
 }
-interface Status {
-  code: number
-  message: string
-}
 
 export function LoginDialog() {
   const [accountOpen, setAccountOpen] = useState(false)
-  const [accountError, setAccountError] = useState('')
-  const [logoutNotice, setLogoutNotice] = useState('')
   const [open, setOpen] = useState(false)
-  const { profile, setProfile, error: profileError } = useAccount()
-  const loggedIn = !!profile
+  const [adapters, setAdapters] = useState<AdapterStatus[]>([])
+  const [source, setSource] = useState('netease')
+  const [account, setAccount] = useState<AccountRecord | null>(null)
+  const [accountError, setAccountError] = useState('')
+  const [revision, setRevision] = useState(0)
   const [avatarFailed, setAvatarFailed] = useState(false)
   const [qr, setQr] = useState<Qr>()
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const generation = useRef(0)
+  const adapter = adapters.find((item) => item.descriptor.source === source)
+  const sourceName = adapter?.descriptor.displayName ?? source
+  const enabled = !!adapter?.enabled
+
+  useEffect(() => {
+    if (!isTauri()) return
+    let disposed = false
+    const stops: (() => void)[] = []
+    const refresh = () => setRevision((value) => value + 1)
+    for (const event of ['music-account-changed', 'adapters-changed']) {
+      void listen(event, refresh)
+        .then((stop) => {
+          if (disposed) stop()
+          else stops.push(stop)
+        })
+        .catch((cause) => {
+          if (!disposed) setAccountError(errorText(cause))
+        })
+    }
+    return () => {
+      disposed = true
+      stops.forEach((stop) => stop())
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isTauri()) return
+    let disposed = false
+    void nativeCall<AdapterStatus[]>('adapter_list')
+      .then((items) => {
+        if (disposed) return
+        const available = items.filter((item) => item.descriptor.capabilities.includes('account'))
+        setAdapters(available)
+        if (!available.some((item) => item.descriptor.source === source))
+          setSource(available[0]?.descriptor.source ?? '')
+      })
+      .catch((cause) => {
+        if (!disposed) setAccountError(errorText(cause))
+      })
+    return () => {
+      disposed = true
+    }
+  }, [source, revision, accountOpen])
+
+  useEffect(() => {
+    let disposed = false
+    setAccount(null)
+    setAvatarFailed(false)
+    setAccountError('')
+    if (isTauri() && source)
+      void musicClient
+        .currentAccount(source)
+        .then((value) => {
+          if (!disposed) setAccount(value)
+        })
+        .catch((cause) => {
+          if (!disposed) setAccountError(errorText(cause))
+        })
+    return () => {
+      disposed = true
+    }
+  }, [source, revision])
+
   async function generate() {
     const serial = ++generation.current
     setBusy(true)
     setQr(undefined)
     setMessage('正在生成二维码…')
     try {
-      const value = await nativeCall<Qr>('qr_login')
+      const result = await musicClient.account(source, { operation: 'beginLogin' })
+      if (result.type !== 'challenge') throw new Error('此适配器未返回可展示的登录二维码。')
       if (serial === generation.current) {
-        setQr(value)
-        setMessage('请使用网易云音乐扫码登录。')
+        setQr(result.data)
+        setMessage(`请使用${sourceName}扫码登录。`)
       }
     } catch (cause) {
       if (serial === generation.current) setMessage(errorText(cause))
@@ -60,27 +133,17 @@ export function LoginDialog() {
     let timer: ReturnType<typeof setTimeout>
     const poll = async () => {
       try {
-        const status = await nativeCall<Status>('poll_login', { key: qr.key })
+        const result = await musicClient.account(source, { operation: 'pollLogin', key: qr.key })
         if (disposed) return
-        setMessage(status.message)
-        if (status.code === 803) {
-          try {
-            const account = await nativeCall<AccountProfile | null>('account_profile')
-            if (!disposed) {
-              setProfile(account)
-              setAvatarFailed(false)
-              setQr(undefined)
-              setOpen(false)
-            }
-          } catch (cause) {
-            if (!disposed) {
-              setMessage(errorText(cause))
-              setQr(undefined)
-            }
-          }
+        if (result.type !== 'progress') throw new Error('登录状态响应无效。')
+        setMessage(result.data.message)
+        if (result.data.code === 803) {
+          setRevision((value) => value + 1)
+          setQr(undefined)
+          setOpen(false)
           return
         }
-        if (status.code === 800) {
+        if (result.data.code === 800) {
           setQr(undefined)
           return
         }
@@ -94,29 +157,17 @@ export function LoginDialog() {
       disposed = true
       clearTimeout(timer)
     }
-  }, [open, qr])
+  }, [open, qr, source])
 
   async function logout() {
     setBusy(true)
     setAccountError('')
-    setLogoutNotice('')
     try {
-      const result = await nativeCall<{
-        localCleared: boolean
-        localError: unknown
-        remoteError: unknown
-      }>('logout')
-      if (!result.localCleared) throw new Error('本地退出失败，请重试。')
-      setAccountOpen(false)
-      setProfile(null)
-      if (result.localError || result.remoteError)
-        setLogoutNotice('已退出；凭据清理或远端退出失败，可重试。')
-      setMessage(
-        result.localError || result.remoteError
-          ? '本地已退出；部分清理或远端退出失败，可重试。'
-          : '已退出登录。'
-      )
-      setOpen(false)
+      const result = await musicClient.account(source, { operation: 'logout' })
+      if (result.type !== 'logout' || !result.data.localCleared)
+        throw new Error('退出当前账号失败，请重试。')
+      setAccount(null)
+      setRevision((value) => value + 1)
     } catch (cause) {
       setAccountError(errorText(cause))
     } finally {
@@ -124,106 +175,135 @@ export function LoginDialog() {
     }
   }
 
-  const accountIdentity = (
-    <>
-      {profile?.avatarUrl && !avatarFailed ? (
-        <img
-          src={profile.avatarUrl}
-          alt=""
-          className="size-6 rounded-full object-cover"
-          onError={() => setAvatarFailed(true)}
-        />
-      ) : (
-        <UserRound aria-hidden="true" />
-      )}
-      <span className="max-w-24 truncate">{profile?.nickname ?? '网易云已登录'}</span>
-    </>
-  )
-  const accountPopover = loggedIn ? (
-    <Popover.Root open={accountOpen} onOpenChange={setAccountOpen}>
-      <Popover.Trigger
-        openOnHover
-        delay={180}
-        closeDelay={250}
-        render={
-          <ActionButton variant="ghost" size="sm" className="gap-2" aria-label="网易云账号" />
-        }
-      >
-        {accountIdentity}
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-50">
-          <Popover.Popup className="w-72 rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-lg outline-none">
-            <p className="mb-4 text-xs text-muted-foreground">账号来源 · 网易云</p>
-            <div className="flex items-center gap-3">
-              {profile?.avatarUrl && !avatarFailed ? (
-                <img
-                  src={profile.avatarUrl}
-                  alt=""
-                  className="size-12 rounded-full object-cover"
-                  onError={() => setAvatarFailed(true)}
-                />
-              ) : (
-                <UserRound className="size-12 rounded-full bg-muted p-3" aria-hidden="true" />
-              )}
-              <div className="min-w-0">
-                <Popover.Title className="truncate text-sm font-semibold">
-                  {profile?.nickname ?? '网易云已登录'}
-                </Popover.Title>
-                <Popover.Description className="mt-1 text-xs text-muted-foreground">
-                  当前账号已登录
-                </Popover.Description>
-              </div>
-            </div>
-            {accountError && (
-              <p role="alert" className="mt-3 text-sm text-destructive">
-                {accountError}
-              </p>
-            )}
-            <SavedAccounts open={accountOpen} current={profile?.userId} />
-            <div className="mt-4 border-t border-border pt-3">
-              <ActionButton
-                variant="ghost"
-                className="w-full justify-start"
-                disabled={busy}
-                onClick={() => {
-                  setAccountOpen(false)
-                  setOpen(true)
-                  if (isTauri()) void generate()
-                }}
-              >
-                <UserPlus aria-hidden="true" />
-                添加账号
-              </ActionButton>
-              <ActionButton
-                variant="ghost"
-                className="w-full justify-start"
-                disabled={busy}
-                onClick={() => void logout()}
-              >
-                <LogOut aria-hidden="true" />
-                {busy ? '正在登出…' : '登出'}
-              </ActionButton>
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
-  ) : null
+  const savedAccounts = (visible: boolean) =>
+    source ? (
+      <SavedAccounts
+        open={visible}
+        source={source}
+        sourceName={sourceName}
+        current={account?.reference}
+        enabled={enabled}
+        onChanged={() => setRevision((value) => value + 1)}
+      />
+    ) : null
 
   return (
     <div className="flex items-center gap-1">
-      {accountPopover}
-      {logoutNotice && (
-        <p role="alert" className="max-w-48 text-xs text-destructive">
-          {logoutNotice}
-        </p>
-      )}
+      <Popover.Root open={accountOpen} onOpenChange={setAccountOpen}>
+        <Popover.Trigger
+          openOnHover
+          delay={180}
+          closeDelay={250}
+          render={
+            <ActionButton variant="ghost" size="sm" className="gap-2" aria-label="音乐账号" />
+          }
+        >
+          {account?.avatar && !avatarFailed ? (
+            <img
+              src={account.avatar}
+              alt=""
+              className="size-6 rounded-full object-cover"
+              onError={() => setAvatarFailed(true)}
+            />
+          ) : (
+            <UserRound aria-hidden="true" />
+          )}
+          <span className="max-w-24 truncate">{account?.displayName ?? '未登录'}</span>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-50">
+            <Popover.Popup className="w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-lg outline-none">
+              <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
+                账号来源
+                <Select
+                  value={source}
+                  disabled={busy}
+                  items={adapters.map((item) => ({
+                    value: item.descriptor.source,
+                    label: `${item.descriptor.displayName}${item.enabled ? '' : '（已停用）'}`
+                  }))}
+                  onValueChange={(value) => {
+                    if (value) setSource(value)
+                  }}
+                >
+                  <SelectTrigger size="sm" aria-label="账号适配器来源" className="min-w-0 flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {adapters.map((item) => (
+                      <SelectItem key={item.descriptor.source} value={item.descriptor.source}>
+                        {item.descriptor.displayName}
+                        {item.enabled ? '' : '（已停用）'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-3">
+                {account?.avatar && !avatarFailed ? (
+                  <img
+                    src={account.avatar}
+                    alt=""
+                    className="size-12 rounded-full object-cover"
+                    onError={() => setAvatarFailed(true)}
+                  />
+                ) : (
+                  <UserRound className="size-12 rounded-full bg-muted p-3" aria-hidden="true" />
+                )}
+                <div className="min-w-0">
+                  <Popover.Title className="truncate text-sm font-semibold">
+                    {account?.displayName ?? '未登录'}
+                  </Popover.Title>
+                  <Popover.Description className="mt-1 text-xs text-muted-foreground">
+                    {!enabled
+                      ? '适配器已停用，保存的账号仍会保留'
+                      : account
+                        ? '当前账号已登录'
+                        : '选择保存的账号或添加账号'}
+                  </Popover.Description>
+                </div>
+              </div>
+              {accountError && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {accountError}
+                </p>
+              )}
+              {savedAccounts(accountOpen)}
+              <div className="mt-4 border-t border-border pt-3">
+                <ActionButton
+                  variant="ghost"
+                  className="w-full justify-start"
+                  disabled={busy || !enabled}
+                  onClick={() => {
+                    setAccountOpen(false)
+                    setOpen(true)
+                    if (isTauri()) void generate()
+                  }}
+                >
+                  <UserPlus aria-hidden="true" />
+                  添加账号
+                </ActionButton>
+                {account && (
+                  <ActionButton
+                    variant="ghost"
+                    className="w-full justify-start"
+                    disabled={busy || !enabled}
+                    onClick={() => void logout()}
+                  >
+                    <LogOut aria-hidden="true" />
+                    {busy ? '正在退出…' : '退出当前账号'}
+                  </ActionButton>
+                )}
+                <p className="mt-2 text-xs text-muted-foreground">退出保留保存的账号和登录凭据。</p>
+              </div>
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
       <Dialog
         open={open}
         onOpenChange={(value) => {
           setOpen(value)
-          if (value && isTauri()) void generate()
           if (!value) {
             generation.current++
             setQr(undefined)
@@ -231,31 +311,16 @@ export function LoginDialog() {
           }
         }}
       >
-        {!loggedIn && (
-          <DialogTrigger
-            render={
-              <ActionButton
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                aria-label="登录网易云音乐"
-              />
-            }
-          >
-            <UserRound aria-hidden="true" />
-            <span>未登录</span>
-          </DialogTrigger>
-        )}
         <DialogPopup className="max-w-sm">
-          <DialogTitle>网易云音乐</DialogTitle>
-          <DialogDescription>使用网易云音乐扫描二维码，并在手机上确认。</DialogDescription>
+          <DialogTitle>{sourceName}</DialogTitle>
+          <DialogDescription>使用{sourceName}扫描二维码，并确认登录。</DialogDescription>
           <div className="flex min-h-64 items-center justify-center">
             {qr ? (
               <img
                 src={qr.image}
                 width={224}
                 height={224}
-                alt="网易云音乐登录二维码"
+                alt={`${sourceName}登录二维码`}
                 className="rounded-lg bg-white"
               />
             ) : (
@@ -269,13 +334,13 @@ export function LoginDialog() {
             )}
           </div>
           <p role="status" className="text-sm text-muted-foreground">
-            {message || profileError}
+            {message}
           </p>
-          <SavedAccounts open={open} current={profile?.userId} />
+          {savedAccounts(open)}
           <div className="mt-4 flex justify-end gap-2">
             <ActionButton
               variant="secondary"
-              disabled={busy || !isTauri()}
+              disabled={busy || !enabled || !isTauri()}
               onClick={() => void generate()}
             >
               重新生成
