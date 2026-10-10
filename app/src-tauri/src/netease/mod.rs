@@ -146,8 +146,9 @@ impl Netease {
                     .map_err(|_| crate::music::ErrorCode::InvalidData)
             })
             .transpose()?;
-        let mut client = self.client.clone();
-        client.set_response_limit(2 * 1024 * 1024);
+        // Business endpoints can include full playlist metadata before pagination.
+        // Retain the pinned client's bounded 16MiB budget; playback uses music_client.
+        let client = self.client.clone();
         Ok(Self {
             client,
             music_client: self.music_client.clone(),
@@ -517,7 +518,7 @@ async fn timed<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>>>(
 async fn checked<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>>>(
     future: F,
 ) -> AppResult<Value> {
-    music_checked(future)
+    checked_with_limit(future, 16 * 1024 * 1024)
         .await
         .map_err(|error| error.to_string())
 }
@@ -636,6 +637,13 @@ fn track_from_json(song: &Value) -> Option<Track> {
 async fn music_checked<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>>>(
     future: F,
 ) -> crate::music::MusicResult<Value> {
+    checked_with_limit(future, 2 * 1024 * 1024).await
+}
+
+async fn checked_with_limit<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>>>(
+    future: F,
+    response_limit: usize,
+) -> crate::music::MusicResult<Value> {
     use crate::music::ErrorCode;
     let response = tokio::time::timeout(Duration::from_secs(12), future)
         .await
@@ -651,7 +659,7 @@ async fn music_checked<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>
             if serde_json::to_vec(&response.body)
                 .map_err(|_| ErrorCode::InvalidData)?
                 .len()
-                > 2 * 1024 * 1024
+                > response_limit
             {
                 return Err(ErrorCode::InvalidData.into());
             }
@@ -691,8 +699,108 @@ fn music_error(error: ncm_api_rs::error::NcmError) -> crate::music::MusicError {
 
 #[cfg(test)]
 mod tests {
-    use super::{account_profile, qr_key, song_aliases, song_information_from_json, Track};
+    use super::{
+        account_profile, checked, music_checked, qr_key, song_aliases, song_information_from_json,
+        ApiResponse, Track,
+    };
     use serde_json::json;
+
+    #[tokio::test]
+    async fn large_liked_playlist_raw_body_does_not_fail_the_small_preview() {
+        // The platform returns full metadata before the host selects 12 preview IDs.
+        let body = json!({"code":200,"playlist":{"trackIds":[{"id":1}],
+            "tracks":[{"description":"x".repeat(3 * 1024 * 1024)}]}});
+        // Exercise the scoped transport too: changing only post-decode validation
+        // would still fail while the HTTP body is being accumulated.
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let raw = serde_json::to_vec(&body).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0; 8192];
+            let _ = stream.read(&mut request).unwrap();
+            let header = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", raw.len());
+            let _ = stream.write_all(header.as_bytes());
+            let _ = stream.write_all(&raw);
+        });
+        let client = ncm_api_rs::create_client(None);
+        let mut music_client = client.clone();
+        music_client.set_response_limit(2 * 1024 * 1024);
+        let api = super::Netease {
+            client,
+            music_client,
+            cookie: Default::default(),
+            accounts: None,
+            frozen: false,
+            session_generation: Default::default(),
+        };
+        let context = crate::music::adapter::RequestContext {
+            session: crate::music::account::SessionContext {
+                source: crate::music::identity::SourceId::try_from("netease".to_owned()).unwrap(),
+                account: None,
+                generation: 0,
+            },
+            adapter_generation: 1,
+            deadline: std::time::Instant::now() + std::time::Duration::from_secs(12),
+            cancellation: Default::default(),
+        };
+        let scoped = api.scoped(&context).unwrap();
+        let received = checked(scoped.client.request(
+            "/api/v6/playlist/detail",
+            json!({"id":1}),
+            ncm_api_rs::request::RequestOption {
+                crypto: ncm_api_rs::request::CryptoType::Api,
+                domain: Some(format!("http://{address}")),
+                ..Default::default()
+            },
+        ))
+        .await;
+        server.join().unwrap();
+        assert!(
+            received.is_ok(),
+            "scoped playlist transport must accept bounded large bodies"
+        );
+        let result = checked(async {
+            Ok(ApiResponse {
+                status: 200,
+                body,
+                cookie: vec![],
+            })
+        })
+        .await;
+        assert!(
+            result.is_ok(),
+            "valid large playlist must not surface invalidData in preview: {result:?}"
+        );
+        assert!(
+            music_checked(async {
+                Ok(ApiResponse {
+                    status: 200,
+                    body: json!({"code":200,"padding":"x".repeat(3 * 1024 * 1024)}),
+                    cookie: vec![],
+                })
+            })
+            .await
+            .is_err(),
+            "single-track/playback budget stays strict"
+        );
+        assert!(
+            checked(async {
+                Ok(ApiResponse {
+                    status: 200,
+                    body: json!({"code":200,"padding":"x".repeat(16 * 1024 * 1024)}),
+                    cookie: vec![],
+                })
+            })
+            .await
+            .is_err(),
+            "business response budget stays bounded"
+        );
+    }
 
     #[test]
     fn song_navigation_keeps_structured_ids_without_splitting_artist_names() {
