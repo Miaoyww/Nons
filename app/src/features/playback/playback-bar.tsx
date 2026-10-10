@@ -27,6 +27,7 @@ export function PlaybackBar({
   const track = state.index !== null ? state.queue[state.index] : undefined
   const playing = ['playing', 'buffering', 'loading'].includes(state.status)
   const [preview, setPreview] = useState<'previous' | 'next' | null>(null)
+  const [hoverExpanded, setHoverExpanded] = useState(false)
   const looping = !state.shuffle && (state.repeatMode === 'all' || state.repeatMode === 'one')
   const previousIndex = adjacentIndex(state, 'previous')
   const nextIndex = adjacentIndex(state, 'next')
@@ -44,9 +45,13 @@ export function PlaybackBar({
   return (
     <footer className="floating-playback" aria-label="播放控制">
       <PlaybackNotice notice={notice} />
-      <div className="playback-capsule">
+      <div
+        className="playback-capsule"
+        data-hover-expanded={hoverExpanded}
+        onMouseLeave={() => setHoverExpanded(false)}
+      >
         <div className="capsule-glass glass-surface" aria-hidden="true" />
-        <div className="capsule-main">
+        <div className="capsule-main" onMouseEnter={() => setHoverExpanded(true)}>
           <ActionButton
             size="icon-lg"
             className="capsule-play"
