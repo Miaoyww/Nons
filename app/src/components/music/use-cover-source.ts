@@ -25,7 +25,7 @@ export function useCoverImageSource(cover?: string, enabled = true) {
       .catch(() => {
         if (!disposed) {
           const source = coverSource(cover!)
-          if (source) setLoaded({ cover: cover!, source })
+          setLoaded({ cover: cover!, source })
         }
       })
     return () => {
@@ -49,5 +49,5 @@ export function useCoverImageSource(cover?: string, enabled = true) {
       setLoaded({ cover, source: original })
     } else setLoaded({ cover, source: undefined })
   }
-  return { source, onError }
+  return { source, onError, pending: visible && remote && isTauri() && loaded?.cover !== cover }
 }

@@ -148,6 +148,26 @@ function updateState(value: PlayerSnapshot) {
   privateFm?.update()
 }
 
+const onlineCachedCommands = new Set([
+  'music_entity_detail',
+  'artist_albums',
+  'artist_tracks',
+  'discovery_radar',
+  'discovery_playlists',
+  'discovery_categories',
+  'discovery_tracks',
+  'search_music',
+  'search_suggestions',
+  'search_collections',
+  'music_library',
+  'library_collections',
+  'library_tracks',
+  'library_history',
+  'liked_song_ids',
+  'song_information'
+])
+let onlineCacheScope: string | undefined
+
 export async function nativeCall<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (!isTauri()) throw new Error('请在 NonsPlayer 桌面应用中使用此功能。')
   if (command === 'runtime_cover')
@@ -155,7 +175,16 @@ export async function nativeCall<T>(command: string, args?: Record<string, unkno
   if (cachedCommands.has(command)) {
     const key = requestKey(command, args)
     if (args?.refresh) requestCache.delete(key)
-    const value = await requestCache.get<T>(key, async () => {
+    const online =
+      onlineCachedCommands.has(command) &&
+      !(command === 'song_information' && String(args?.key ?? '').startsWith('local:'))
+    const scopePromise = online
+      ? invoke<string>('music_context', { source: 'netease' }).then(
+          (value) => ({ value, error: undefined }),
+          (error) => ({ value: undefined, error })
+        )
+      : undefined
+    const valuePromise = requestCache.get<T>(key, async () => {
       const result = await invoke<T>(command, args)
       // Partial previews and transient absent lyrics must remain retryable.
       if (command === 'music_library' && (result as { likedError?: string })?.likedError) {
@@ -163,6 +192,29 @@ export async function nativeCall<T>(command: string, args?: Record<string, unkno
       }
       return result
     })
+    void valuePromise.catch(() => {})
+    const scope = await scopePromise
+    if (scope?.error) {
+      void valuePromise.catch(() => {})
+      throw scope.error
+    }
+    if (scope?.value !== undefined) {
+      const changed = onlineCacheScope !== undefined && onlineCacheScope !== scope.value
+      onlineCacheScope = scope.value
+      if (changed) {
+        invalidateNativeCache([...onlineCachedCommands])
+        void valuePromise.catch(() => {})
+        return nativeCall<T>(command, { ...args, refresh: true })
+      }
+    }
+    const value = await valuePromise
+    if (
+      scope?.value !== undefined &&
+      scope.value !== (await invoke<string>('music_context', { source: 'netease' }))
+    ) {
+      invalidateNativeCache([...onlineCachedCommands])
+      throw new Error('账号或音乐来源状态已变化，请重试')
+    }
     if (command === 'track_lyrics' && value === null) requestCache.delete(key)
     return value
   }
@@ -235,6 +287,8 @@ export async function nativeCall<T>(command: string, args?: Record<string, unkno
     remove_local_playlist_track: ['local_entities', 'local_entity_detail', 'local_entity_tracks'],
     clear_local_cache: ['track_lyrics'],
     set_local_cache_options: ['track_lyrics'],
+    music_select_account: [...cachedCommands],
+    music_remove_account: [...cachedCommands],
     logout: [...cachedCommands]
   }
   if (affected[command]) invalidateNativeCache(affected[command])
@@ -268,6 +322,8 @@ export async function connectPlayer(): Promise<UnlistenFn> {
       )
     )
     listeners.push(await listen('lyrics-updated', () => invalidateNativeCache(['track_lyrics'])))
+    listeners.push(await listen('music-changed', () => invalidateNativeCache()))
+    listeners.push(await listen('music-account-changed', () => invalidateNativeCache()))
     const serial = updateSerial
     const initial = await nativeCall<PlayerSnapshot>('player_snapshot')
     if (serial === updateSerial) updateState(initial)
@@ -304,6 +360,29 @@ export function formatTime(ms: number) {
 }
 
 export function errorText(error: unknown): string {
+  const messages: Record<string, string> = {
+    unauthenticated: '登录已失效，请重新登录',
+    notFound: '音乐资源不存在',
+    permissionDenied: '当前账号无权执行此操作',
+    regionRestricted: '当前地区不可用',
+    rateLimited: '音乐来源繁忙，请稍后重试',
+    network: '音乐请求失败，请检查网络后重试',
+    unsupported: '音乐来源不支持此能力',
+    sourceUnavailable: '音乐来源已停用或不可用',
+    cancelled: '音乐请求已取消',
+    deadlineExceeded: '音乐请求超时，请重试',
+    staleContext: '账号或音乐来源状态已变化，请重试',
+    invalidData: '音乐来源返回了无效数据',
+    internal: '音乐服务不可用'
+  }
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    messages[error.code]
+  )
+    return messages[error.code]
   return error instanceof Error ? error.message : String(error)
 }
 

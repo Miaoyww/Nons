@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
 export type MusicView =
+  | 'accounts'
   | 'library'
   | 'discover'
   | 'local'
@@ -48,6 +49,7 @@ function restoreHistory(): NavigationHistory {
   try {
     const saved = JSON.parse(localStorage.getItem(historyKey) ?? 'null') as NavigationHistory | null
     const views: MusicView[] = [
+      'accounts',
       'library',
       'discover',
       'local',

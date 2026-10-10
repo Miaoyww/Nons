@@ -312,6 +312,17 @@ impl Store {
     }
 }
 
+impl crate::music::accounts::AccountRecordStore for Store {
+    fn load(&self) -> crate::music::MusicResult<Option<String>> {
+        self.setting("musicAccountsV1")
+            .map_err(|_| crate::music::ErrorCode::Internal.into())
+    }
+    fn save(&self, json: &str) -> crate::music::MusicResult<()> {
+        self.set_setting("musicAccountsV1", json)
+            .map_err(|_| crate::music::ErrorCode::Internal.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

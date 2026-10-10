@@ -1,3 +1,4 @@
+import { TrackListSkeleton, CollectionGridSkeleton, TextSkeleton } from '@/components/music/loading'
 import { DetailHeader } from '@/features/library/detail-header'
 import { DetailDescription } from '@/features/library/detail-description'
 import { MusicPage } from '@/components/music/music-page'
@@ -118,11 +119,7 @@ export default function ArtistPage({
           </div>
         </div>
       </DetailHeader>
-      {busy && (
-        <p role="status" className="mb-4 text-sm text-muted-foreground">
-          正在加载歌手信息…
-        </p>
-      )}
+      {busy && <TextSkeleton />}
       {error && (
         <div role="alert" className="mb-5 flex items-center gap-3 text-sm text-destructive">
           {error}
@@ -164,11 +161,7 @@ export default function ArtistPage({
             </button>
           ))}
         </div>
-        {albums.busy && !latest.length && (
-          <p role="status" className="py-6 text-sm text-muted-foreground">
-            正在加载最新专辑…
-          </p>
-        )}
+        {albums.busy && !latest.length && <CollectionGridSkeleton count={2} />}
         {!albums.busy && !albums.error && !latest.length && (
           <p className="py-6 text-sm text-muted-foreground">还没有发布专辑。</p>
         )}
@@ -233,10 +226,10 @@ export default function ArtistPage({
                 .catch(onError)
             }}
           />
+        ) : songs.busy ? (
+          <TrackListSkeleton />
         ) : (
-          <p role={songs.busy ? 'status' : undefined} className="library-empty">
-            {songs.busy ? '正在加载歌曲…' : '这里还没有歌曲。'}
-          </p>
+          <p className="library-empty">这里还没有歌曲。</p>
         )}
         {tab === 'songs' && (
           <InfiniteLoad
@@ -265,11 +258,12 @@ export default function ArtistPage({
             />
           ))}
         </div>
-        {!albums.items.length && (
-          <p role={albums.busy ? 'status' : undefined} className="library-empty">
-            {albums.busy ? '正在加载专辑…' : '这里还没有专辑。'}
-          </p>
-        )}
+        {!albums.items.length &&
+          (albums.busy ? (
+            <CollectionGridSkeleton />
+          ) : (
+            <p className="library-empty">这里还没有专辑。</p>
+          ))}
         {tab === 'albums' && (
           <InfiniteLoad
             more={albums.more}

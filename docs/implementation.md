@@ -1,5 +1,13 @@
 # 初始框架实现与验证
 
+## 统一音乐适配器：ADR 0006 阶段一（2026-10-10）
+
+- 在 `feat/adapter` 分支新增 `app/src-tauri/src/music/`，定义统一标识/曲目、能力组、错误、会话、分页、缓存作用域、基础适配器 trait、后端账号凭据与播放资源契约；`lib.rs` 导出模块。没有新增依赖、通用 IPC 或运行时管理器，既有网易云、账号、缓存、播放与功能插件仍走原路径。
+- 提供旧曲目、混合队列和公开账号 profile 的只读转换，保留非 JS 安全整数 ID、重复队列项、顺序及本地歌词关联；本地路径/封面绑定独立保存，公共 DTO 不交付文件路径。实际 SQLite 与系统凭据库迁移尚未启用，事务、失败恢复与系统凭据迁移顺序已记录。
+- 更新 [ADR 0006](adr/0006-music-provider-adapters.md) 与 ADR 索引的完成状态；规格、职责划分、修改记录与阶段二/三接线注意事项见 [音乐适配器契约与迁移记录](music-adapters.md)。插件文档注明这些契约尚未开放为 SDK。本机 `CONTEXT.md` 补充领域词汇，沿用仓库忽略规则，不强制加入版本控制；共享定义保存在契约记录。
+- Windows x64、Rust 1.95.0、项目私有 GStreamer 1.28.7：先运行 `pnpm --dir app format`；前端 187 项测试与 TypeScript/Vite 生产构建通过。串行 Rust 库单元测试 115 项通过、2 项既有在线 QQ/系统字体测试忽略，包含新增的 10 项契约测试。`native.ps1 -Task clippy` 的 `--all-targets --all-features --locked -- -D warnings` 和最终 `pnpm --dir app format:check` 通过。
+- 测试覆盖不透明标识、能力与账号限制、会话/来源/实例隔离、取消与期限、分页上限、资源代次与有效期、试听拒绝、凭据与传输 Debug 隐藏、历史数据转换及缓存作用域。未验证尚不存在的管理器授权、外部 ABI 或实际迁移；未运行本轮真实音频/WebView 探测、macOS/Linux 原生构建与基本播放，也未测性能。生产构建沿用现有大于 500kB chunk 提示。
+
 ## 开发运行
 
 Windows x64：需要 Rust 1.95、MSVC 工具链、Node/pnpm、Python，以及 Tauri 的 WebView2 环境。
@@ -64,7 +72,7 @@ Rust 后端位于 `app/src-tauri/src/`，`lib.rs` 声明模块并导出启动入
 
 - `model/mod.rs` 定义歌曲、本地/网易云资源和播放状态；当前没有多来源插件框架。
 - `playback/player.rs` 单线程拥有 GStreamer playbin3、设备监视和 SMTC；有界命令队列、可取消资源解析、仅一首下一曲预加载。流线程回调只消费已准备 URI。
-- `netease/mod.rs` 直接嵌入固定提交的 ncm-api-rs，不运行额外 API 服务。Cookie 留在 Rust 与系统钥匙串，IPC 只返回二维码和登录结果。
+- `adapters/netease` 独立原生源码包拥有固定提交的 ncm-api-rs，默认随应用编译链接，不运行额外 API 服务。宿主 `netease/mod.rs` 仅作 DTO/歌词与探测兼容导入；登录、业务与资源解析由统一服务路由。凭据由宿主 AccountManager 与系统钥匙串保存，普通登录 IPC 不返回凭据。
 - `infrastructure/storage.rs` 使用 SQLite，列表分页；`local/library.rs` 使用 Lofty 读取元数据，批量入库。
 - `lyrics/mod.rs` 管理歌词来源、超时与缓存；AMLL 负责前端解析和显示。
 - `playback/media.rs` 从同一播放状态同步 Windows SMTC；StartTime/MinSeekTime 为 0，EndTime/MaxSeekTime 为曲目时长，Position 限定在有效范围。
@@ -177,3 +185,47 @@ AMLL 当前依赖标注 AGPL-3.0-only，项目现有许可证为 GPL-3.0；发�
 - Windows x64：187 项前端测试通过；Rust 单元测试 105 项通过、2 项依赖在线服务或系统字体的既有测试忽略；TypeScript/Vite 构建、插件打包、全目标全特性 Clippy（拒绝警告）、格式检查通过。测试覆盖损坏 NCM、解码定位、临时文件复用与失效、转换元数据、失败清理、不覆盖输出、越权拒绝及批量失败重试。
 - 使用参考仓库的真实 4 秒 NCM 样本完成元数据读取、解码和 GStreamer fakesink 全曲 EOS，验证释放临时音频且保留源文件。浏览器布局验收复用真实页面与控件，模拟选择 40 个文件，确认工具卡片入口、自然滚动及最后一项和说明能显示在播放栏上方。
 - 本轮未验证 macOS/Linux 原生构建、真实扬声器输出、原生文件选择器手动交互或 Release 吞吐/内存。浏览器模拟文件接口只用于布局验收，真实解码与写入由 Rust 测试及原生样本探测验证。
+
+## 内置音乐适配器基础接线（2026-10-10，ADR 0006 阶段二）
+
+- 宿主启动在独立 AdapterManager 注册内置网易云；单曲读取、当前播放和下一首预加载改走统一契约。播放 Actor 不再持有网易云客户端，本地／NCM 准备回归宿主 local 功能目录。沿用混合队列、歌词服务、插件 DTO、系统 Cookie 存储及原缓存，没有执行数据库或账号持久化迁移。范围、预算及阶段三注意事项见 [音乐适配器记录](music-adapters.md#阶段二修改记录与注意事项2026-10-10)。
+- 复用此前固定 commit 的 ncm-api-rs，保留源码与许可证并补读取时响应上限，基础调用 2MiB、其他旧业务 16MiB；克隆共享连接池。GStreamer HTTP 源继续流式读取，禁用自动重定向并隐藏媒体访问诊断。预加载资源使用受控句柄／租约，在会话、实例或播放代次变化和过期时拒绝交付；请求期限与准备资源存活期限分别检查。
+- Windows x64、Rust 1.95.0、GStreamer 1.28.7：最终完整串行 Rust 回归通过，单元测试 123 项通过、2 项依赖在线服务／系统字体的原有测试忽略；WAV 无缝 1 项、HTTP 无缝 1 项、读取恢复 5 项、定位 2 项、音量／队列 14 项通过，真实输出设备测试沿用原忽略条件。前端 187 项测试、TypeScript/Vite 构建、全目标全特性 Clippy（拒绝警告）通过。
+- 新增管理器测试覆盖非数字 ID、重复来源与错误曲目身份、不会合作取消的查询在停用／账号变化／重载时终止、期限、独立播放预算、资源数量上限、旧代次拒绝、平台过期和敏感 Debug。另验证 ResourceLease 在解析请求期限结束后使用自己的交付期限，避免把预加载误判为解析超时。客户端补丁测试验证声明长度和 chunked 超限拒绝及刚好达到上限的读取。
+- 真实网易云只读探测经统一资源解析成功：返回完整 standard 资源，媒体 HTTP 206、GStreamer fakesink 解码并推进至少 500ms，定位到 30 秒后推进至 30101ms；平台歌词读取仍正常。没有输出 Cookie 或完整媒体地址，没有覆盖用户队列或播放到扬声器。
+- 中间复跑曾分别出现 `http_recovery` 的首次 HTTP `UnexpectedMessage` 与 `http_seek` 的 `Failed to seek`；定位间歇失败在此前记录中已有。恢复测试单独复跑通过，最终完整串行回归两组均通过。本轮没有放宽断供、定位或 PCM 边界断言，不能据最终一次通过宣称已消除其间歇性。
+- 本轮未验证 macOS/Linux 原生构建与基本播放、真实账号的所有权限／音质或 Release 的首声延迟与进程内存。数量、响应与调度上限是实现预算，不是性能收益实测。
+- 用户已完成本轮验收并要求收尾。额外隐藏 WebView 探测通过统一歌曲查询、ESM 展示、权限拒绝及插件页面，配置入口等待超时，未完成该探测的后续配置／卸载流程；临时诊断已清理，未据此修改配置产品行为。此前配置验收记录保持其原有范围。
+
+## 统一音乐适配器：ADR 0006 阶段三（2026-10-10）
+
+- 搜索、详情、账号、曲库、收藏、歌单写入及推荐／FM 经统一适配器执行；旧页面 IPC/DTO 留在兼容桥，新增宿主 musicClient 和功能插件 useMusicSource／music.*，内置灵动岛后端迁移单曲读取。权限增加 music:library 与敏感 music:write，扩大范围需重新授权。
+- AccountManager 保存来源／账号公开索引及系统二进制凭据，提供保存账号选择／删除、登录提交、旧 Cookie 迁移与删除墓碑恢复。后端事件隔离旧前端请求；退出本地清理和远端结果分别报告。系统 I/O 进入有界阻塞任务，凭据访问和刷新复核来源／实例；播放资源仍按阶段二管线解析。
+- 验证环境：Windows x64、Rust 1.95.0、项目私有 GStreamer 1.28.7。按约定先执行 pnpm --dir app format。前端 191 项测试通过，包含账号事件、保存账号选择／删除确认、缓存停用与实例变更、通用 SDK 权限回归；TypeScript/Vite 生产构建通过，保留已有大于 500kB chunk 提示。pnpm --dir app plugins:build 成功重建插件和真实 WASM fixture。
+- Rust 库测试 135 项通过、2 项既有在线 QQ／系统字体测试忽略；包括迁移写入／读取／公开提交失败、恢复不覆盖较新目标、旧登录与跨来源拒绝、墓碑清理重试与连续失败容量、刷新时实例撤销、远端退出失败、本地清理、能力／请求／分页校验、账号／查询／实例游标隔离和写前在途响应失效。真实灵动岛 WASM 在受控 FakeHost 下调用新接口的测试通过。全部目标／功能的严格 Clippy（--all-targets --all-features --locked -- -D warnings）、git diff --check 和最终 pnpm --dir app format:check 通过。
+- 凭据故障测试使用内存存储，不读取或改写开发机实际账号；未进行真实二维码登录、远端收藏／歌单写入与退出，也未进行本轮扬声器／WebView 探测、macOS/Linux 编译及基本播放或 Release 性能测量。原生播放与本地音乐回归沿用已有单元场景，不能代替实机验收。不同登录展示、外部 ABI、第二来源和独立包仍属阶段四、五；历史曲库／队列 schema 尚未切换。
+- 修改清单、预算、兼容迁移与注意事项见 [阶段三记录](music-adapters.md#阶段三修改记录与注意事项2026-10-10)，ADR 状态与索引已同步。没有新增第三方依赖。
+
+## 阶段三回归修复：大歌单预览（2026-10-10）
+
+- 合法的 3MiB 歌单原始响应在旧 checked 业务路径下复现“音乐来源返回了无效数据”；阶段三同时把 scoped 传输和业务检查缩至 2MiB，导致还未提取预览歌曲就失败。恢复平台业务原始响应的既有 16MiB 上限，保留单曲／播放解析和公开业务 DTO 的 2MiB 上限。
+- 回归经过本地 HTTP 服务、实际平台请求客户端与 scoped 克隆，验证读取前与解码后的预算一致；并验证单曲严格预算和超过 16MiB 的业务拒绝。Windows 环境下先执行 format，Rust 库 136 项通过、2 项既有测试忽略，严格全部目标 Clippy 和最终 format:check 通过。开发进程持有资源 DLL 时默认 Clippy 的 Tauri 资源复制遇到 os error 32，检查进程临时使用 TAURI_CONFIG 的 bundle.resources=[] 跳过复制后通过，未修改持久打包配置。仅 Rust 与文档变化，未重复无关前端构建。
+- 临时只读探测没有取得开发版登录会话，不能据此宣称用户实际歌单页面已通过在线验收；探测没有写入／删除真实凭据，已移除临时源码。详细限制见适配器阶段三后续修复记录。
+
+## 外部音乐适配器验证：ADR 0006 阶段四（2026-10-10）
+
+- 独立 `music-fixture` Component 经 ExternalAdapter → AdapterManager 执行，使用非数字／Unicode ID 和真实两页 continuation。仅验证受限外部 ABI，不注册为功能插件、不随包安装，没有真实平台 HTTP／登录、通用外部包安装或多来源播放 UI；完整范围与阶段五注意事项见 [阶段四记录](music-adapters.md#阶段四修改记录与注意事项2026-10-10)。
+- 共享 Wasmtime 执行器提取到 infrastructure，既有功能插件 Context 和外部全拒绝 Host 分别绑定；五个既有只读探测 example 同步引入共享模块。未改音频线程、歌词、本地目录、队列持久格式或真实账号凭据，没有新增宿主依赖和用户可见 CHANGELOG 条目。
+- 验证环境：Windows x64、Rust 1.95.0、项目私有 GStreamer 1.28.7、Wasmtime 46.0.1。按约定先执行 pnpm --dir app format；pnpm --dir app plugins:fixtures 以 --locked 重建运行 fixture 和音乐 fixture。前端 191 项测试及 TypeScript/Vite 生产构建通过，保留既有大于 500kB chunk 提示。
+- Rust 库 142 项通过、2 项既有在线 QQ／系统字体测试忽略。新增 6 项真实外部 WASM 回归，覆盖两页／能力缺失／账号切换／来源和 Host 越权、资源失效与停用恢复、燃料／内存／trap／非法／超大响应、取消和保留播放预算、加载身份／版本／过大文件与编译超载。既有账号、缓存、内部 TestAdapter、灵动岛真实 Component 和本地音乐回归同时通过。首次并行测试因共享编译上限返回 rateLimited，fixture 加载改为测试内串行，另保留显式超载断言；分页 fixture 最初误套 page 层，被真实 DTO 反序列化拒绝，已按展平 DTO 修复。
+- 严格全目标／全特性 Clippy（--all-targets --all-features --locked -- -D warnings）通过，包含五个独立音乐探测入口。未执行真实账号操作、真实第二平台／扬声器／WebView 释放验收、macOS/Linux 构建与基本播放或 Release 性能测量。六个 Store 的线性内存理论上限与请求实例化成本是设计预算，未据测试耗时宣称首声／内存收益。
+- 提取共享执行器后，完整串行 cargo test --locked -- --test-threads=1 通过：库 142 通过／2 忽略；WAV 无缝 1、HTTP 无缝 1、断供恢复 5、定位 2、音量／队列 14 通过，真实 Windows 音频输出 1 项沿用忽略条件。未放宽既有 PCM／定位／恢复断言；这些本地服务和 fakesink 场景不替代真实平台输出验收。最终 format:check 与 git diff --check 通过。
+
+## 统一音乐适配器：ADR 0006 阶段五（2026-10-10）
+
+- 完成默认网易云独立原生源码包与共享后端契约包拆分，平台 SDK/补丁/许可证移入适配器；宿主不再直接依赖平台 SDK，功能插件管理器不再持有平台客户端。设置新增 Blocks 图标的适配器管理入口，实时显示来源与能力，支持持久化启停、重载及刷新。旧来源 ID、契约版本与账号/曲库/队列格式不变。
+- 原生库随宿主编译和链接；第三方平台的运行时安装、完整外部 HTTP/账号 ABI 与网易云 WASM 化未实现，具体边界与修改记录见 [阶段五记录](music-adapters.md#阶段五修改记录与注意事项2026-10-10)。本轮未新增第三方运行框架、账号存储或自建平台协议。
+- 实测环境：Windows x64、Rust 1.95.0、Node 24.15.0、项目私有 GStreamer 1.28.7。每轮先 `pnpm --dir app format`，再执行验证；前端 192 项测试、TypeScript/Vite 生产构建通过，保留原有大于 500kB chunk 提示。宿主 `native.ps1 -Task test` 的 `--lib --locked` 124 项通过，2 项既有在线 QQ/系统字体测试忽略；网易云独立包 `cargo test --manifest-path adapters/netease/Cargo.toml --locked --lib` 22 项通过，包括原有大歌单响应预算回归。
+- 宿主 `native.ps1 -Task clippy` 的 `--all-targets --all-features --locked -- -D warnings` 与独立包 `cargo clippy --manifest-path adapters/netease/Cargo.toml --all-targets --locked -- -D warnings` 通过，包含全部 example/测试目标编译。格式化同时覆盖新 crate，最终 `pnpm --dir app format:check` 通过；检查旧源码路径和平台 SDK 直接调用，保留历史阶段记录中的路径语境。
+- 新增回归覆盖：启停重启恢复、写盘失败不改变运行状态、停用拒绝重载、未知来源拒绝、跨来源凭据读取拒绝、旧实例/停用访问失效、恢复后凭据与账号记录保留；DOM 覆盖异步保存/失败/忙碌/刷新竞态/卸载后的旧响应。原有外部 WASM fixture、统一能力/账号/缓存/播放资源和混合队列回归继续通过，没有访问开发机真实账号。
+- 未执行真实二维码登录、远端写入/退出、真实音频/WebView 回收后播放、Windows 安装器、macOS/Linux 编译或基本播放；未测 Release 首声延迟、内存、安装包体积，也不将有界并发设计或编译耗时描述为性能实测。

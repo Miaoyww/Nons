@@ -1,3 +1,4 @@
+import { Skeleton } from '@/components/ui/skeleton'
 import { CollectionContextMenu } from '@/features/library/collection-actions'
 import { Play } from 'lucide-react'
 import { ActionButton } from '@/components/music/action-button'
@@ -67,14 +68,16 @@ export function AlbumCard({
       >
         {item.name}
       </button>
-      <p ref={host} className="library-cover-subtitle">
+      <div ref={host} className="library-cover-subtitle">
         {item.trackCount} 首 ·{' '}
-        {publishedAt
-          ? formatReleaseDate(publishedAt)
-          : dateBusy
-            ? '正在读取发行日期…'
-            : '发行日期未知'}
-      </p>
+        {publishedAt ? (
+          formatReleaseDate(publishedAt)
+        ) : dateBusy ? (
+          <Skeleton className="inline-block h-3 w-20 align-middle" />
+        ) : (
+          '发行日期未知'
+        )}
+      </div>
     </CollectionContextMenu>
   )
 }

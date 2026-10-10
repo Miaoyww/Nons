@@ -5,7 +5,7 @@ use crate::{
     model::{
         AppResult, OutputDevice, PlaybackStatus, PlayerSnapshot, Progress, ResolvedTrack, Track,
     },
-    netease::Netease,
+    music::{manager::ResourceTicket, service::MusicService},
     storage::Store,
 };
 use gstreamer::{self as gst, prelude::*};
@@ -46,7 +46,7 @@ pub enum Command {
         generation: u64,
         index: usize,
         key: String,
-        result: Box<AppResult<ResolvedTrack>>,
+        result: Box<AppResult<crate::music::service::ResolvedPlayback>>,
         next: bool,
     },
     Devices(mpsc::Sender<AppResult<Vec<OutputDevice>>>),
@@ -70,13 +70,14 @@ struct Prepared {
     generation: u64,
     index: usize,
     resolved: ResolvedTrack,
+    resource: Option<Arc<ResourceTicket>>,
 }
 
 impl Player {
     pub fn start(
         app: tauri::AppHandle,
         store: Arc<Store>,
-        netease: Arc<Netease>,
+        music: Arc<MusicService>,
         hwnd: isize,
     ) -> AppResult<Self> {
         let restored = store
@@ -103,7 +104,7 @@ impl Player {
                 let result = Actor::new(
                     app.clone(),
                     store,
-                    netease,
+                    music,
                     shared.clone(),
                     actor_sender,
                     hwnd,
@@ -176,7 +177,7 @@ impl Player {
 struct Actor {
     app: tauri::AppHandle,
     store: Arc<Store>,
-    netease: Arc<Netease>,
+    music: Arc<MusicService>,
     shared: Arc<RwLock<PlayerSnapshot>>,
     sender: SyncSender<Command>,
     state: PlayerSnapshot,
@@ -203,7 +204,7 @@ impl Actor {
     fn new(
         app: tauri::AppHandle,
         store: Arc<Store>,
-        netease: Arc<Netease>,
+        music: Arc<MusicService>,
         shared: Arc<RwLock<PlayerSnapshot>>,
         sender: SyncSender<Command>,
         hwnd: isize,
@@ -267,10 +268,12 @@ impl Actor {
             // Only consume a prepared URI here. This runs on a streaming thread:
             // no HTTP, database work, events, or channel waits are allowed.
             if let Ok(mut slot) = pending.lock() {
-                if let Some(next) = slot
-                    .take()
-                    .filter(|p| p.generation == current_generation.load(Ordering::Acquire))
-                {
+                if let Some(next) = slot.take().filter(|p| {
+                    p.generation == current_generation.load(Ordering::Acquire)
+                        && p.resource
+                            .as_ref()
+                            .is_none_or(|r| r.check(p.generation).is_ok())
+                }) {
                     let element = values[0]
                         .get::<gst::Element>()
                         .expect("GStreamer signal instance");
@@ -286,7 +289,7 @@ impl Actor {
         Ok(Self {
             app,
             store,
-            netease,
+            music,
             shared,
             sender,
             state,
@@ -606,17 +609,31 @@ impl Actor {
                         return Ok(());
                     }
                     self.next_job = None;
-                    if let Ok(resolved) = *result {
+                    if let Ok((resolved, resource)) = *result {
+                        if resource
+                            .as_ref()
+                            .is_some_and(|r| r.check(generation).is_err())
+                        {
+                            return Ok(());
+                        }
                         *self.prepared.lock().map_err(|_| "预加载状态不可用")? = Some(Prepared {
                             generation,
                             index,
                             resolved,
+                            resource,
                         });
                     }
                 } else {
                     self.current_job = None;
-                    match *result {
-                        Ok(resolved) => {
+                    let result = (*result).and_then(|(resolved, resource)| {
+                        if let Some(resource) = &resource {
+                            resource.check(generation).map_err(|e| e.to_string())?;
+                        }
+                        Ok((resolved, resource))
+                    });
+                    match result {
+                        Ok((resolved, resource)) => {
+                            let _resource = resource;
                             self.state.actual_quality = resolved.quality;
                             crate::audio::start_stream(
                                 &self.playbin,
@@ -681,7 +698,7 @@ impl Actor {
 
     fn resolve(&mut self, index: usize, track: Track, next: bool) {
         let generation = self.generation.load(Ordering::Acquire);
-        let netease = self.netease.clone();
+        let music = self.music.clone();
         let sender = self.sender.clone();
         let quality = self
             .store
@@ -698,7 +715,7 @@ impl Actor {
             != Some("false");
         let task = tauri::async_runtime::spawn(async move {
             let key = track.key.clone();
-            let result = netease.resolve(track, &quality, downgrade).await;
+            let result = music.resolve(track, &quality, downgrade, generation).await;
             // Bounded channel delivery is performed off the audio thread.
             let _ = tauri::async_runtime::spawn_blocking(move || {
                 sender.send(Command::Resolved {
@@ -843,6 +860,17 @@ impl Actor {
     }
 
     fn tick(&mut self) {
+        if let Ok(mut prepared) = self.prepared.lock() {
+            if prepared.as_ref().is_some_and(|p| {
+                p.resource
+                    .as_ref()
+                    .is_some_and(|r| r.check(p.generation).is_err())
+            }) {
+                *prepared = None;
+                self.next_attempt = None;
+                self.next_attempts = 0;
+            }
+        }
         if matches!(
             self.state.status,
             PlaybackStatus::Playing

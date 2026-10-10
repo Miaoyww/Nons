@@ -1,3 +1,4 @@
+import { TextSkeleton } from '@/components/music/loading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -88,9 +89,7 @@ export function FolderManager() {
         </DialogHeader>
         <div className="my-5 max-h-[40dvh] overflow-auto">
           {loading ? (
-            <p role="status" className="py-16 text-center text-sm text-muted-foreground">
-              正在读取音乐文件夹…
-            </p>
+            <TextSkeleton />
           ) : folders.length ? (
             <ul className="flex flex-col gap-3">
               {folders.map((folder) => (

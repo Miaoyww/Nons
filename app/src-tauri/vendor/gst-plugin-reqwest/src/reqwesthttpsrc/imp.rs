@@ -293,7 +293,7 @@ impl ReqwestHttpSrc {
             }
         }
 
-        let mut builder = Client::builder().cookie_store(true).gzip(true);
+        let mut builder = Client::builder().redirect(reqwest::redirect::Policy::none()).cookie_store(true).gzip(true);
 
         if let Some(proxy) = &proxy {
             // Proxy is url-checked on property set but perhaps this might still fail.
@@ -350,7 +350,7 @@ impl ReqwestHttpSrc {
         use headers::{Connection, ContentLength, ContentRange, HeaderMapExt, Range, UserAgent};
         use reqwest::header::{self, HeaderMap, HeaderName, HeaderValue};
 
-        gst::debug!(CAT, imp = self, "Creating new request for {}", uri);
+        gst::debug!(CAT, imp = self, "Creating new media request [redacted]");
 
         let settings = self.settings.lock().unwrap().clone();
 
@@ -471,13 +471,13 @@ impl ReqwestHttpSrc {
             req
         };
 
-        gst::debug!(CAT, imp = self, "Sending new request: {:?}", req);
+        gst::debug!(CAT, imp = self, "Sending media request [redacted]");
 
         let future = async {
             req.send().await.map_err(|err| {
                 gst::error_msg!(
                     gst::ResourceError::OpenRead,
-                    ["Failed to fetch {}: {:?}", uri, err]
+                    ["Failed to fetch media: {:?}", err.without_url()]
                 )
             })
         };
@@ -495,7 +495,7 @@ impl ReqwestHttpSrc {
             }
         };
 
-        gst::debug!(CAT, imp = self, "Received response: {:?}", res);
+        gst::debug!(CAT, imp = self, "Received media response: {}", res.status());
 
         if !res.status().is_success() {
             match res.status() {
@@ -503,7 +503,7 @@ impl ReqwestHttpSrc {
                     gst::error!(CAT, imp = self, "Resource not found");
                     return Err(Some(gst::error_msg!(
                         gst::ResourceError::NotFound,
-                        ["Resource '{}' not found", uri]
+                        ["Media resource not found"]
                     )));
                 }
                 StatusCode::UNAUTHORIZED
@@ -513,14 +513,14 @@ impl ReqwestHttpSrc {
                     gst::error!(CAT, imp = self, "Not authorized: {}", res.status());
                     return Err(Some(gst::error_msg!(
                         gst::ResourceError::NotAuthorized,
-                        ["Not Authorized for resource '{}': {}", uri, res.status()]
+                        ["Not authorized for media resource: {}", res.status()]
                     )));
                 }
                 _ => {
                     gst::error!(CAT, imp = self, "Request failed: {}", res.status());
                     return Err(Some(gst::error_msg!(
                         gst::ResourceError::OpenRead,
-                        ["Request for '{}' failed: {}", uri, res.status()]
+                        ["Media request failed: {}", res.status()]
                     )));
                 }
             }
@@ -1094,7 +1094,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             })
             .cloned()?;
 
-        gst::debug!(CAT, imp = self, "Starting for URI {}", uri);
+        gst::debug!(CAT, imp = self, "Starting media resource [redacted]");
 
         *state = self.do_request(uri, 0, None).map_err(|err| {
             err.unwrap_or_else(|| {
@@ -1248,7 +1248,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
                 let chunk = current_response.chunk().await.map_err(move |err| {
                     gst::error_msg!(
                         gst::ResourceError::Read,
-                        ["Failed to read chunk at offset {}: {:?}", offset, err]
+                        ["Failed to read chunk at offset {}: {:?}", offset, err.without_url()]
                     )
                 })?;
                 match chunk {

@@ -1,3 +1,4 @@
+import { TextSkeleton } from '@/components/music/loading'
 import { PluginSongMenuItems } from '@/plugins/song-menu'
 import { LocalPlaylistPicker } from '@/features/local/local-playlist-picker'
 import { PlaylistPicker } from '@/features/library/playlist-picker'
@@ -283,11 +284,7 @@ export function SongActionsProvider({
                   {field(8)}
                 </>
               )}
-              {busy && (
-                <p role="status" className="text-sm text-muted-foreground">
-                  正在读取更多信息…
-                </p>
-              )}
+              {busy && <TextSkeleton />}
               {error && (
                 <div role="alert" className="flex items-center gap-2 text-sm text-destructive">
                   <span>{error}</span>

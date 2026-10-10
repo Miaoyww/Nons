@@ -1,3 +1,4 @@
+import { TextSkeleton } from '@/components/music/loading'
 import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Search } from 'lucide-react'
@@ -163,9 +164,7 @@ export function PlaylistPicker({
           aria-busy={loading || saving}
         >
           {loading ? (
-            <p role="status" className="p-6 text-sm text-muted-foreground">
-              正在加载自己的歌单…
-            </p>
+            <TextSkeleton />
           ) : filtered.length ? (
             <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
               {virtual.getVirtualItems().map((row) => {

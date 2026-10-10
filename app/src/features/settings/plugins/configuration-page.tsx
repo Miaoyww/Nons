@@ -1,3 +1,4 @@
+import { TextSkeleton } from '@/components/music/loading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, FolderOpen, RotateCw, Trash2 } from 'lucide-react'
 import { listen } from '@tauri-apps/api/event'
@@ -138,11 +139,7 @@ export function PluginConfigurationPage({
           </Button>
         </div>
       )}
-      {!settings && !error && (
-        <p role="status" className="text-sm text-muted-foreground">
-          正在读取配置…
-        </p>
-      )}
+      {!settings && !error && <TextSkeleton />}
       {snapshot?.pendingReload && (
         <div
           role="status"

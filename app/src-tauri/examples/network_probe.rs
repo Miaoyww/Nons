@@ -1,7 +1,4 @@
 //! Opt-in read-only live probe. Never prints cookies or expiring media URLs.
-#[path = "../src/local/encoded_audio.rs"]
-#[allow(dead_code)]
-mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
@@ -14,13 +11,22 @@ use gstreamer::{self as gst, prelude::*};
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let api = netease::Netease::new()?;
+    let api = std::sync::Arc::new(netease::probe_client()?);
+    let adapters = std::sync::Arc::new(nons_lib::music::manager::AdapterManager::default());
+    let session_api = api.clone();
+    adapters
+        .register(
+            std::sync::Arc::new(nons_adapter_netease::NeteaseAdapter::new(api.clone())),
+            std::sync::Arc::new(move || nons_adapter_netease::session(&session_api)),
+        )
+        .map_err(|e| e.to_string())?;
+    let music = nons_lib::music::service::MusicService::new(adapters);
     let tracks = api.search("纯音乐", 0).await?;
     println!("Search returned {} tracks", tracks.len());
     let mut selected = None;
     for track in tracks.into_iter().take(3) {
-        if let Ok(resource) = api.resolve(track, "standard", true).await {
-            selected = Some(resource);
+        if let Ok(resource) = music.resolve(track, "standard", true, 0).await {
+            selected = Some(resource.0);
             break;
         }
     }

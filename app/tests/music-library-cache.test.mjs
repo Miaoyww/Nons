@@ -21,6 +21,8 @@ function load(path, modules) {
 }
 function harness() {
   const requests = []
+  let scope = 'account-a:instance-1'
+  let enabled = true
   const cache = load('../src/lib/runtime-cache.ts', { 'lru-cache': { LRUCache } })
   const player = load('../src/lib/player.ts', {
     '@/lib/runtime-cache': cache,
@@ -30,6 +32,8 @@ function harness() {
     '@tauri-apps/api/core': {
       isTauri: () => true,
       invoke(command, args) {
+        if (command === 'music_context')
+          return enabled ? Promise.resolve(scope) : Promise.reject(new Error('source unavailable'))
         return new Promise((resolve, reject) => requests.push({ command, args, resolve, reject }))
       }
     }
@@ -38,7 +42,18 @@ function harness() {
     '@/lib/player': player,
     '@/lib/runtime-cache': cache
   })
-  return { requests, cache, player, library }
+  return {
+    requests,
+    cache,
+    player,
+    library,
+    setScope: (value) => {
+      scope = value
+    },
+    setEnabled: (value) => {
+      enabled = value
+    }
+  }
 }
 const summary = { likedPlaylist: { id: 1, kind: 'playlist' }, likedTracks: [], likedError: null }
 
@@ -366,3 +381,22 @@ for (const command of ['add_playlist_song', 'update_library_playlist', 'delete_l
     }
   })
 }
+
+test('compatibility cache cannot bypass disabled sources and reloads after an instance change', async () => {
+  const app = harness()
+  const initial = app.player.nativeCall('search_music', { keyword: 'q', offset: 0 })
+  app.requests.at(-1).resolve([{ key: 'netease:1' }])
+  await initial
+  app.setEnabled(false)
+  await assert.rejects(
+    app.player.nativeCall('search_music', { keyword: 'q', offset: 0 }),
+    /source unavailable/
+  )
+  app.setEnabled(true)
+  app.setScope('account-a:instance-3')
+  const refreshed = app.player.nativeCall('search_music', { keyword: 'q', offset: 0 })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(app.requests.length, 2)
+  app.requests.at(-1).resolve([{ key: 'netease:2' }])
+  assert.equal((await refreshed)[0].key, 'netease:2')
+})

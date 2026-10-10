@@ -1,3 +1,4 @@
+import { TrackListSkeleton, CollectionGridSkeleton } from '@/components/music/loading'
 import { useCallback, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { Disc3, ListMusic, Mic2, Music2, Search } from 'lucide-react'
@@ -69,7 +70,13 @@ function Results({
   const open = (item: MusicCollection) => navigate('collection', '', item)
   return (
     <>
-      {list.items.length ? (
+      {list.busy && !list.items.length ? (
+        kind === 'song' ? (
+          <TrackListSkeleton sortable={false} />
+        ) : (
+          <CollectionGridSkeleton artist={kind === 'artist'} />
+        )
+      ) : list.items.length ? (
         kind === 'song' ? (
           <TrackList
             tracks={tracks}

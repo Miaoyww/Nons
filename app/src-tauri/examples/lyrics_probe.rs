@@ -1,7 +1,4 @@
 //! Read-only online lyrics probe; optionally pass a local audio file.
-#[path = "../src/local/encoded_audio.rs"]
-#[allow(dead_code)]
-mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
@@ -84,7 +81,7 @@ async fn main() -> Result<(), String> {
             lyrics.content.len()
         );
     }
-    let api = netease::Netease::new()?;
+    let api = netease::probe_client()?;
     let fallback = netease_lyrics::lookup(&api, &track, &separators).await?;
     if let Some(lyrics) = &fallback {
         println!(

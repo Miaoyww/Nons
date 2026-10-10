@@ -3511,7 +3511,6 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 [[package]]
 name = "ncm-api-rs"
 version = "0.1.0"
-source = "git+https://github.com/SPlayer-Dev/ncm-api-rs.git?rev=133b65bfe482e41ebccf018870d3fce07bf58eb3#133b65bfe482e41ebccf018870d3fce07bf58eb3"
 dependencies = [
  "aes",
  "base64 0.22.1",
@@ -3603,7 +3602,6 @@ dependencies = [
  "cipher",
  "clipboard-rs",
  "clipboard-win",
- "cookie",
  "fastrand",
  "flate2",
  "font-kit",
@@ -3614,11 +3612,11 @@ dependencies = [
  "jsonschema",
  "keyring",
  "lofty",
- "ncm-api-rs",
  "ncmdump",
+ "nons-adapter-netease",
+ "nons-music-adapter-sdk",
  "notify",
  "percent-encoding",
- "qrcode",
  "quick-xml 0.39.4",
  "regex 1.13.1",
  "reqwest 0.12.28",
@@ -3643,6 +3641,30 @@ dependencies = [
  "windows 0.62.2",
  "winreg 0.55.0",
  "zip",
+]
+
+[[package]]
+name = "nons-adapter-netease"
+version = "1.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "cookie",
+ "ncm-api-rs",
+ "nons-music-adapter-sdk",
+ "qrcode",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "nons-music-adapter-sdk"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "url",
 ]
 
 [[package]]

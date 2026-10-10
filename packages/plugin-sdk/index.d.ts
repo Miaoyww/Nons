@@ -189,3 +189,6 @@ export interface PluginTransfer {
   total: number | null
   error: string | null
 }
+
+export type * from './music'
+export function useMusicSource(): import('./music').MusicSourceClient

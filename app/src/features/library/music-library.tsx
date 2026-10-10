@@ -1,3 +1,11 @@
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  TrackListSkeleton,
+  CollectionGridSkeleton,
+  SongGridSkeleton,
+  TextSkeleton
+} from '@/components/music/loading'
+import AccountLoginPage from '@/features/account/account-login-page'
 import { CollectionTabs } from '@/features/library/collection-tabs'
 import { MusicPage } from '@/components/music/music-page'
 import { CollectionContextMenu, useCollectionActions } from '@/features/library/collection-actions'
@@ -38,7 +46,6 @@ import {
 import { ActionButton } from '@/components/music/action-button'
 import { useAccount } from '@/features/account/account'
 import { Cover } from '@/components/music/cover'
-import { LoginDialog } from '@/features/account/login-dialog'
 import { useMusicNavigation, type MusicCollection } from '@/features/workspace/music-navigation'
 import { TrackList } from '@/components/music/track-list'
 import { InfiniteLoad } from '@/components/music/infinite-load'
@@ -239,6 +246,8 @@ export default function MusicLibrary({
     </ActionButton>
   )
 
+  if (!showingDetail && !profile && !accountLoading) return <AccountLoginPage />
+
   return (
     <MusicPage aria-label="网易云音乐库">
       {showingDetail ? (
@@ -260,16 +269,16 @@ export default function MusicLibrary({
             {!profile ? (
               <div className="library-empty">
                 <p>登录网易云音乐后查看这个收藏。</p>
-                <LoginDialog />
+                <ActionButton variant="secondary" onClick={() => navigate('accounts', 'netease')}>
+                  登录账号
+                </ActionButton>
               </div>
-            ) : detailBusy && !detail.tracks.length ? (
-              <p role="status" className="library-empty">
-                正在加载歌曲…
-              </p>
-            ) : detail.tracks.length ? (
+            ) : detailBusy || detail.tracks.length ? (
               <TrackList
                 key={`${collection.kind}:${collection.id}`}
                 tracks={detail.tracks}
+                loading={detailBusy && !detail.tracks.length}
+                showLikes
                 sortable
                 searchable
                 hasMore={detail.more}
@@ -301,7 +310,7 @@ export default function MusicLibrary({
         <>
           <header className="library-profile">
             {profile?.avatarUrl ? (
-              <img src={profile.avatarUrl} alt="" className="library-avatar" />
+              <Cover cover={profile.avatarUrl} className="library-avatar rounded-full" />
             ) : (
               <UserRound className="library-avatar bg-muted p-2" aria-hidden="true" />
             )}
@@ -310,12 +319,12 @@ export default function MusicLibrary({
             </h1>
           </header>
           {(accountLoading || accountError) && (
-            <p
+            <div
               role={accountError ? 'alert' : 'status'}
               className="mt-4 text-sm text-muted-foreground"
             >
-              {accountError ?? '正在读取账号…'}
-            </p>
+              {accountError ?? <Skeleton className="h-4 w-32" />}
+            </div>
           )}
           <div className="library-featured">
             <CollectionContextMenu
@@ -332,24 +341,30 @@ export default function MusicLibrary({
                 }}
               >
                 <div className="library-liked-top">
-                  <LyricExcerpt
-                    tracks={summary?.likedTracks}
-                    enabled={!!profile && !summaryBusy && !!(summary || summaryError)}
-                  />
+                  {summaryBusy || accountLoading ? (
+                    <TextSkeleton />
+                  ) : (
+                    <LyricExcerpt
+                      tracks={summary?.likedTracks}
+                      enabled={!!profile && !summaryBusy && !!(summary || summaryError)}
+                    />
+                  )}
                 </div>
                 <div>
                   <h2>我喜欢的音乐</h2>
-                  <p>
-                    {summaryBusy
-                      ? '正在加载…'
-                      : summaryError || summary?.likedError
-                        ? '暂时无法读取'
-                        : liked
-                          ? `${liked.trackCount} 首歌`
-                          : profile
-                            ? '还没有喜欢的音乐'
-                            : '登录后收藏你的音乐'}
-                  </p>
+                  <div className="library-liked-count">
+                    {summaryBusy || accountLoading ? (
+                      <Skeleton className="h-4 w-20" />
+                    ) : summaryError || summary?.likedError ? (
+                      '暂时无法读取'
+                    ) : liked ? (
+                      `${liked.trackCount} 首歌`
+                    ) : profile ? (
+                      '还没有喜欢的音乐'
+                    ) : (
+                      '登录后收藏你的音乐'
+                    )}
+                  </div>
                 </div>
               </button>
               <ActionButton
@@ -369,25 +384,17 @@ export default function MusicLibrary({
               {!profile && !accountLoading ? (
                 <div className="library-empty">
                   <p>登录网易云音乐，找回你喜欢的旋律。</p>
-                  <LoginDialog />
+                  <ActionButton variant="secondary" onClick={() => navigate('accounts', 'netease')}>
+                    登录账号
+                  </ActionButton>
                 </div>
               ) : summaryError || summary?.likedError ? (
                 <div role="alert" className="library-empty text-destructive">
                   <p>{summaryError ?? summary?.likedError}</p>
                   {retry}
                 </div>
-              ) : summaryBusy ? (
-                <div role="status" className="library-song-grid">
-                  {Array.from({ length: 12 }, (_, index) => (
-                    <div key={index} className="library-song-skeleton">
-                      <span />
-                      <div>
-                        <span />
-                        <span />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              ) : summaryBusy || accountLoading ? (
+                <SongGridSkeleton />
               ) : summary?.likedTracks.length ? (
                 <div className="library-song-grid">
                   {summary.likedTracks.map((track) => (
@@ -551,23 +558,18 @@ export default function MusicLibrary({
               </ActionButton>
             </div>
           )}
-          {!profile ? (
+          {accountLoading && !profile ? (
+            <CollectionGridSkeleton />
+          ) : !profile ? (
             <p className="library-empty text-muted-foreground">
               登录后查看收藏的歌单、专辑和艺人。
             </p>
           ) : listBusy && !list.items.length ? (
-            <div
-              role="status"
-              className={tab === 'playlist' ? 'discover-playlist-grid' : 'library-cover-grid'}
-            >
-              {Array.from({ length: 5 }, (_, index) => (
-                <div className="library-cover-skeleton" key={index}>
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              ))}
-            </div>
+            tab === 'history' ? (
+              <TrackListSkeleton sortable={false} />
+            ) : (
+              <CollectionGridSkeleton artist={tab === 'artist'} />
+            )
           ) : tab === 'history' ? (
             history.tracks.length ? (
               <TrackList

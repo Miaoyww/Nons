@@ -59,8 +59,15 @@ impl Guest for Island {
             return Ok("null".into());
         };
         // Network failures are recoverable and must not fault this plugin.
-        if let Ok(song) = host::call("netease.get-song", &json!({"id":id}).to_string()) {
-            let payload: Value = serde_json::from_str(&song).map_err(|_| "无效歌曲信息")?;
+        if let Ok(song) = host::call(
+            "music.read-track",
+            &json!({"reference":{"source":"netease","kind":"track","id":id.to_string()}})
+                .to_string(),
+        ) {
+            let song: Value = serde_json::from_str(&song).map_err(|_| "无效歌曲信息")?;
+            // This plugin interprets Netease links; its existing card keeps the legacy presentation.
+            let artists = song["artists"].as_array().into_iter().flatten().map(|c| json!({"name":c["name"],"id":c.pointer("/reference/id").and_then(Value::as_str).and_then(|id| id.parse::<u64>().ok())})).collect::<Vec<_>>();
+            let payload = json!({"id":id,"key":format!("netease:{id}"),"title":song["title"],"artist":song["artist"],"artists":artists,"album":song["album"],"durationMs":song["durationMs"],"cover":song["cover"]});
             host::call(
                 "events.emit",
                 &json!({"event":"song-detected","payload":payload}).to_string(),

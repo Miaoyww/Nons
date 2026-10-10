@@ -1,7 +1,4 @@
 //! Read-only opt-in library probe; never prints account identifiers or cookies.
-#[path = "../src/local/encoded_audio.rs"]
-#[allow(dead_code)]
-mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
@@ -11,7 +8,7 @@ mod netease;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let api = netease::Netease::new()?;
+    let api = netease::probe_client()?;
     let summary = api.library_summary().await?;
     println!(
         "Account loaded; liked playlist found: {}; preview tracks: {}",

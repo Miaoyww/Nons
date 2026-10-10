@@ -31,7 +31,9 @@ const permissionLabels: Record<string, string> = {
   'http:transfer': '将授权域名的资源传输到授权目录',
   secrets: '管理插件自己的系统凭据',
   'account:credentials': '敏感权限：读取 NonsPlayer 的网易云账户凭证',
-  'music:metadata': '读取网易云歌曲信息',
+  'music:metadata': '读取音乐来源的公开音乐信息',
+  'music:library': '读取当前账号的音乐库、收藏和听歌记录',
+  'music:write': '敏感权限：更改当前账号的收藏、歌单和推荐',
   'player:read': '读取播放状态',
   'player:control': '控制播放',
   storage: '保存独立插件数据',
@@ -482,6 +484,7 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
                             key={p}
                             className={
                               p === 'account:credentials' ||
+                              p === 'music:write' ||
                               (p === 'files:selected' &&
                                 plugin.manifest.fileRoots?.includes('*')) ||
                               (['http:request', 'http:transfer'].includes(p) &&

@@ -11,6 +11,7 @@ function harness() {
   let cursor = 0
   const jsx = (type, props) => ({ type, props })
   const modules = {
+    '@/components/music/loading': { TextSkeleton: 'div' },
     'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
     react: {
       createContext: () => ({ Provider: 'Provider' }),

@@ -57,6 +57,8 @@
           "clipboard:music-links",
           "storage",
           "music:metadata",
+          "music:library",
+          "music:write",
           "player:read",
           "player:control",
           "ui",

@@ -1,57 +1,9 @@
-pub const MAX_LYRIC_BYTES: usize = 2 * 1024 * 1024;
-
+#[allow(unused_imports)]
+// Standalone probes/tests embed this compatibility module and use a subset.
+pub use nons_music_adapter_sdk::legacy::{
+    Lyrics, MusicCredit, Track, TrackSource, MAX_LYRIC_BYTES,
+};
 use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(
-    tag = "kind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum TrackSource {
-    Netease {
-        id: u64,
-    },
-    Local {
-        path: String,
-        netease_id: Option<u64>,
-    },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MusicCredit {
-    pub name: String,
-    pub id: Option<u64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Track {
-    pub key: String,
-    pub title: String,
-    #[serde(default)]
-    pub aliases: Vec<String>,
-    pub artist: String,
-    #[serde(default)]
-    pub artists: Vec<MusicCredit>,
-    #[serde(default)]
-    pub album_id: Option<u64>,
-    pub album: String,
-    pub duration_ms: u64,
-    pub cover: String,
-    pub source: TrackSource,
-}
-
-impl Track {
-    pub fn netease_id(&self) -> Option<u64> {
-        match &self.source {
-            TrackSource::Netease { id } => Some(*id),
-            TrackSource::Local { netease_id, .. } => *netease_id,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum PlaybackStatus {
@@ -326,24 +278,22 @@ pub struct OutputDevice {
     pub name: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Lyrics {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub match_score: Option<u32>,
-    pub source: String,
-    pub format: String,
-    pub content: String,
-    pub translation: Option<String>,
-    pub romanization: Option<String>,
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ResolvedTrack {
     pub decoded_audio: Option<std::sync::Arc<tempfile::NamedTempFile>>,
     pub track: Track,
     pub uri: String,
     pub quality: Option<String>,
+}
+
+impl std::fmt::Debug for ResolvedTrack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResolvedTrack")
+            .field("track", &self.track.key)
+            .field("quality", &self.quality)
+            .field("access", &"[redacted]")
+            .finish()
+    }
 }
 
 pub type AppResult<T> = Result<T, String>;

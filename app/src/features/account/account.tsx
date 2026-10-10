@@ -8,6 +8,7 @@ import {
   type ReactNode
 } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { errorText, nativeCall } from '@/lib/player'
 import {
   getMusicLibrary,
@@ -59,19 +60,42 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, [])
   useEffect(() => {
     if (!isTauri()) return
-    const serial = ++generation.current
-    void nativeCall<AccountProfile | null>('account_profile')
-      .then((value) => {
-        if (generation.current === serial) updateProfile(value)
-      })
-      .catch((cause) => {
-        if (generation.current === serial) setError(errorText(cause))
-      })
-      .finally(() => {
-        if (generation.current === serial) setLoading(false)
-      })
+    let disposed = false
+    let unlisten: (() => void) | undefined
+    const refresh = () => {
+      const serial = ++generation.current
+      void nativeCall<AccountProfile | null>('account_profile')
+        .then((value) => {
+          if (!disposed && generation.current === serial) {
+            updateProfile(value)
+            setError(undefined)
+          }
+        })
+        .catch((cause) => {
+          if (!disposed && generation.current === serial) setError(errorText(cause))
+        })
+        .finally(() => {
+          if (!disposed && generation.current === serial) setLoading(false)
+        })
+    }
+    refresh()
+    void listen<string>('music-account-changed', ({ payload }) => {
+      if (disposed || payload !== 'netease') return
+      resetAccountCache()
+      likesGeneration.current++
+      setLikedIds(new Set())
+      setLikesReady(false)
+      updateProfile(null)
+      setLoading(true)
+      refresh()
+    }).then((cleanup) => {
+      if (disposed) cleanup()
+      else unlisten = cleanup
+    })
     return () => {
+      disposed = true
       generation.current++
+      unlisten?.()
     }
   }, [])
   useEffect(() => {

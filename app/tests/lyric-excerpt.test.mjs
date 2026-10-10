@@ -11,6 +11,7 @@ function harness() {
   let cursor = 0
   const sources = { amll: true, qq: true }
   const modules = {
+    '@/components/music/loading': { TextSkeleton: 'div' },
     '@/features/local/use-local-preferences': {
       useLocalPreferences: () => ({ options: { lyricPriority: 'local', artistSeparators: [] } })
     },
@@ -150,7 +151,7 @@ test('disabled cards do not load; empty libraries use quotes; changing songs can
   await settle()
   h.requests[0].resolve('过期一言')
   await settle()
-  assert.doesNotMatch(text(h.render(tracks)), /过期一言/)
+  assert.doesNotMatch(text(h.render(tracks)) ?? '', /过期一言/)
   h.dispose()
   h.requests[1].resolve(null)
   await settle()

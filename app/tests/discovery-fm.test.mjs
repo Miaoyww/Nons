@@ -45,6 +45,7 @@ function harness() {
     'lucide-react': {},
     '@tauri-apps/api/core': { isTauri: () => true },
     '@/features/account/account': { useAccount: () => ({ profile }) },
+    '@/features/workspace/music-navigation': { useMusicNavigation: () => ({ navigate() {} }) },
     '@/lib/player': {
       usePlayer: () => player,
       getPlayer: () => player,

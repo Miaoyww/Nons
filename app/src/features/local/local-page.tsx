@@ -1,3 +1,4 @@
+import { TrackListSkeleton, CollectionGridSkeleton } from '@/components/music/loading'
 import { CollectionTabs } from '@/features/library/collection-tabs'
 import { TrackArtists } from '@/components/music/music-links'
 import { useCallback, useEffect, useState } from 'react'
@@ -98,7 +99,13 @@ function Results({ sectionTitle, kind, keyword, list, onError, onNotice }: Resul
   if (sectionTitle && !list.items.length && !list.busy && !list.error) return null
   const content = (
     <>
-      {list.items.length > 0 ? (
+      {list.busy && !list.items.length ? (
+        kind === 'song' ? (
+          <TrackListSkeleton online={false} sortable={false} />
+        ) : (
+          <CollectionGridSkeleton artist={kind === 'artist'} />
+        )
+      ) : list.items.length > 0 ? (
         kind === 'song' ? (
           <TrackList
             tracks={tracks}
@@ -431,7 +438,9 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
             collection={collection}
             hasMore={list.more}
           >
-            {list.items.length > 0 ? (
+            {list.busy && !list.items.length ? (
+              <TrackListSkeleton online={false} sortable={false} />
+            ) : list.items.length > 0 ? (
               <TrackList
                 tracks={list.items}
                 key={`${collection.kind}:${collection.localId ?? collection.id}`}
@@ -466,7 +475,11 @@ export default function LocalPage({ refresh, importing, onImport, onError, onNot
             ) : (
               !list.error && (
                 <div className="library-empty">
-                  {list.busy ? '正在读取歌曲…' : '还没有歌曲，在本地歌曲的右键菜单中添加到此歌单。'}
+                  {list.busy ? (
+                    <TrackListSkeleton online={false} sortable={false} />
+                  ) : (
+                    '还没有歌曲，在本地歌曲的右键菜单中添加到此歌单。'
+                  )}
                 </div>
               )
             )}

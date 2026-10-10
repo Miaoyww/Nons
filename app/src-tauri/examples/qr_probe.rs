@@ -1,7 +1,4 @@
 //! Opt-in QR generation probe. Never prints keys, URLs, cookies, or image contents.
-#[path = "../src/local/encoded_audio.rs"]
-#[allow(dead_code)]
-mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
@@ -12,7 +9,7 @@ use base64::Engine;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let qr = netease::Netease::new()?.qr_login().await?;
+    let qr = netease::probe_client()?.qr_login().await?;
     let image = qr
         .image
         .strip_prefix("data:image/svg+xml;base64,")

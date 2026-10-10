@@ -15,7 +15,7 @@ mod secrets;
 pub(crate) mod settings;
 mod transfers;
 
-use crate::{model::AppResult, netease::Netease, player::Player};
+use crate::{model::AppResult, player::Player};
 use capability::Context;
 use database::Database;
 use manifest::Manifest;
@@ -75,7 +75,7 @@ impl PluginManager {
     pub fn new(
         app: tauri::AppHandle,
         data: &Path,
-        netease: Arc<Netease>,
+        music: Arc<crate::music::service::MusicService>,
         player: Arc<Player>,
     ) -> AppResult<Arc<Self>> {
         let root = data.join("plugins");
@@ -92,7 +92,7 @@ impl PluginManager {
             database,
             configurations,
             files,
-            songs: Arc::new(SongService::new(netease)),
+            songs: Arc::new(SongService::new(music)),
             http: Arc::new(http::Http::new()?),
             transfers: Arc::new(transfers::Transfers::default()),
             player,

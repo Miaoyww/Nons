@@ -1,0 +1,203 @@
+//! Backend-only v1 adapter bridge. Reuses the Component transport, never PluginManager.
+use super::{adapter::*, business::*, identity::*, resource::*, ErrorCode, MusicResult};
+use crate::{
+    model::AppResult,
+    wasm_runtime::{self as runtime, HostHandler, Runtime},
+};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{future::Future, io::Read, path::Path, pin::Pin, sync::Arc};
+use wasmtime::{component::Component, Engine};
+
+// Held inside the blocking closure, including when the loading future is dropped.
+static COMPILATIONS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+struct NoCapabilities;
+impl HostHandler for NoCapabilities {
+    fn call<'a>(
+        &'a self,
+        _: &'a str,
+        _: &'a str,
+    ) -> Pin<Box<dyn Future<Output = AppResult<String>> + Send + 'a>> {
+        Box::pin(async { Err("permissionDenied".into()) })
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(
+    tag = "status",
+    content = "data",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+enum Reply<T> {
+    Ok(T),
+    Error(super::MusicError),
+}
+// Transport DTO only: URLs never acquire Serialize on the domain resource type.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WireResource {
+    metadata: ResourceMetadata,
+    url: String,
+    headers: Vec<(String, String)>,
+}
+
+pub struct ExternalAdapter {
+    descriptor: SourceDescriptor,
+    engine: Engine,
+    component: Component,
+    reads: tokio::sync::Semaphore,
+    playback: tokio::sync::Semaphore,
+}
+impl ExternalAdapter {
+    /// Explicit backend loading only. No auto-discovery, frontend, WASI or credential access.
+    pub async fn load(path: &Path, expected: SourceDescriptor) -> MusicResult<Self> {
+        expected.validate()?;
+        // The initial external ABI has no login, lyrics or download methods.
+        if expected
+            .capabilities
+            .iter()
+            .any(|c| !matches!(c, Capability::Search | Capability::Browse))
+        {
+            return Err(ErrorCode::Unsupported.into());
+        }
+        let permit = COMPILATIONS
+            .try_acquire()
+            .map_err(|_| ErrorCode::RateLimited)?;
+        let engine = runtime::engine().map_err(|_| ErrorCode::Internal)?;
+        let compile_engine = engine.clone();
+        let path = path.to_owned();
+        let component = tauri::async_runtime::spawn_blocking(move || {
+            let _permit = permit;
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)
+                .map_err(|_| ErrorCode::InvalidData)?
+                .take(16 * 1024 * 1024 + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|_| ErrorCode::InvalidData)?;
+            if bytes.len() > 16 * 1024 * 1024 {
+                return Err(ErrorCode::InvalidData);
+            }
+            Component::new(&compile_engine, bytes).map_err(|_| ErrorCode::InvalidData)
+        })
+        .await
+        .map_err(|_| ErrorCode::Internal)??;
+        let adapter = Self {
+            descriptor: expected,
+            engine,
+            component,
+            reads: tokio::sync::Semaphore::new(4),
+            playback: tokio::sync::Semaphore::new(2),
+        };
+        let actual: SourceDescriptor = adapter.invoke("music.descriptor", "null", false).await?;
+        actual.validate()?;
+        if serde_json::to_value(actual).map_err(|_| ErrorCode::InvalidData)?
+            != serde_json::to_value(&adapter.descriptor).map_err(|_| ErrorCode::InvalidData)?
+        {
+            return Err(ErrorCode::InvalidData.into());
+        }
+        Ok(adapter)
+    }
+
+    async fn invoke<T: DeserializeOwned>(
+        &self,
+        method: &str,
+        args: &str,
+        playback: bool,
+    ) -> MusicResult<T> {
+        let budget = if playback {
+            &self.playback
+        } else {
+            &self.reads
+        };
+        let _permit = budget.try_acquire().map_err(|_| ErrorCode::RateLimited)?;
+        // Each request owns a fresh Store. Cancellation drops it, so no poisoned instance,
+        // credentials, guest state or suspended execution survive into another session.
+        // Compilation is shared; initialization and execution remain in the manager deadline.
+        let mut runtime = Runtime::from_component(
+            self.engine.clone(),
+            &self.component,
+            Arc::new(NoCapabilities),
+        )
+        .await
+        .map_err(|_| ErrorCode::Internal)?;
+        let response = runtime
+            .call(method, args)
+            .await
+            .map_err(|_| ErrorCode::Internal)?;
+        match serde_json::from_str::<Reply<T>>(&response).map_err(|_| ErrorCode::InvalidData)? {
+            Reply::Ok(value) => Ok(value),
+            Reply::Error(error) => Err(error),
+        }
+    }
+
+    fn arguments(request: &impl Serialize, context: &RequestContext) -> MusicResult<String> {
+        if context.cancellation.is_cancelled() {
+            return Err(ErrorCode::Cancelled.into());
+        }
+        if std::time::Instant::now() >= context.deadline {
+            return Err(ErrorCode::DeadlineExceeded.into());
+        }
+        serde_json::to_string(&serde_json::json!({
+            "request": request,
+            "session": context.session,
+            "adapterGeneration": context.adapter_generation,
+        }))
+        .map_err(|_| ErrorCode::InvalidData.into())
+    }
+}
+impl MusicAdapter for ExternalAdapter {
+    fn descriptor(&self) -> &SourceDescriptor {
+        &self.descriptor
+    }
+    fn read_track<'a>(
+        &'a self,
+        reference: &'a EntityRef,
+        context: &'a RequestContext,
+    ) -> AdapterFuture<'a, MusicTrack> {
+        Box::pin(async move {
+            context.check_reference(reference)?;
+            self.invoke(
+                "music.read-track",
+                &Self::arguments(reference, context)?,
+                false,
+            )
+            .await
+        })
+    }
+    fn business<'a>(
+        &'a self,
+        request: &'a BusinessRequest,
+        context: &'a RequestContext,
+    ) -> AdapterFuture<'a, BusinessResponse> {
+        Box::pin(async move {
+            self.invoke("music.business", &Self::arguments(request, context)?, false)
+                .await
+        })
+    }
+    fn resolve_playback<'a>(
+        &'a self,
+        request: &'a ResolveRequest,
+        context: &'a RequestContext,
+    ) -> AdapterFuture<'a, PlaybackResource> {
+        Box::pin(async move {
+            request.validate(context)?;
+            let wire: WireResource = self
+                .invoke(
+                    "music.resolve-playback",
+                    &Self::arguments(request, context)?,
+                    true,
+                )
+                .await?;
+            Ok(PlaybackResource {
+                metadata: wire.metadata,
+                access: ResourceAccess::Http(HttpAccess {
+                    url: wire.url,
+                    headers: wire.headers,
+                }),
+            })
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests;

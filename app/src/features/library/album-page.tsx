@@ -1,3 +1,4 @@
+import { TrackListSkeleton } from '@/components/music/loading'
 import { CollectionTabs } from '@/features/library/collection-tabs'
 import { DetailHeader } from '@/features/library/detail-header'
 import { DetailDescription } from '@/features/library/detail-description'
@@ -108,9 +109,7 @@ export default function AlbumPage({
         hasMore={list.more}
       >
         {(busy || list.busy) && !list.items.length ? (
-          <p role="status" className="library-empty">
-            正在加载专辑…
-          </p>
+          <TrackListSkeleton />
         ) : list.items.length ? (
           <TrackList
             key={`${collection.kind}:${collection.id}`}
