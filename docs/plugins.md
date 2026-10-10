@@ -63,6 +63,8 @@ app/src-tauri/bundled-plugins/netease-island.zip
 {
   "id": "netease-island",
   "name": "灵动岛",
+  "description": "识别剪贴板中的网易云音乐链接，在灵动岛中查看歌曲并快速播放。",
+  "repository": "https://github.com/Miaoyww/Nons",
   "version": "1.0.0",
   "backend": "backend.wasm",
   "frontend": "ui.mjs",
@@ -76,6 +78,8 @@ app/src-tauri/bundled-plugins/netease-island.zip
   }
 }
 ```
+
+`description` 与 `repository` 均可省略或为 `null`，兼容旧 manifest；描述为 1 至 1024 个字符的非空纯文本，代码仓库为最多 2048 个字符且不含空白或凭证的 HTTP(S) URL。插件列表展示描述和仓库入口，搜索包含描述；缺失字段不显示对应信息。仅更改这两项元数据不影响既有权限授权。
 
 backend／frontend 可独立省略，但至少有一个入口。UI 贡献必须声明 frontend 与 `ui`。未知字段或权限拒绝加载；改动已安装插件的版本或权限需要重新安装并确认。commands、menus、settings、shortcuts 仅保留声明字段，当前不执行。contextMenus 的歌曲入口已执行，见下节。
 

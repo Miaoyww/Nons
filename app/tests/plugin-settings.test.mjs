@@ -26,6 +26,7 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
   let listener, finishInstall
   let cleanups = 0
   const calls = []
+  const openedUrls = []
   let plugins = []
   const modules = {
     '@/components/animate-ui/components/base/tabs': {
@@ -47,9 +48,11 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
         }
       })
     },
+    '@tauri-apps/plugin-opener': { openUrl: async (url) => openedUrls.push(url) },
     '@tauri-apps/plugin-dialog': { open: async () => 'chosen.zip' },
     'lucide-react': Object.fromEntries(
       [
+        'ExternalLink',
         'FolderOpen',
         'Package',
         'RefreshCw',
@@ -144,6 +147,8 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
         manifest: {
           id: 'download',
           name: '下载管理',
+          description: '保存歌曲与管理下载队列。',
+          repository: 'https://github.com/Miaoyww/Nons',
           version: '1.1.0',
           permissions: ['ui', 'account:credentials', 'http:request', 'http:transfer'],
           httpHosts: ['*', 'example.org', 'api.example.org']
@@ -153,6 +158,11 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
       }
     ]
     await React.act(async () => root.render(React.createElement(exports.PluginsPage)))
+    assert.match(document.querySelector('[role=tabpanel]').textContent, /保存歌曲与管理下载队列。/)
+    await React.act(async () =>
+      document.querySelector('[aria-label="打开 下载管理 的代码仓库"]').click()
+    )
+    assert.deepEqual(openedUrls, ['https://github.com/Miaoyww/Nons'])
     assert.match(document.querySelector('[role=tab][aria-selected=true]').textContent, /未加载1/)
     const selectTab = async (value) =>
       React.act(async () =>

@@ -1,6 +1,8 @@
 export interface PluginManifest {
   id: string
   name: string
+  description?: string | null
+  repository?: string | null
   version: string
   backend: string | null
   frontend: string | null

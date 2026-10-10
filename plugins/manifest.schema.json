@@ -206,6 +206,21 @@
         "maxLength": 253
       },
       "description": "http:request/http:transfer 的域名范围；支持精确域名或 *（任意 DNS 域名，启用时显示敏感权限警告），不含协议、端口、IP 或子域通配符，由 Rust 校验。"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "\\S",
+      "description": "插件功能描述，纯文本；可省略。"
+    },
+    "repository": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 2048,
+      "format": "uri",
+      "pattern": "^https?://\\S+$",
+      "description": "代码仓库 HTTP(S) 链接，不含凭证；可省略，Rust 校验 URL。"
     }
   },
   "$defs": {

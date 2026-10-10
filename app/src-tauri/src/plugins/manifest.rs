@@ -29,6 +29,8 @@ pub const PERMISSIONS: &[&str] = &[
 pub struct Manifest {
     pub id: String,
     pub name: String,
+    pub description: Option<String>,
+    pub repository: Option<String>,
     pub version: String,
     pub backend: Option<String>,
     pub frontend: Option<String>,
@@ -224,6 +226,26 @@ impl Manifest {
         if !valid_id(&self.id) || self.name.trim().is_empty() || self.name.len() > 128 {
             return Err("插件标识或名称无效".into());
         }
+        if self.description.as_ref().is_some_and(|description| {
+            description.trim().is_empty() || description.chars().count() > 1024
+        }) {
+            return Err("插件描述必须是 1 至 1024 个字符的非空文本".into());
+        }
+        if let Some(repository) = &self.repository {
+            let url = url::Url::parse(repository).map_err(|_| "插件代码仓库链接无效")?;
+            if !(repository.starts_with("https://") || repository.starts_with("http://"))
+                || repository.chars().count() > 2048
+                || repository
+                    .chars()
+                    .any(|c| c.is_whitespace() || c.is_control())
+                || !matches!(url.scheme(), "https" | "http")
+                || url.host_str().is_none()
+                || !url.username().is_empty()
+                || url.password().is_some()
+            {
+                return Err("插件代码仓库必须是最多 2048 个字符且不含凭证的 HTTP(S) 链接".into());
+            }
+        }
         Version::parse(&self.version).map_err(|_| "插件版本必须是 SemVer")?;
         for (range, version) in [
             (&self.engines.app, env!("CARGO_PKG_VERSION")),
@@ -368,6 +390,56 @@ mod tests {
                 .validate()
                 .is_err());
         }
+    }
+    #[test]
+    fn validates_optional_metadata_and_preserves_authorization() {
+        let value: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../plugins/netease-island/manifest.json"
+        ))
+        .unwrap();
+        let valid: Manifest = serde_json::from_value(value.clone()).unwrap();
+        assert!(valid.validate().is_ok());
+        let roundtrip = serde_json::to_value(&valid).unwrap();
+        assert_eq!(roundtrip["description"], value["description"]);
+        assert_eq!(roundtrip["repository"], value["repository"]);
+        let mut legacy = value.clone();
+        legacy.as_object_mut().unwrap().remove("description");
+        legacy.as_object_mut().unwrap().remove("repository");
+        let legacy: Manifest = serde_json::from_value(legacy).unwrap();
+        assert!(legacy.validate().is_ok());
+        assert_eq!(valid.authorization(), legacy.authorization());
+        for (field, invalid) in [
+            ("description", "".to_string()),
+            ("description", "  ".to_string()),
+            ("description", "文".repeat(1025)),
+            ("repository", "".to_string()),
+            ("repository", "javascript:alert(1)".to_string()),
+            ("repository", "file:///tmp/repo".to_string()),
+            ("repository", "git@github.com:example/repo.git".to_string()),
+            (
+                "repository",
+                "https://user:secret@example.org/repo".to_string(),
+            ),
+            ("repository", "https://example.org/\nrepo".to_string()),
+            (
+                "repository",
+                format!("https://example.org/{}", "a".repeat(2048)),
+            ),
+        ] {
+            let mut candidate = value.clone();
+            candidate[field] = serde_json::json!(invalid);
+            assert!(
+                serde_json::from_value::<Manifest>(candidate)
+                    .unwrap()
+                    .validate()
+                    .is_err(),
+                "{field}: {invalid}"
+            );
+        }
+        let mut candidate = valid;
+        candidate.description = Some("文".repeat(1024));
+        candidate.repository = Some("http://example.org/repo".into());
+        assert!(candidate.validate().is_ok());
     }
     #[test]
     fn rejects_paths_and_reserved_ids() {

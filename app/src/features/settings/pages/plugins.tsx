@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { open } from '@tauri-apps/plugin-dialog'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import {
+  ExternalLink,
   FolderOpen,
   Package,
   RefreshCw,
@@ -122,7 +124,9 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
   const filteredPlugins = plugins.filter(
     (plugin) =>
       plugin.loaded === (tab === 'loaded') &&
-      `${plugin.manifest.name} ${plugin.manifest.id}`.toLocaleLowerCase().includes(search)
+      `${plugin.manifest.name} ${plugin.manifest.id} ${plugin.manifest.description ?? ''}`
+        .toLocaleLowerCase()
+        .includes(search)
   )
   const selectedPlugin = plugins.find((plugin) => plugin.manifest.id === configuring)
   const action = (id: string, action: string, confirmed = false) =>
@@ -356,9 +360,35 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
                                 : '已停用'}
                         </span>
                       </div>
-                      <p className="mt-0.5 break-all text-xs text-muted-foreground">
-                        {plugin.manifest.id}
-                      </p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                        <span className="break-all">{plugin.manifest.id}</span>
+                        {plugin.manifest.repository && (
+                          <Button
+                            variant="link"
+                            size="xs"
+                            className="h-auto gap-1 p-0 text-xs"
+                            disabled={busy}
+                            aria-label={`打开 ${plugin.manifest.name} 的代码仓库`}
+                            title={plugin.manifest.repository}
+                            onClick={() =>
+                              void run(() =>
+                                isTauri()
+                                  ? openUrl(plugin.manifest.repository!)
+                                  : Promise.resolve(
+                                      window.open(
+                                        plugin.manifest.repository!,
+                                        '_blank',
+                                        'noopener,noreferrer'
+                                      )
+                                    )
+                              )
+                            }
+                          >
+                            <ExternalLink aria-hidden="true" />
+                            代码仓库
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="ml-auto flex flex-wrap items-center gap-1">
                       <Button
@@ -433,6 +463,11 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
                       </Button>
                     </div>
                   </div>
+                  {plugin.manifest.description && (
+                    <p className="mt-2 whitespace-pre-line break-words text-xs leading-relaxed text-muted-foreground">
+                      {plugin.manifest.description}
+                    </p>
+                  )}
                   {plugin.error && (
                     <p role="alert" className="mt-2 break-words text-xs text-destructive">
                       {plugin.error}
