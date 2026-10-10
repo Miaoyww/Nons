@@ -1,0 +1,62 @@
+import { nativeCall } from '@/lib/player'
+import { invalidateNativeCache } from '@/lib/runtime-cache'
+import type {
+  AccountPresentation,
+  AccountRecord,
+  AccountRef,
+  AccountRequest,
+  EntityRef,
+  MusicReadRequest,
+  MusicResponse,
+  MusicSourceClient,
+  MusicTrack,
+  MusicWriteRequest,
+  SourceDescriptor
+} from './types'
+
+async function scoped<T>(
+  source: string,
+  command: string,
+  args: Record<string, unknown>,
+  refresh = false
+): Promise<T> {
+  const scope = await nativeCall<string>('music_context', { source })
+  const result = await nativeCall<T>(command, { ...args, source, scope, refresh })
+  if (scope !== (await nativeCall<string>('music_context', { source })))
+    throw new Error('账号或音乐来源状态已变化，请重试')
+  return result
+}
+export const musicClient: MusicSourceClient & {
+  sources(): Promise<SourceDescriptor[]>
+  accounts(source: string): Promise<AccountRecord[]>
+  account(source: string, request: AccountRequest): Promise<AccountPresentation>
+  selectAccount(reference: AccountRef): Promise<void>
+  removeAccount(reference: AccountRef): Promise<void>
+  refresh(
+    source: string,
+    request: MusicReadRequest
+  ): Promise<Exclude<MusicResponse, { type: 'write' }>>
+} = {
+  sources: () => nativeCall('music_sources'),
+  getTrack: (reference: EntityRef) =>
+    scoped<MusicTrack>(reference.source, 'music_read_track', { reference }),
+  query: (source, request) => scoped(source, 'music_query', { request }),
+  refresh: (source, request) => scoped(source, 'music_query', { request }, true),
+  async write(source: string, request: MusicWriteRequest) {
+    const response = await nativeCall<Extract<MusicResponse, { type: 'write' }>>('music_write', {
+      source,
+      request
+    })
+    invalidateNativeCache()
+    return response
+  },
+  accounts: (source) => nativeCall('music_accounts', { source }),
+  async account(source, request) {
+    const result = await nativeCall<AccountPresentation>('music_account', { source, request })
+    if (request.operation === 'logout' || (result.type === 'progress' && result.data.code === 803))
+      invalidateNativeCache()
+    return result
+  },
+  selectAccount: (reference) => nativeCall('music_select_account', { reference }),
+  removeAccount: (reference) => nativeCall('music_remove_account', { reference })
+}

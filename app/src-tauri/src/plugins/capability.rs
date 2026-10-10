@@ -217,6 +217,55 @@ impl Context {
                     .map_err(|e| e.to_string())??
                 }
             }
+            "music.sources" => {
+                self.check(Some("music:metadata"))?;
+                serde_json::to_value(
+                    self.songs
+                        .music
+                        .adapters
+                        .descriptors()
+                        .map_err(|e| e.to_string())?,
+                )
+                .map_err(|e| e.to_string())?
+            }
+            "music.read-track" => {
+                self.check(Some("music:metadata"))?;
+                let reference: crate::music::identity::EntityRef =
+                    serde_json::from_value(args.get("reference").ok_or("缺少曲目引用")?.clone())
+                        .map_err(|_| "曲目引用无效")?;
+                serde_json::to_value(self.songs.read_track(&reference).await?)
+                    .map_err(|e| e.to_string())?
+            }
+            "music.query" | "music.write" => {
+                let source: crate::music::identity::SourceId =
+                    serde_json::from_value(args.get("source").ok_or("缺少音乐来源")?.clone())
+                        .map_err(|_| "音乐来源无效")?;
+                let request: crate::music::business::BusinessRequest =
+                    serde_json::from_value(args.get("request").ok_or("缺少音乐请求")?.clone())
+                        .map_err(|_| "音乐请求无效")?;
+                self.check(Some(if request.is_write() {
+                    "music:write"
+                } else if request.requires_account() {
+                    "music:library"
+                } else {
+                    "music:metadata"
+                }))?;
+                if request.is_write() != (operation == "music.write") {
+                    return Err("音乐操作类型无效".into());
+                }
+                let response = self
+                    .songs
+                    .music
+                    .adapters
+                    .business(&source, &request)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                self.check(None)?;
+                if request.is_write() {
+                    let _ = self.app.emit("music-changed", &source);
+                }
+                serde_json::to_value(response).map_err(|e| e.to_string())?
+            }
             "netease.get-song" | "music.get-song" => {
                 self.check(Some("music:metadata"))?;
                 self.songs

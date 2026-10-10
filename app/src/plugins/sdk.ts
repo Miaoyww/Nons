@@ -35,6 +35,53 @@ export function useSongPlayback() {
   )
 }
 
+export type * from '@/features/music/types'
+export function useMusicSource(): import('@/features/music/types').MusicSourceClient {
+  const scope = useScope()
+  return useMemo(
+    () => ({
+      sources: () => {
+        checkScope(scope, 'music:metadata')
+        return hostCall<import('@/features/music/types').SourceDescriptor[]>(
+          scope,
+          'music.sources',
+          {}
+        )
+      },
+      getTrack: (reference: import('@/features/music/types').EntityRef) => {
+        checkScope(scope, 'music:metadata')
+        return hostCall<import('@/features/music/types').MusicTrack>(scope, 'music.read-track', {
+          reference
+        })
+      },
+      query: (source: string, request: import('@/features/music/types').MusicReadRequest) => {
+        const account = [
+          'librarySummary',
+          'libraryCollections',
+          'history',
+          'favorites',
+          'recommendedTracks'
+        ].includes(request.operation)
+        checkScope(scope, account ? 'music:library' : 'music:metadata')
+        return hostCall<Exclude<import('@/features/music/types').MusicResponse, { type: 'write' }>>(
+          scope,
+          'music.query',
+          { source, request }
+        )
+      },
+      write: (source: string, request: import('@/features/music/types').MusicWriteRequest) => {
+        checkScope(scope, 'music:write')
+        return hostCall<Extract<import('@/features/music/types').MusicResponse, { type: 'write' }>>(
+          scope,
+          'music.write',
+          { source, request }
+        )
+      }
+    }),
+    [scope]
+  )
+}
+/** @deprecated Use useMusicSource for metadata and business queries. */
 export function useNetease() {
   const scope = useScope('music:metadata')
   return useMemo(

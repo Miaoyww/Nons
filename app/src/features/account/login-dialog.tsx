@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { Popover } from '@base-ui/react/popover'
-import { LogOut, UserRound } from 'lucide-react'
+import { LogOut, UserRound, UserPlus } from 'lucide-react'
 import {
   Dialog,
   DialogClose,
@@ -13,6 +13,7 @@ import {
 import { errorText, nativeCall } from '@/lib/player'
 import { useAccount, type AccountProfile } from '@/features/account/account'
 import { ActionButton } from '@/components/music/action-button'
+import { SavedAccounts } from './saved-accounts'
 
 interface Qr {
   key: string
@@ -26,6 +27,7 @@ interface Status {
 export function LoginDialog() {
   const [accountOpen, setAccountOpen] = useState(false)
   const [accountError, setAccountError] = useState('')
+  const [logoutNotice, setLogoutNotice] = useState('')
   const [open, setOpen] = useState(false)
   const { profile, setProfile, error: profileError } = useAccount()
   const loggedIn = !!profile
@@ -97,11 +99,23 @@ export function LoginDialog() {
   async function logout() {
     setBusy(true)
     setAccountError('')
+    setLogoutNotice('')
     try {
-      await nativeCall('logout')
+      const result = await nativeCall<{
+        localCleared: boolean
+        localError: unknown
+        remoteError: unknown
+      }>('logout')
+      if (!result.localCleared) throw new Error('本地退出失败，请重试。')
       setAccountOpen(false)
       setProfile(null)
-      setMessage('已退出登录。')
+      if (result.localError || result.remoteError)
+        setLogoutNotice('已退出；凭据清理或远端退出失败，可重试。')
+      setMessage(
+        result.localError || result.remoteError
+          ? '本地已退出；部分清理或远端退出失败，可重试。'
+          : '已退出登录。'
+      )
       setOpen(false)
     } catch (cause) {
       setAccountError(errorText(cause))
@@ -125,67 +139,86 @@ export function LoginDialog() {
       <span className="max-w-24 truncate">{profile?.nickname ?? '网易云已登录'}</span>
     </>
   )
-  if (loggedIn)
-    return (
-      <Popover.Root open={accountOpen} onOpenChange={setAccountOpen}>
-        <Popover.Trigger
-          openOnHover
-          delay={180}
-          closeDelay={250}
-          render={
-            <ActionButton variant="ghost" size="sm" className="gap-2" aria-label="网易云账号" />
-          }
-        >
-          {accountIdentity}
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-50">
-            <Popover.Popup className="w-72 rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-lg outline-none">
-              <p className="mb-4 text-xs text-muted-foreground">账号来源 · 网易云</p>
-              <div className="flex items-center gap-3">
-                {profile?.avatarUrl && !avatarFailed ? (
-                  <img
-                    src={profile.avatarUrl}
-                    alt=""
-                    className="size-12 rounded-full object-cover"
-                    onError={() => setAvatarFailed(true)}
-                  />
-                ) : (
-                  <UserRound className="size-12 rounded-full bg-muted p-3" aria-hidden="true" />
-                )}
-                <div className="min-w-0">
-                  <Popover.Title className="truncate text-sm font-semibold">
-                    {profile?.nickname ?? '网易云已登录'}
-                  </Popover.Title>
-                  <Popover.Description className="mt-1 text-xs text-muted-foreground">
-                    当前账号已登录
-                  </Popover.Description>
-                </div>
-              </div>
-              {accountError && (
-                <p role="alert" className="mt-3 text-sm text-destructive">
-                  {accountError}
-                </p>
+  const accountPopover = loggedIn ? (
+    <Popover.Root open={accountOpen} onOpenChange={setAccountOpen}>
+      <Popover.Trigger
+        openOnHover
+        delay={180}
+        closeDelay={250}
+        render={
+          <ActionButton variant="ghost" size="sm" className="gap-2" aria-label="网易云账号" />
+        }
+      >
+        {accountIdentity}
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-50">
+          <Popover.Popup className="w-72 rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-lg outline-none">
+            <p className="mb-4 text-xs text-muted-foreground">账号来源 · 网易云</p>
+            <div className="flex items-center gap-3">
+              {profile?.avatarUrl && !avatarFailed ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt=""
+                  className="size-12 rounded-full object-cover"
+                  onError={() => setAvatarFailed(true)}
+                />
+              ) : (
+                <UserRound className="size-12 rounded-full bg-muted p-3" aria-hidden="true" />
               )}
-              <div className="mt-4 border-t border-border pt-3">
-                <ActionButton
-                  variant="ghost"
-                  className="w-full justify-start"
-                  disabled={busy}
-                  onClick={() => void logout()}
-                >
-                  <LogOut aria-hidden="true" />
-                  {busy ? '正在登出…' : '登出'}
-                </ActionButton>
+              <div className="min-w-0">
+                <Popover.Title className="truncate text-sm font-semibold">
+                  {profile?.nickname ?? '网易云已登录'}
+                </Popover.Title>
+                <Popover.Description className="mt-1 text-xs text-muted-foreground">
+                  当前账号已登录
+                </Popover.Description>
               </div>
-            </Popover.Popup>
-          </Popover.Positioner>
-        </Popover.Portal>
-      </Popover.Root>
-    )
+            </div>
+            {accountError && (
+              <p role="alert" className="mt-3 text-sm text-destructive">
+                {accountError}
+              </p>
+            )}
+            <SavedAccounts open={accountOpen} current={profile?.userId} />
+            <div className="mt-4 border-t border-border pt-3">
+              <ActionButton
+                variant="ghost"
+                className="w-full justify-start"
+                disabled={busy}
+                onClick={() => {
+                  setAccountOpen(false)
+                  setOpen(true)
+                  if (isTauri()) void generate()
+                }}
+              >
+                <UserPlus aria-hidden="true" />
+                添加账号
+              </ActionButton>
+              <ActionButton
+                variant="ghost"
+                className="w-full justify-start"
+                disabled={busy}
+                onClick={() => void logout()}
+              >
+                <LogOut aria-hidden="true" />
+                {busy ? '正在登出…' : '登出'}
+              </ActionButton>
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  ) : null
 
   return (
     <div className="flex items-center gap-1">
+      {accountPopover}
+      {logoutNotice && (
+        <p role="alert" className="max-w-48 text-xs text-destructive">
+          {logoutNotice}
+        </p>
+      )}
       <Dialog
         open={open}
         onOpenChange={(value) => {
@@ -198,14 +231,21 @@ export function LoginDialog() {
           }
         }}
       >
-        <DialogTrigger
-          render={
-            <ActionButton variant="ghost" size="sm" className="gap-2" aria-label="登录网易云音乐" />
-          }
-        >
-          <UserRound aria-hidden="true" />
-          <span>未登录</span>
-        </DialogTrigger>
+        {!loggedIn && (
+          <DialogTrigger
+            render={
+              <ActionButton
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                aria-label="登录网易云音乐"
+              />
+            }
+          >
+            <UserRound aria-hidden="true" />
+            <span>未登录</span>
+          </DialogTrigger>
+        )}
         <DialogPopup className="max-w-sm">
           <DialogTitle>网易云音乐</DialogTitle>
           <DialogDescription>使用网易云音乐扫描二维码，并在手机上确认。</DialogDescription>
@@ -231,7 +271,8 @@ export function LoginDialog() {
           <p role="status" className="text-sm text-muted-foreground">
             {message || profileError}
           </p>
-          <div className="flex justify-end gap-2">
+          <SavedAccounts open={open} current={profile?.userId} />
+          <div className="mt-4 flex justify-end gap-2">
             <ActionButton
               variant="secondary"
               disabled={busy || !isTauri()}

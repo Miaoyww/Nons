@@ -16,6 +16,8 @@ pub const PERMISSIONS: &[&str] = &[
     "account:credentials",
     "storage",
     "music:metadata",
+    "music:library",
+    "music:write",
     "player:read",
     "player:control",
     "ui",

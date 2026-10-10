@@ -13,20 +13,23 @@ use std::{
     time::{Duration, Instant},
 };
 
-type CacheStamp = (crate::music::account::SessionContext, u64);
-type CacheEntry = (CacheStamp, u64, Instant, Track);
+type CacheStamp = String;
+type CacheEntry = (CacheStamp, u64, Instant, crate::music::identity::MusicTrack);
 
 pub struct SongService {
     netease: Arc<Netease>,
     generation: AtomicU64,
-    music: Arc<crate::music::service::MusicService>,
-    cache: tokio::sync::Mutex<HashMap<u64, CacheEntry>>,
+    pub(super) music: Arc<crate::music::service::MusicService>,
+    cache: tokio::sync::Mutex<HashMap<crate::music::identity::EntityRef, CacheEntry>>,
 }
 impl SongService {
     pub(super) fn account_credentials(&self) -> AppResult<Value> {
-        Ok(
-            json!({"cookie":self.netease.account_credentials()?,"generation":self.generation.load(Ordering::SeqCst)}),
-        )
+        let (session, _) = self.music.legacy_stamp()?;
+        let cookie = self.netease.account_credentials()?;
+        if session != self.music.legacy_stamp()?.0 {
+            return Err("账号状态已变化".into());
+        }
+        Ok(json!({"cookie":cookie,"generation":session.generation}))
     }
     pub fn new(netease: Arc<Netease>, music: Arc<crate::music::service::MusicService>) -> Self {
         Self {
@@ -43,8 +46,19 @@ impl SongService {
         Ok(song_value(id, &self.track(id).await?))
     }
     pub(super) async fn track(&self, id: u64) -> AppResult<Track> {
+        let reference = crate::music::netease::reference(id).map_err(|e| e.to_string())?;
+        crate::music::netease::legacy(self.read_track(&reference).await?).map_err(|e| e.to_string())
+    }
+    pub async fn read_track(
+        &self,
+        reference: &crate::music::identity::EntityRef,
+    ) -> AppResult<crate::music::identity::MusicTrack> {
         // A bounded serial fetch also coalesces duplicate concurrent requests.
-        let stamp = self.music.legacy_stamp()?;
+        let stamp = self
+            .music
+            .adapters
+            .cache_identity(&reference.source)
+            .map_err(|e| e.to_string())?;
         let generation = self.generation.load(Ordering::SeqCst);
         let mut cache = self.cache.lock().await;
         cache.retain(|_, (entry_stamp, entry_generation, time, _)| {
@@ -54,18 +68,34 @@ impl SongService {
         });
         // Cache entries belong to the account generation in which they were fetched.
         if generation != self.generation.load(Ordering::SeqCst)
-            || stamp != self.music.legacy_stamp()?
+            || stamp
+                != self
+                    .music
+                    .adapters
+                    .cache_identity(&reference.source)
+                    .map_err(|e| e.to_string())?
         {
             return Err("账号状态已变化".into());
         }
-        if let Some((_, _, _, track)) = cache.get(&id) {
+        if let Some((_, _, _, track)) = cache.get(reference) {
             return Ok(track.clone());
         }
-        let track = tokio::time::timeout(Duration::from_secs(3), self.music.legacy_track(id))
-            .await
-            .map_err(|_| "歌曲信息查询超时")??;
+        let track = tokio::time::timeout(Duration::from_secs(3), async {
+            self.music
+                .adapters
+                .read_track(reference)
+                .await
+                .map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|_| "歌曲信息查询超时")??;
         if generation != self.generation.load(Ordering::SeqCst)
-            || stamp != self.music.legacy_stamp()?
+            || stamp
+                != self
+                    .music
+                    .adapters
+                    .cache_identity(&reference.source)
+                    .map_err(|e| e.to_string())?
         {
             cache.clear();
             return Err("账号状态已变化".into());
@@ -74,16 +104,19 @@ impl SongService {
             if let Some(key) = cache
                 .iter()
                 .min_by_key(|(_, (_, _, time, _))| *time)
-                .map(|(key, _)| *key)
+                .map(|(key, _)| key.clone())
             {
                 cache.remove(&key);
             }
         }
-        let value = song_value(id, &track);
+        let value = serde_json::to_value(&track).map_err(|e| e.to_string())?;
         if serde_json::to_vec(&value).map_err(|e| e.to_string())?.len() > MAX_JSON {
             return Err("歌曲信息过大".into());
         }
-        cache.insert(id, (stamp, generation, Instant::now(), track.clone()));
+        cache.insert(
+            reference.clone(),
+            (stamp, generation, Instant::now(), track.clone()),
+        );
         Ok(track)
     }
     pub async fn clear(&self) {

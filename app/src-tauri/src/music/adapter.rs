@@ -209,12 +209,33 @@ pub struct WriteImpact {
     pub entities: Vec<EntityRef>,
 }
 
+pub type LogoutAction = Pin<Box<dyn Future<Output = MusicResult<()>> + Send>>;
 pub type AdapterFuture<'a, T> = Pin<Box<dyn Future<Output = MusicResult<T>> + Send + 'a>>;
 
 /// Backend-only base contract. Optional groups acquire methods as they are migrated.
 /// AdapterManager must validate DTO size/kind/source and context before publishing.
 pub trait MusicAdapter: Send + Sync {
     fn descriptor(&self) -> &SourceDescriptor;
+    fn prepare_logout<'a>(
+        &'a self,
+        _context: &'a RequestContext,
+    ) -> AdapterFuture<'a, LogoutAction> {
+        Box::pin(async { Err(ErrorCode::Unsupported.into()) })
+    }
+    fn business<'a>(
+        &'a self,
+        _request: &'a super::business::BusinessRequest,
+        _context: &'a RequestContext,
+    ) -> AdapterFuture<'a, super::business::BusinessResponse> {
+        Box::pin(async { Err(ErrorCode::Unsupported.into()) })
+    }
+    fn account<'a>(
+        &'a self,
+        _request: &'a super::business::AccountRequest,
+        _context: &'a RequestContext,
+    ) -> AdapterFuture<'a, super::business::AccountOutcome> {
+        Box::pin(async { Err(ErrorCode::Unsupported.into()) })
+    }
     fn read_track<'a>(
         &'a self,
         reference: &'a EntityRef,

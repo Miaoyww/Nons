@@ -1,13 +1,13 @@
 use super::{checked, track_from_json, AccountProfile, Netease};
 use crate::model::{AppResult, Track};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
 const COLLECTION_LIMIT: usize = 30;
 const TRACK_LIMIT: usize = 100;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Collection {
     pub id: u64,
@@ -22,20 +22,20 @@ pub struct Collection {
     pub published_at: Option<u64>,
     pub artists: Vec<crate::model::MusicCredit>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionPage {
     pub items: Vec<Collection>,
     pub more: bool,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EntityDetail {
     pub item: Collection,
     pub description: Option<String>,
     pub album_count: Option<u64>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackPage {
     pub description: Option<String>,
@@ -43,7 +43,7 @@ pub struct TrackPage {
     pub total: usize,
     pub more: bool,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibrarySummary {
     pub profile: AccountProfile,
@@ -273,10 +273,6 @@ impl Netease {
         self.collection_tracks(kind, id, offset, limit).await
     }
 
-    pub async fn library_queue(&self, kind: &str, id: u64) -> AppResult<TrackPage> {
-        self.collection_tracks(kind, id, 0, 1000).await
-    }
-
     async fn collection_tracks(
         &self,
         kind: &str,
@@ -342,10 +338,13 @@ impl Netease {
         let body = match kind {
             "artist" => checked(self.client.artist_detail(&query)).await?,
             "album" => checked(self.client.album(&query)).await?,
+            "playlist" => checked(self.client.playlist_detail(&query)).await?,
             _ => return Err("音乐详情类型无效".into()),
         };
         let value = if kind == "artist" {
             body.pointer("/data/artist")
+        } else if kind == "playlist" {
+            body.get("playlist")
         } else {
             body.get("album")
         }

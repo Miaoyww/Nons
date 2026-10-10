@@ -14,7 +14,7 @@ use tauri::{Manager, State};
 
 pub(crate) struct Backend {
     pub(crate) store: Arc<storage::Store>,
-    pub(crate) netease: Arc<Netease>,
+    pub(crate) music: Arc<crate::music::service::MusicService>,
     pub(crate) lyrics: Arc<lyrics::LyricService>,
     pub(crate) player: Arc<Player>,
     pub(crate) covers: PathBuf,
@@ -23,6 +23,144 @@ pub(crate) struct Backend {
     pub(crate) folders: Arc<local_folders::LocalFolders>,
     pub(crate) cover_client: reqwest::Client,
     pub(crate) cover_requests: tokio::sync::Semaphore,
+}
+
+#[tauri::command]
+fn music_sources(
+    backend: State<'_, Backend>,
+) -> crate::music::MusicResult<Vec<crate::music::adapter::SourceDescriptor>> {
+    backend.music.adapters.descriptors()
+}
+#[tauri::command]
+fn music_context(
+    source: crate::music::identity::SourceId,
+    backend: State<'_, Backend>,
+) -> crate::music::MusicResult<String> {
+    backend.music.adapters.cache_identity(&source)
+}
+#[tauri::command]
+async fn music_query(
+    source: crate::music::identity::SourceId,
+    request: crate::music::business::BusinessRequest,
+    scope: String,
+    backend: State<'_, Backend>,
+) -> crate::music::MusicResult<crate::music::business::BusinessResponse> {
+    if request.is_write() {
+        return Err(crate::music::ErrorCode::PermissionDenied.into());
+    }
+    if backend.music.adapters.cache_identity(&source)? != scope {
+        return Err(crate::music::ErrorCode::StaleContext.into());
+    }
+    let response = backend.music.adapters.business(&source, &request).await?;
+    if backend.music.adapters.cache_identity(&source)? != scope {
+        return Err(crate::music::ErrorCode::StaleContext.into());
+    }
+    Ok(response)
+}
+#[tauri::command]
+async fn music_read_track(
+    reference: crate::music::identity::EntityRef,
+    scope: String,
+    backend: State<'_, Backend>,
+) -> crate::music::MusicResult<crate::music::identity::MusicTrack> {
+    if backend.music.adapters.cache_identity(&reference.source)? != scope {
+        return Err(crate::music::ErrorCode::StaleContext.into());
+    }
+    let track = backend.music.adapters.read_track(&reference).await?;
+    if backend.music.adapters.cache_identity(&reference.source)? != scope {
+        return Err(crate::music::ErrorCode::StaleContext.into());
+    }
+    Ok(track)
+}
+#[tauri::command]
+async fn music_write(
+    source: crate::music::identity::SourceId,
+    request: crate::music::business::BusinessRequest,
+    app: tauri::AppHandle,
+    backend: State<'_, Backend>,
+) -> crate::music::MusicResult<crate::music::business::BusinessResponse> {
+    use tauri::Emitter;
+    if !request.is_write() {
+        return Err(crate::music::ErrorCode::InvalidData.into());
+    }
+    let response = backend.music.adapters.business(&source, &request).await?;
+    let _ = app.emit("music-changed", &source);
+    Ok(response)
+}
+#[tauri::command]
+async fn music_account(
+    source: crate::music::identity::SourceId,
+    request: crate::music::business::AccountRequest,
+    backend: State<'_, Backend>,
+    plugins: State<'_, Arc<plugins::PluginManager>>,
+) -> crate::music::MusicResult<crate::music::business::AccountPresentation> {
+    let accounts = backend
+        .music
+        .accounts
+        .as_ref()
+        .ok_or(crate::music::ErrorCode::Internal)?;
+    let before = accounts.session(&source);
+    let result = backend
+        .music
+        .adapters
+        .account(&source, &request, accounts)
+        .await;
+    if accounts.session(&source) != before {
+        plugins.account_changed().await;
+    }
+    result
+}
+#[tauri::command]
+fn music_accounts(
+    source: crate::music::identity::SourceId,
+    backend: State<'_, Backend>,
+) -> crate::music::MusicResult<Vec<crate::music::account::AccountRecord>> {
+    backend
+        .music
+        .accounts
+        .as_ref()
+        .ok_or(crate::music::ErrorCode::Internal)?
+        .records(&source)
+}
+#[tauri::command]
+async fn music_select_account(
+    reference: crate::music::account::AccountRef,
+    backend: State<'_, Backend>,
+    plugins: State<'_, Arc<plugins::PluginManager>>,
+) -> crate::music::MusicResult<()> {
+    let accounts = backend
+        .music
+        .accounts
+        .as_ref()
+        .ok_or(crate::music::ErrorCode::Internal)?;
+    let selected = reference.clone();
+    accounts
+        .blocking(move |accounts| accounts.select(&selected))
+        .await?;
+    plugins.account_changed().await;
+
+    Ok(())
+}
+#[tauri::command]
+async fn music_remove_account(
+    reference: crate::music::account::AccountRef,
+    backend: State<'_, Backend>,
+    plugins: State<'_, Arc<plugins::PluginManager>>,
+) -> crate::music::MusicResult<()> {
+    let accounts = backend
+        .music
+        .accounts
+        .as_ref()
+        .ok_or(crate::music::ErrorCode::Internal)?;
+    let before = accounts.session(&reference.source);
+    let removed = reference.clone();
+    let result = accounts
+        .blocking(move |accounts| accounts.remove(&removed))
+        .await;
+    if accounts.session(&reference.source) != before {
+        plugins.account_changed().await;
+    }
+    result
 }
 
 #[tauri::command]
@@ -155,7 +293,7 @@ async fn search_music(
     offset: u32,
     backend: State<'_, Backend>,
 ) -> AppResult<Vec<Track>> {
-    let mut tracks = backend.netease.search(&keyword, offset.min(10_000)).await?;
+    let mut tracks = backend.music.search(&keyword, offset.min(10_000)).await?;
     for track in &mut tracks {
         if track.cover.is_empty() {
             track.cover = backend.fallback_cover.clone();
@@ -167,7 +305,7 @@ async fn search_music(
 
 #[tauri::command]
 async fn liked_song_ids(backend: State<'_, Backend>) -> AppResult<Vec<u64>> {
-    backend.netease.liked_song_ids().await
+    backend.music.liked_song_ids().await
 }
 
 #[tauri::command]
@@ -175,7 +313,7 @@ async fn search_suggestions(
     keyword: String,
     backend: State<'_, Backend>,
 ) -> AppResult<Vec<String>> {
-    backend.netease.search_suggestions(&keyword).await
+    backend.music.search_suggestions(&keyword).await
 }
 
 #[tauri::command]
@@ -186,14 +324,14 @@ async fn search_collections(
     backend: State<'_, Backend>,
 ) -> AppResult<netease::CollectionPage> {
     backend
-        .netease
+        .music
         .search_collections(&keyword, &kind, offset)
         .await
 }
 
 #[tauri::command]
 async fn set_song_liked(id: u64, liked: bool, backend: State<'_, Backend>) -> AppResult<()> {
-    backend.netease.set_song_liked(id, liked).await
+    backend.music.set_song_liked(id, liked).await
 }
 
 #[tauri::command]
@@ -203,7 +341,7 @@ async fn song_information(
 ) -> AppResult<netease::SongInformation> {
     let track = backend.store.track(&key)?;
     if let TrackSource::Netease { id } = track.source {
-        backend.netease.song_information(id).await
+        backend.music.song_information(id).await
     } else {
         Ok(netease::SongInformation {
             artists: vec![netease::SongCredit {
@@ -223,7 +361,7 @@ async fn remove_playlist_song(
     backend: State<'_, Backend>,
 ) -> AppResult<()> {
     backend
-        .netease
+        .music
         .remove_playlist_song(playlist_id, song_id)
         .await
 }
@@ -235,7 +373,7 @@ fn remove_queue_track(index: usize, key: String, backend: State<'_, Backend>) ->
 
 #[tauri::command]
 async fn music_library(backend: State<'_, Backend>) -> AppResult<LibrarySummary> {
-    let mut summary = backend.netease.library_summary().await?;
+    let mut summary = backend.music.library_summary().await?;
     save_library_tracks(&mut summary.liked_tracks, &backend)?;
     Ok(summary)
 }
@@ -249,7 +387,7 @@ async fn discovery_playlists(
     backend: State<'_, Backend>,
 ) -> AppResult<CollectionPage> {
     backend
-        .netease
+        .music
         .discovery_playlists(&section, &category, &order, offset)
         .await
 }
@@ -257,21 +395,21 @@ async fn discovery_playlists(
 async fn discovery_categories(
     backend: State<'_, Backend>,
 ) -> AppResult<Vec<netease::PlaylistCategory>> {
-    backend.netease.discovery_categories().await
+    backend.music.discovery_categories().await
 }
 #[tauri::command]
 async fn discovery_radar(backend: State<'_, Backend>) -> AppResult<netease::Collection> {
-    backend.netease.discovery_radar().await
+    backend.music.discovery_radar().await
 }
 #[tauri::command]
 async fn discovery_tracks(kind: String, backend: State<'_, Backend>) -> AppResult<Vec<Track>> {
-    let mut tracks = backend.netease.discovery_tracks(&kind).await?;
+    let mut tracks = backend.music.discovery_tracks(&kind).await?;
     save_library_tracks(&mut tracks, &backend)?;
     Ok(tracks)
 }
 #[tauri::command]
 async fn discovery_dislike(id: u64, backend: State<'_, Backend>) -> AppResult<()> {
-    backend.netease.discovery_dislike(id).await
+    backend.music.discovery_dislike(id).await
 }
 
 #[tauri::command]
@@ -282,7 +420,7 @@ async fn library_collections(
     backend: State<'_, Backend>,
 ) -> AppResult<CollectionPage> {
     backend
-        .netease
+        .music
         .library_collections(&kind, offset, &filter)
         .await
 }
@@ -294,10 +432,7 @@ async fn library_tracks(
     offset: u32,
     backend: State<'_, Backend>,
 ) -> AppResult<TrackPage> {
-    let mut page = backend
-        .netease
-        .library_tracks(&kind, id, offset, 100)
-        .await?;
+    let mut page = backend.music.library_tracks(&kind, id, offset, 100).await?;
     save_library_tracks(&mut page.tracks, &backend)?;
     Ok(page)
 }
@@ -308,7 +443,7 @@ async fn music_entity_detail(
     id: u64,
     backend: State<'_, Backend>,
 ) -> AppResult<netease::EntityDetail> {
-    backend.netease.music_entity_detail(&kind, id).await
+    backend.music.music_entity_detail(&kind, id).await
 }
 #[tauri::command]
 async fn artist_albums(
@@ -316,11 +451,11 @@ async fn artist_albums(
     offset: u32,
     backend: State<'_, Backend>,
 ) -> AppResult<CollectionPage> {
-    backend.netease.artist_albums(id, offset).await
+    backend.music.artist_albums(id, offset).await
 }
 #[tauri::command]
 async fn artist_tracks(id: u64, offset: u32, backend: State<'_, Backend>) -> AppResult<TrackPage> {
-    let mut page = backend.netease.artist_tracks(id, offset).await?;
+    let mut page = backend.music.artist_tracks(id, offset).await?;
     save_library_tracks(&mut page.tracks, &backend)?;
     Ok(page)
 }
@@ -331,7 +466,7 @@ async fn library_history(
     offset: u32,
     backend: State<'_, Backend>,
 ) -> AppResult<TrackPage> {
-    let mut page = backend.netease.library_history(week, offset).await?;
+    let mut page = backend.music.library_history(week, offset).await?;
     save_library_tracks(&mut page.tracks, &backend)?;
     Ok(page)
 }
@@ -352,7 +487,7 @@ async fn play_library_collection(
     key: Option<String>,
     backend: State<'_, Backend>,
 ) -> AppResult<bool> {
-    let mut page = backend.netease.library_queue(&kind, id).await?;
+    let mut page = backend.music.library_queue(&kind, id).await?;
     save_library_tracks(&mut page.tracks, &backend)?;
     if page.tracks.is_empty() {
         return Err("这个收藏还没有可播放的歌曲".into());
@@ -375,10 +510,7 @@ async fn create_library_playlist(
     private: bool,
     backend: State<'_, Backend>,
 ) -> AppResult<()> {
-    backend
-        .netease
-        .library_create_playlist(&name, private)
-        .await
+    backend.music.library_create_playlist(&name, private).await
 }
 
 #[tauri::command]
@@ -387,7 +519,7 @@ async fn append_library_collection(
     id: u64,
     backend: State<'_, Backend>,
 ) -> AppResult<bool> {
-    let mut page = backend.netease.library_queue(&kind, id).await?;
+    let mut page = backend.music.library_queue(&kind, id).await?;
     if page.tracks.is_empty() {
         return Err("这个收藏还没有可播放的歌曲".into());
     }
@@ -402,10 +534,7 @@ async fn add_playlist_song(
     song_id: u64,
     backend: State<'_, Backend>,
 ) -> AppResult<()> {
-    backend
-        .netease
-        .add_playlist_song(playlist_id, song_id)
-        .await
+    backend.music.add_playlist_song(playlist_id, song_id).await
 }
 
 #[tauri::command]
@@ -416,14 +545,14 @@ async fn update_library_playlist(
     backend: State<'_, Backend>,
 ) -> AppResult<()> {
     backend
-        .netease
+        .music
         .update_library_playlist(id, &name, &description)
         .await
 }
 
 #[tauri::command]
 async fn delete_library_playlist(id: u64, backend: State<'_, Backend>) -> AppResult<()> {
-    backend.netease.delete_library_playlist(id).await
+    backend.music.delete_library_playlist(id).await
 }
 
 #[tauri::command]
@@ -652,7 +781,7 @@ fn set_lyric_endpoints(endpoints: Vec<String>, backend: State<'_, Backend>) -> A
 
 #[tauri::command]
 async fn qr_login(backend: State<'_, Backend>) -> AppResult<QrLogin> {
-    backend.netease.qr_login().await
+    backend.music.qr_login().await
 }
 #[tauri::command]
 async fn poll_login(
@@ -660,7 +789,7 @@ async fn poll_login(
     backend: State<'_, Backend>,
     plugins: State<'_, Arc<plugins::PluginManager>>,
 ) -> AppResult<LoginStatus> {
-    let result = backend.netease.poll_login(&key).await?;
+    let result = backend.music.poll_login(&key).await?;
     if result.code == 803 {
         plugins.account_changed().await;
     }
@@ -671,7 +800,7 @@ async fn login_session(
     backend: State<'_, Backend>,
     plugins: State<'_, Arc<plugins::PluginManager>>,
 ) -> AppResult<bool> {
-    let result = backend.netease.session().await?;
+    let result = backend.music.session().await?;
     if !result {
         plugins.account_changed().await;
     }
@@ -679,16 +808,16 @@ async fn login_session(
 }
 #[tauri::command]
 async fn account_profile(backend: State<'_, Backend>) -> AppResult<Option<AccountProfile>> {
-    backend.netease.profile().await
+    backend.music.profile().await
 }
 #[tauri::command]
 async fn logout(
     backend: State<'_, Backend>,
     plugins: State<'_, Arc<plugins::PluginManager>>,
-) -> AppResult<()> {
-    backend.netease.logout()?;
+) -> AppResult<crate::music::business::LogoutReport> {
+    let result = backend.music.logout().await?;
     plugins.account_changed().await;
-    Ok(())
+    Ok(result)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -741,7 +870,16 @@ pub fn run() {
                 store.rebuild_local_index()?;
                 store.set_setting("localIndexVersion", "1")?;
             }
-            let netease = Arc::new(Netease::new()?);
+            let accounts = Arc::new(crate::music::accounts::AccountManager::new(
+                store.clone(),
+                Arc::new(crate::music::accounts::SystemCredentials),
+            )?);
+            let account_events = app.handle().clone();
+            accounts.on_change(Arc::new(move |source| {
+                use tauri::Emitter;
+                let _ = account_events.emit("music-account-changed", source);
+            }));
+            let netease = Arc::new(Netease::with_accounts(accounts));
             let music = Arc::new(crate::music::netease::builtin_service(netease.clone())?);
             let cache = Arc::new(ttml_cache::TtmlCache::new(
                 store.clone(),
@@ -787,7 +925,7 @@ pub fn run() {
             });
             app.manage(Backend {
                 store,
-                netease,
+                music,
                 lyrics,
                 player,
                 covers,
@@ -828,6 +966,15 @@ pub fn run() {
             plugins::plugin_fault,
             fonts::system_fonts,
             player_snapshot,
+            music_sources,
+            music_context,
+            music_query,
+            music_write,
+            music_read_track,
+            music_account,
+            music_accounts,
+            music_select_account,
+            music_remove_account,
             search_music,
             search_suggestions,
             search_collections,

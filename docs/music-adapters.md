@@ -1,6 +1,6 @@
 # 音乐适配器契约与迁移记录
 
-本文记录 [ADR 0006](adr/0006-music-provider-adapters.md) 的契约、已完成接线与后续注意事项。2026-10-10：阶段一、二已完成，契约版本 `1`、独立适配器注册表、内置网易云单曲读取和播放解析已落地。**当前没有 AccountManager、账号／队列存储迁移、公开通用 IPC 或外部适配器 ABI**。搜索、账号、详情和写操作仍走迁移期业务接口，阶段三继续切换；这些 Rust 接口不是已开放的功能插件 SDK。下文“阶段一尚未实现”的表述是该阶段完成时的历史记录，当前运行行为以末尾阶段二记录为准。
+本文记录 [ADR 0006](adr/0006-music-provider-adapters.md) 的契约、已完成接线与后续注意事项。2026-10-10：阶段一至三已完成，契约版本 `1`、独立适配器注册表、内置网易云播放与业务路由、AccountManager、系统凭据迁移和通用客户端已落地。历史曲库／队列存储仍保留旧格式；外部适配器 ABI、安装管理和网易云拆包尚未实现。前文阶段一、二的“尚未实现”描述保留为历史记录，当前运行行为以末尾阶段三记录为准。
 
 ## 标识与曲目
 
@@ -123,3 +123,57 @@ URL 与请求头只供受控后端消费，不可序列化；`HttpAccess` 的 De
 - 本机验证结果见 [实现记录](implementation.md)。Windows fakesink 与本地测试不能替代 macOS/Linux 构建、真实账号所有音质、扬声器或 Release 内存／首声延迟实测。
 
 Tokio 的 future 丢弃／期限语义经 Context7 核对；ncm-api-rs 的响应限制查询未命中文档，改查上述固定版本官方源码，确认原客户端整包读取后补丁。HTTP 读取与重定向复用 Reqwest API，没有新建网络框架。
+
+## 阶段三修改记录与注意事项（2026-10-10）
+
+### 业务归属与修改清单
+
+- `music/business.rs` 定义统一业务与账号展示 DTO，`manager.rs` 负责校验、能力／账号判断、请求预算、会话隔离、游标和写入代次。适配器可选 `business`／`account` 方法默认返回 `unsupported`。`netease_business.rs` 复用既有固定版本平台客户端，完成平台转换；没有自建网易云协议或加密库。内置来源声明 Search、Browse、Account、UserLibrary、Favorites、PlaylistWrite、Recommendations、PrivateFm 八个能力组。
+- 统一读取覆盖搜索／建议、实体详情、歌单／专辑曲目、艺术家歌曲／专辑、歌曲补充信息、曲库预览、收藏列表／喜欢、历史、推荐歌单／分类／私人雷达与推荐／FM 曲目。写入覆盖喜欢、歌单新建／编辑／删除、添加／移除歌曲及 FM 不喜欢。错误仅交付稳定 `MusicError`，平台原始响应不进入通用 DTO。
+- `music/compatibility.rs` 是宿主旧数字 DTO／offset 的迁移桥，所有在线业务都经统一管理器；`application/mod.rs` 不再直接调用平台业务。现有页面、播放快照、TrackSource 和 SQLite 曲库／队列仍保留旧形状；这不表示已完成统一存储迁移。旧“播放整个收藏”桥按页读取、最多 1000 首、整体期限 12 秒，保持顺序和重复项。
+- `music/accounts.rs` 及 `accounts/tests.rs` 管理公开记录、当前选择、代次、系统凭据和恢复；`storage.rs` 只保存公开 JSON。`netease/mod.rs` 的平台客户端只读受控会话快照，二维码轮询返回待确认凭据，账号管理器才持久化。`account/` 界面新增保存账号选择／删除及添加账号，退出显示本地和远端结果；异步结果按账号变更事件隔离。
+- `features/music/client.ts` 与 `packages/plugin-sdk/music.d.ts` 提供宿主客户端和公开类型；插件 `useMusicSource` 与后端 `music.sources/read-track/query/write` 提供通用能力。`plugins/netease.rs` 复用原 128 条歌曲缓存，以 EntityRef 为身份并复核账号／实例／写代次；没有新增歌曲缓存。灵动岛后端改用 `music.read-track`。
+
+### 账号持久化、恢复和边界
+
+公开索引在现有 SQLite settings 的 `musicAccountsV1`：记录、每来源当前选择、旧凭据迁移标志和待删除墓碑，账号记录与删除墓碑各最多 100 条；连续物理删除失败使墓碑达到上限时，拒绝新增删除并保留待处理账号，避免写出无法恢复的索引。凭据只存于系统 keyring 的 `NonsPlayer / music-account-v1-<SHA256(AccountRef JSON)>`，使用二进制 secret API；不写 SQLite、插件 storage、前端缓存或日志。它是存储命名空间，不能作为插件持有的访问授权。
+
+旧 `NonsPlayer / netease-session` 用 password API 读取后转换为 UTF-8 Cookie 字节，避免 Windows 旧密码 UTF-16 与新 binary secret 混读。只有适配器通过 profile 确认真实 userId 才迁移；网络错误不提交身份或完成标志。顺序是写新 secret、读回验证、提交公开索引与标志、删除旧 secret。写入／读回／公开提交失败保留旧条目；中断后发现已有目标时不覆盖较新凭据，完成标志存在时重启重试旧条目删除。重新登录同一账号若公开提交失败，恢复原 secret。
+
+账号删除先提交墓碑并撤销选择，再清理 secret；清理失败不会在重启时恢复被删除账号，启动重试。退出先准备旧会话的远端操作，再清理本地、推进代次，最后执行远端请求；返回 `LogoutReport { localCleared, localError, remoteError }`。`localCleared=true` 表示宿主已隔离本地账号，系统凭据物理删除仍可能失败并由 localError 提示。删除保存账号不会发送平台退出请求；停用来源也不退出或删除账号。确认会话失效撤销当前选择但保留保存记录，允许重新选择／登录。
+
+适配器只获得绑定 RequestContext 的 AccountAccess，读取／刷新验证来源、账号、代次、实例与期限，刷新成功推进会话代次。账号变更发出 `music-account-changed`，现有喜欢状态、FM 与查询缓存丢弃旧结果。二维码 challenge 最多保留 4 个、180 秒过期，轮询同时核对生成时会话和实例；重新选择账号后旧二维码不能提交登录。当前 AccountRequest/Presentation 是内置二维码展示契约；不同平台的密码／浏览器授权展示和外部访问令牌仍需阶段四设计验证。
+
+### 接口与兼容迁移
+
+宿主 IPC：`music_sources`、`music_context`、`music_read_track`、`music_query`、`music_write`、`music_account`、`music_accounts`、`music_select_account`、`music_remove_account`。查询与写入分开，主 WebView 沿用既有受信任边界。宿主 `musicClient` 查询在缓存前后复核来源作用域；普通插件没有账号管理或原始凭据权限。
+
+插件接口（详见 [插件文档](plugins.md#统一音乐客户端adr-0006-阶段三)）：
+
+| 能力               | 权限                                                    | 参数／返回                                                       |
+| ------------------ | ------------------------------------------------------- | ---------------------------------------------------------------- |
+| `music.sources`    | `music:metadata`                                        | 来源描述列表                                                     |
+| `music.read-track` | `music:metadata`                                        | `{ reference: EntityRef }` → `MusicTrack`                        |
+| `music.query`      | 公开读取 `music:metadata`；账号相关读取 `music:library` | `{ source, request: MusicReadRequest }` → tagged `MusicResponse` |
+| `music.write`      | `music:write`                                           | `{ source, request: MusicWriteRequest }` → 写入影响范围          |
+
+`useMusicSource()` 对应 `sources/getTrack/query/write`。引用 ID 是字符串，调用方不得 parseInt 或跨来源替换引用；nextCursor 原样回传，同一查询保持参数和 limit，账号、实例或写入代次变化后从首页开始。结果为 `{type,data}`，读取响应没有 write，写响应没有曲目数据。来源缺少能力时返回 unsupported，当前缺少账号时返回 unauthenticated。
+
+`useNetease().getSong(id)`、`netease.get-song` 以及 `music.get-song` 保留旧数字 ID／DTO 形状，已标记 deprecated，内部转统一单曲接口。`netease.account-credentials` 仅保留显式 `account:credentials` 的敏感兼容访问，不作为新的音乐查询或写入前提。新通用能力不得添加到 `netease.*`。历史队列迁移需要后续独立、原子数据库事务与本地绑定迁移，不能仅替换前端 Track 类型。
+
+### 预算、缓存与后续验证
+
+| 项目           | 当前限制                                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 普通单曲读取   | 每来源 4 个并行、3 秒总期限                                                                                                                                   |
+| 业务读取／写入 | 与单曲读取共用每来源 4 个并行、12 秒总期限；超载直接 rateLimited                                                                                              |
+| 账号协议       | 每来源串行，最多 4 个调用（含执行中）等待，总期限 12 秒含等待                                                                                                 |
+| 系统凭据任务   | 账号管理最多 4 个阻塞任务；内置适配器查询 credential 预算 4、播放单独保留 2；许可在阻塞闭包中持有                                                             |
+| 请求／响应     | 业务与账号请求 16KiB；业务结果／内置平台原始响应 2MiB；账号展示 64KiB；单曲 64KiB                                                                             |
+| 分页／聚合     | 契约每页 1–100；内置分类搜索／艺人专辑／收藏列表／推荐歌单固定 30、歌曲搜索最多 50；游标 4096 字节；推荐批次 100、历史和艺人曲目按页截取；旧整收藏桥最多 1000 |
+
+系统凭据 API 与 SQLite 为同步 I/O，spawn_blocking 已运行任务不能被强行中止，许可不会随被丢弃的 future 释放。凭据提交前再检查上下文，旧任务不能发布新选择；正在执行的 OS I/O 仍可能超出异步期限，不宣称 12 秒是账号磁盘处理的硬实时保证。阶段四仍需真实外部执行与不同平台 keyring 验证；现有原生只读探测工具仍使用旧 Cookie，迁移后不代表有已保存账号支持，真实登录验收应使用宿主。
+
+`music_query/read_track` 加入现有 nativeCall 查询缓存，键带来源、会话／实例和写代次；旧在线缓存命中前后也查询 music_context，来源停用或重载不能绕过后端检查。写成功推进来源写代次，旧在途读取拒绝；`music-changed` 与账号事件清理现有查询缓存，失败不触发成功写入通知。新客户端写入使用整查询缓存失效作为保守兜底，兼容调用沿用原命令影响表；公开封面与独立歌词缓存仍遵循原策略。上下文复核增加本地 IPC；未测命中延迟，不将设计预算当作实测性能。
+
+所有上限只是请求、序列化和任务数量限制，不等于 HTTP/TLS、JSON 展开或进程内存上限。未新增依赖。Windows 单元、DOM、WASM 宿主与生产构建记录见 [实现记录](implementation.md#统一音乐适配器adr-0006-阶段三2026-10-10)；真实账号登录、远端写入／退出、macOS/Linux 编译和基本播放、外部 ABI、多来源 UI、不同登录方式与 Release 性能仍需后续验收。本阶段不开放外部包安装，也不将内置受信任访问误称为防恶意适配器沙箱。

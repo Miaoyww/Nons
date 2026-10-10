@@ -180,10 +180,13 @@ mod tests {
                             .push(serde_json::from_str(args).unwrap());
                         Ok(r#"{"status":302,"headers":{"location":"https://music.163.com/#/song?id=347230"},"body":""}"#.into())
                     }
-                    "netease.get-song" => {
+                    "music.read-track" => {
                         let args: serde_json::Value = serde_json::from_str(args).unwrap();
-                        assert_eq!(args["id"], 347230);
-                        Ok(serde_json::json!({"id":347230,"title":"Fixture song","artist":"Fixture artist","album":"Fixture album","durationMs":1000,"cover":""}).to_string())
+                        assert_eq!(
+                            args["reference"],
+                            serde_json::json!({"source":"netease","kind":"track","id":"347230"})
+                        );
+                        Ok(serde_json::json!({"reference":{"source":"netease","kind":"track","id":"347230"},"artists":[],"title":"Fixture song","artist":"Fixture artist","album":"Fixture album","durationMs":1000,"cover":""}).to_string())
                     }
                     "events.emit" => {
                         self.events

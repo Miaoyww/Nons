@@ -20,7 +20,8 @@ pub struct AccountRecord {
 }
 
 /// Issued by AccountManager, never accepted from a plugin-supplied identity.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionContext {
     pub source: SourceId,
     pub account: Option<OpaqueId>,

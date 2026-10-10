@@ -2,11 +2,15 @@
 //! See docs/music-adapters.md before wiring these types into persistence or playback.
 
 pub mod account;
+pub mod accounts;
 pub mod adapter;
+pub mod business;
+pub(crate) mod compatibility;
 pub mod identity;
 pub mod manager;
 pub mod migration;
 pub(crate) mod netease;
+mod netease_business;
 pub mod resource;
 pub mod service;
 #[cfg(test)]

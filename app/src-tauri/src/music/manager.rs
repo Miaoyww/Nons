@@ -28,6 +28,10 @@ struct Entry {
     generation: AtomicU64,
     reads: Semaphore,
     playback: Semaphore,
+    accounts: Semaphore,
+    account_waiters: Semaphore,
+    login_challenges: Mutex<BTreeMap<String, (SessionContext, u64, Instant)>>,
+    revision: AtomicU64,
 }
 impl Entry {
     fn check(&self, context: &RequestContext) -> MusicResult<()> {
@@ -103,6 +107,10 @@ impl AdapterManager {
                 generation: AtomicU64::new(1),
                 reads: Semaphore::new(4),
                 playback: Semaphore::new(2),
+                accounts: Semaphore::new(1),
+                account_waiters: Semaphore::new(4),
+                login_challenges: Default::default(),
+                revision: AtomicU64::new(0),
             }),
         );
         Ok(())
@@ -166,6 +174,275 @@ impl AdapterManager {
                 result = &mut future => { entry.check(context)?; return result; }
             }
         }
+    }
+    pub fn cache_identity(&self, source: &SourceId) -> MusicResult<String> {
+        let (session, generation) = self.stamp(source)?;
+        let entry = self.entry(source)?;
+        serde_json::to_string(&(session, generation, entry.revision.load(Ordering::Acquire)))
+            .map_err(|_| ErrorCode::Internal.into())
+    }
+    pub fn descriptors(&self) -> MusicResult<Vec<SourceDescriptor>> {
+        Ok(self
+            .entries
+            .lock()
+            .map_err(|_| ErrorCode::Internal)?
+            .values()
+            .map(|e| e.adapter.descriptor().clone())
+            .collect())
+    }
+    pub async fn business(
+        &self,
+        source: &SourceId,
+        request: &super::business::BusinessRequest,
+    ) -> MusicResult<super::business::BusinessResponse> {
+        use super::business::*;
+        request.validate(source)?;
+        let entry = self.entry(source)?;
+        let context = Self::context(&entry, Duration::from_secs(12));
+        entry.check(&context)?;
+        if !entry
+            .adapter
+            .descriptor()
+            .capabilities
+            .contains(&request.capability())
+        {
+            return Err(ErrorCode::Unsupported.into());
+        }
+        if request.requires_account() && context.session.account.is_none() {
+            return Err(ErrorCode::Unauthenticated.into());
+        }
+        let _permit = entry
+            .reads
+            .try_acquire()
+            .map_err(|_| ErrorCode::RateLimited)?;
+        let revision = entry.revision.load(Ordering::Acquire);
+        let scope = format!("{}-{revision}", cursor_scope(request, &context)?);
+        let internal = decode_cursor(request, &scope)?;
+        let mut result = self
+            .run(
+                &entry,
+                &context,
+                entry.adapter.business(&internal, &context),
+            )
+            .await?;
+        result.validate(request, source)?;
+        if let BusinessResponse::Summary(summary) = &result {
+            if context.session.account.as_ref() != Some(&summary.account.reference.id) {
+                return Err(ErrorCode::InvalidData.into());
+            }
+        }
+        if !request.is_write() && entry.revision.load(Ordering::Acquire) != revision {
+            return Err(ErrorCode::StaleContext.into());
+        }
+        match &mut result {
+            BusinessResponse::Tracks(p) => encode_cursor(&mut p.page.next_cursor, &scope)?,
+            BusinessResponse::Entities(p) => encode_cursor(&mut p.next_cursor, &scope)?,
+            _ => (),
+        }
+        entry.check(&context)?;
+        if request.is_write() {
+            entry.revision.fetch_add(1, Ordering::AcqRel);
+        }
+        Ok(result)
+    }
+    /// Only the host compatibility facade may translate the old numeric offset.
+    pub(crate) async fn business_legacy(
+        &self,
+        source: &SourceId,
+        request: &super::business::BusinessRequest,
+    ) -> MusicResult<super::business::BusinessResponse> {
+        let entry = self.entry(source)?;
+        let context = Self::context(&entry, Duration::from_secs(12));
+        let revision = entry.revision.load(Ordering::Acquire);
+        let scope = format!("{}-{revision}", cursor_scope(request, &context)?);
+        let mut value = serde_json::to_value(request).map_err(|_| ErrorCode::InvalidData)?;
+        if let Some(page) = value.get_mut("page") {
+            if !page["cursor"].is_null() {
+                let raw = page["cursor"]
+                    .as_str()
+                    .ok_or(ErrorCode::InvalidData)?
+                    .to_owned();
+                page["cursor"] = serde_json::Value::String(
+                    serde_json::to_string(&(scope, raw)).map_err(|_| ErrorCode::InvalidData)?,
+                );
+            }
+        }
+        entry.check(&context)?;
+        self.business(
+            source,
+            &serde_json::from_value(value).map_err(|_| ErrorCode::InvalidData)?,
+        )
+        .await
+    }
+    pub async fn account(
+        &self,
+        source: &SourceId,
+        request: &super::business::AccountRequest,
+        accounts: &Arc<super::accounts::AccountManager>,
+    ) -> MusicResult<super::business::AccountPresentation> {
+        use super::business::*;
+        let entry = self.entry(source)?;
+        if serde_json::to_vec(request)
+            .map_err(|_| ErrorCode::InvalidData)?
+            .len()
+            > 16 * 1024
+        {
+            return Err(ErrorCode::InvalidData.into());
+        }
+        let deadline = Instant::now() + Duration::from_secs(12);
+        let _waiter = entry
+            .account_waiters
+            .try_acquire()
+            .map_err(|_| ErrorCode::RateLimited)?;
+        let _permit = tokio::time::timeout_at(deadline.into(), entry.accounts.acquire())
+            .await
+            .map_err(|_| ErrorCode::DeadlineExceeded)?
+            .map_err(|_| ErrorCode::Internal)?;
+        let mut context = Self::context(&entry, Duration::from_secs(12));
+        context.deadline = deadline;
+        entry.check(&context)?;
+        if !entry
+            .adapter
+            .descriptor()
+            .capabilities
+            .contains(&Capability::Account)
+        {
+            return Err(ErrorCode::Unsupported.into());
+        }
+        if let AccountRequest::PollLogin { key } = request {
+            let mut challenges = entry
+                .login_challenges
+                .lock()
+                .map_err(|_| ErrorCode::Internal)?;
+            challenges.retain(|_, (_, _, expires)| Instant::now() < *expires);
+            let (session, generation, _) = challenges.get(key).ok_or(ErrorCode::StaleContext)?;
+            if session != &context.session || *generation != context.adapter_generation {
+                return Err(ErrorCode::StaleContext.into());
+            }
+        }
+        if matches!(request, AccountRequest::Logout) {
+            let remote = self
+                .run(&entry, &context, entry.adapter.prepare_logout(&context))
+                .await;
+            // A remote preparation timeout must not prevent local logout, but a
+            // changed account or revoked instance must still reject the old operation.
+            let mut local_context = context.clone();
+            local_context.deadline = Instant::now() + Duration::from_secs(12);
+            entry.check(&local_context)?;
+            let worker = accounts.clone();
+            let expected = context.session.clone();
+            let local_error = worker
+                .blocking(move |accounts| accounts.clear_expected(&expected))
+                .await
+                .err();
+            let local_cleared = accounts.session(source) != context.session
+                && accounts.session(source).account.is_none();
+            if !local_cleared {
+                return Ok(AccountPresentation::Logout(LogoutReport {
+                    local_cleared,
+                    local_error,
+                    remote_error: None,
+                }));
+            }
+            let mut after = Self::context(&entry, Duration::from_secs(12));
+            after.deadline = context.deadline;
+            let remote_error = match remote {
+                Ok(future) => self.run(&entry, &after, future).await.err(),
+                Err(error) => Some(error),
+            };
+            return Ok(AccountPresentation::Logout(LogoutReport {
+                local_cleared,
+                local_error,
+                remote_error,
+            }));
+        }
+        let outcome = self
+            .run(&entry, &context, entry.adapter.account(request, &context))
+            .await?;
+        if serde_json::to_vec(&outcome.presentation)
+            .map_err(|_| ErrorCode::InvalidData)?
+            .len()
+            > 64 * 1024
+        {
+            return Err(ErrorCode::InvalidData.into());
+        }
+        entry.check(&context)?;
+        let valid = match (request, &outcome.presentation) {
+            (AccountRequest::BeginLogin, AccountPresentation::Challenge { key, image }) => {
+                !key.is_empty()
+                    && key.len() <= 256
+                    && image.len() <= 64 * 1024
+                    && outcome.credential.is_none()
+            }
+            (AccountRequest::PollLogin { .. }, AccountPresentation::Progress { code, .. }) => {
+                (*code == 803) == outcome.credential.is_some()
+            }
+            (AccountRequest::Profile, AccountPresentation::Profile(record)) => {
+                record.as_ref().is_none_or(|r| {
+                    &r.reference.source == source
+                        && (context.session.account.is_none()
+                            || context.session.account.as_ref() == Some(&r.reference.id))
+                })
+            }
+            _ => false,
+        };
+        if !valid {
+            return Err(ErrorCode::InvalidData.into());
+        }
+        if let AccountPresentation::Challenge { key, .. } = &outcome.presentation {
+            let mut challenges = entry
+                .login_challenges
+                .lock()
+                .map_err(|_| ErrorCode::Internal)?;
+            challenges.retain(|_, (_, _, expires)| Instant::now() < *expires);
+            if challenges.len() >= 4 {
+                challenges.clear();
+            }
+            challenges.insert(
+                key.clone(),
+                (
+                    context.session.clone(),
+                    context.adapter_generation,
+                    Instant::now() + Duration::from_secs(180),
+                ),
+            );
+        }
+        if let Some((record, credential)) = outcome.credential {
+            let worker = accounts.clone();
+            let mutation_context = context.clone();
+            let migration = outcome.migration;
+            worker
+                .blocking(move |accounts| {
+                    accounts.accept_context(&mutation_context, record, credential, migration)
+                })
+                .await?;
+        } else if matches!(outcome.presentation, AccountPresentation::Profile(None))
+            && context.session.account.is_some()
+        {
+            let expected = context.session.clone();
+            accounts
+                .blocking(move |accounts| {
+                    accounts.invalidate(&expected);
+                    Ok(())
+                })
+                .await?;
+        }
+        if let AccountRequest::PollLogin { key } = request {
+            if matches!(
+                outcome.presentation,
+                AccountPresentation::Progress {
+                    code: 803 | 800,
+                    ..
+                }
+            ) {
+                entry
+                    .login_challenges
+                    .lock()
+                    .map_err(|_| ErrorCode::Internal)?
+                    .remove(key);
+            }
+        }
+        Ok(outcome.presentation)
     }
     pub async fn read_track(&self, reference: &EntityRef) -> MusicResult<MusicTrack> {
         let entry = self.entry(&reference.source)?;
@@ -242,6 +519,51 @@ impl AdapterManager {
         Ok(ticket)
     }
 }
+fn cursor_scope(
+    request: &super::business::BusinessRequest,
+    context: &RequestContext,
+) -> MusicResult<String> {
+    use sha2::{Digest, Sha256};
+    let mut value = serde_json::to_value(request).map_err(|_| ErrorCode::InvalidData)?;
+    if let Some(page) = value.get_mut("page") {
+        page["cursor"] = serde_json::Value::Null;
+    }
+    let bytes = serde_json::to_vec(&(
+        value,
+        &context.session.source,
+        &context.session.account,
+        context.session.generation,
+        context.adapter_generation,
+    ))
+    .map_err(|_| ErrorCode::InvalidData)?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+fn decode_cursor(
+    request: &super::business::BusinessRequest,
+    scope: &str,
+) -> MusicResult<super::business::BusinessRequest> {
+    let mut value = serde_json::to_value(request).map_err(|_| ErrorCode::InvalidData)?;
+    if let Some(page) = value.get_mut("page") {
+        if let Some(cursor) = page["cursor"].as_str() {
+            let (binding, raw): (String, String) =
+                serde_json::from_str(cursor).map_err(|_| ErrorCode::InvalidData)?;
+            if binding != scope {
+                return Err(ErrorCode::StaleContext.into());
+            }
+            page["cursor"] = serde_json::Value::String(raw);
+        }
+    }
+    serde_json::from_value(value).map_err(|_| ErrorCode::InvalidData.into())
+}
+fn encode_cursor(cursor: &mut Option<Cursor>, scope: &str) -> MusicResult<()> {
+    if let Some(raw) = cursor.take() {
+        *cursor = Some(Cursor::try_from(
+            serde_json::to_string(&(scope, raw.as_str())).map_err(|_| ErrorCode::InvalidData)?,
+        )?);
+    }
+    Ok(())
+}
+
 fn validate_access(access: &ResourceAccess) -> MusicResult<()> {
     let ResourceAccess::Http(http) = access;
     if http.url.len() > 8192 {
@@ -272,6 +594,7 @@ mod tests {
         descriptor: SourceDescriptor,
         blocked: bool,
         entered: Arc<tokio::sync::Notify>,
+        release: Arc<tokio::sync::Notify>,
         calls: Arc<AtomicU64>,
         wrong_identity: bool,
         expiry: Option<u64>,
@@ -279,6 +602,49 @@ mod tests {
     impl MusicAdapter for TestAdapter {
         fn descriptor(&self) -> &SourceDescriptor {
             &self.descriptor
+        }
+        fn business<'a>(
+            &'a self,
+            request: &'a super::super::business::BusinessRequest,
+            context: &'a RequestContext,
+        ) -> AdapterFuture<'a, super::super::business::BusinessResponse> {
+            use super::super::business::*;
+            Box::pin(async move {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                self.entered.notify_one();
+                if self.blocked && !request.is_write() {
+                    self.release.notified().await;
+                }
+                match request {
+                    BusinessRequest::Search { .. } => {
+                        let mut track = adapter(false)
+                            .read_track(&reference_for("opaque:01/track"), context)
+                            .await?;
+                        if self.wrong_identity {
+                            track.reference.source =
+                                SourceId::try_from("wrong".to_owned()).unwrap();
+                        }
+                        Ok(BusinessResponse::Tracks(TrackPage {
+                            page: Page {
+                                items: vec![track],
+                                next_cursor: Some(Cursor::try_from(
+                                    "provider:next/page".to_owned(),
+                                )?),
+                            },
+                            total: None,
+                            description: None,
+                        }))
+                    }
+                    BusinessRequest::Suggestions { keyword } => {
+                        Ok(BusinessResponse::Suggestions(vec![keyword.clone()]))
+                    }
+                    request if request.is_write() => Ok(BusinessResponse::Write(WriteImpact {
+                        operations: ["favorites".to_owned()].into_iter().collect(),
+                        entities: vec![],
+                    })),
+                    _ => Err(ErrorCode::Unsupported.into()),
+                }
+            })
         }
         fn read_track<'a>(
             &'a self,
@@ -349,6 +715,7 @@ mod tests {
             },
             blocked,
             entered: Default::default(),
+            release: Default::default(),
             calls: Default::default(),
             wrong_identity: false,
             expiry: None,
@@ -564,6 +931,153 @@ mod tests {
             .unwrap_err()
             .code,
             ErrorCode::Unsupported
+        );
+    }
+    fn business_adapter(blocked: bool) -> TestAdapter {
+        let mut provider = adapter(blocked);
+        provider.descriptor.capabilities = [Capability::Search, Capability::Favorites]
+            .into_iter()
+            .collect();
+        provider
+    }
+    fn search(keyword: &str, cursor: Option<Cursor>) -> super::super::business::BusinessRequest {
+        super::super::business::BusinessRequest::Search {
+            keyword: keyword.into(),
+            kind: EntityKind::Track,
+            page: PageRequest { cursor, limit: 1 },
+        }
+    }
+    #[tokio::test]
+    async fn business_capabilities_references_and_account_requirements_are_enforced() {
+        use super::super::business::*;
+        let (manager, _, _) = setup(adapter(false));
+        assert_eq!(
+            manager
+                .business(&source(), &search("q", None))
+                .await
+                .unwrap_err()
+                .code,
+            ErrorCode::Unsupported
+        );
+        let (manager, _, _) = setup(business_adapter(false));
+        assert_eq!(
+            manager
+                .business(&source(), &BusinessRequest::Favorites)
+                .await
+                .unwrap_err()
+                .code,
+            ErrorCode::Unauthenticated
+        );
+        let request = BusinessRequest::SetFavorite {
+            track: EntityRef {
+                source: SourceId::try_from("other".to_owned()).unwrap(),
+                ..reference_for("abc")
+            },
+            liked: true,
+        };
+        assert_eq!(
+            manager
+                .business(&source(), &request)
+                .await
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidData
+        );
+        let BusinessResponse::Tracks(page) = manager
+            .business(&source(), &search("q", None))
+            .await
+            .unwrap()
+        else {
+            panic!("track page");
+        };
+        assert_eq!(page.page.items[0].reference.id.as_str(), "opaque:01/track");
+        let mut malformed = business_adapter(false);
+        malformed.wrong_identity = true;
+        assert_eq!(
+            setup(malformed)
+                .0
+                .business(&source(), &search("q", None))
+                .await
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidData
+        );
+    }
+    #[tokio::test]
+    async fn cursors_are_bound_to_query_session_and_instance_without_parsing_provider_tokens() {
+        use super::super::business::*;
+        let (manager, session, _) = setup(business_adapter(false));
+        let BusinessResponse::Tracks(page) = manager
+            .business(&source(), &search("first", None))
+            .await
+            .unwrap()
+        else {
+            panic!("track page");
+        };
+        let cursor = page.page.next_cursor.unwrap();
+        manager
+            .business(&source(), &search("first", Some(cursor.clone())))
+            .await
+            .unwrap();
+        assert_eq!(
+            manager
+                .business(&source(), &search("different", Some(cursor.clone())))
+                .await
+                .unwrap_err()
+                .code,
+            ErrorCode::StaleContext
+        );
+        session.fetch_add(1, Ordering::AcqRel);
+        assert_eq!(
+            manager
+                .business(&source(), &search("first", Some(cursor.clone())))
+                .await
+                .unwrap_err()
+                .code,
+            ErrorCode::StaleContext
+        );
+        manager.reload(&source()).unwrap();
+        assert_eq!(
+            manager
+                .business(&source(), &search("first", Some(cursor)))
+                .await
+                .unwrap_err()
+                .code,
+            ErrorCode::StaleContext
+        );
+    }
+    #[tokio::test]
+    async fn successful_writes_reject_older_inflight_queries_and_change_cache_identity() {
+        use super::super::business::*;
+        let manager = Arc::new(AdapterManager::default());
+        let provider = Arc::new(business_adapter(true));
+        manager
+            .register(
+                provider.clone(),
+                Arc::new(|| SessionContext {
+                    source: source(),
+                    account: Some(OpaqueId::try_from("account:A".to_owned()).unwrap()),
+                    generation: 1,
+                }),
+            )
+            .unwrap();
+        let before = manager.cache_identity(&source()).unwrap();
+        let query_manager = manager.clone();
+        let job =
+            tokio::spawn(
+                async move { query_manager.business(&source(), &search("q", None)).await },
+            );
+        provider.entered.notified().await;
+        let request = BusinessRequest::SetFavorite {
+            track: reference_for("track:01"),
+            liked: true,
+        };
+        manager.business(&source(), &request).await.unwrap();
+        assert_ne!(before, manager.cache_identity(&source()).unwrap());
+        provider.release.notify_one();
+        assert_eq!(
+            job.await.unwrap().unwrap_err().code,
+            ErrorCode::StaleContext
         );
     }
 }

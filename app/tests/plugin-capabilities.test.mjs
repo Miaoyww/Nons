@@ -169,3 +169,30 @@ test('detail tab registration is bound to UI permission and plugin lifecycle', (
   assert.doesNotThrow(dispose)
   assert.throws(() => client.registerCollectionTab({ ...tab, id: 'late' }), /禁用/)
 })
+
+test('uniform music client preserves opaque references and separates library and write permissions', async () => {
+  const calls = []
+  const { scope, sdk } = harness(['music:metadata'], {
+    nativeCall: async (command, args) => {
+      assert.equal(command, 'plugin_host_call')
+      calls.push({ operation: args.operation, args: JSON.parse(args.args) })
+      return 'null'
+    }
+  })
+  const client = sdk.useMusicSource()
+  const reference = { source: 'other', kind: 'track', id: 'A:non-numeric/01' }
+  await client.getTrack(reference)
+  assert.deepEqual(calls[0], { operation: 'music.read-track', args: { reference } })
+  assert.throws(() => client.query('other', { operation: 'favorites' }), /music:library/)
+  assert.throws(
+    () => client.write('other', { operation: 'setFavorite', track: reference, liked: true }),
+    /music:write/
+  )
+  scope.descriptor.manifest.permissions.push('music:library', 'music:write')
+  await client.query('other', { operation: 'favorites' })
+  await client.write('other', { operation: 'setFavorite', track: reference, liked: true })
+  assert.equal(calls[1].operation, 'music.query')
+  assert.equal(calls[2].operation, 'music.write')
+  scope.active = false
+  assert.throws(() => client.getTrack(reference), /插件已禁用或卸载/)
+})

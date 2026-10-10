@@ -4,10 +4,10 @@ use super::{
     track_from_json, CollectionPage, Netease,
 };
 use crate::model::{AppResult, Track};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PlaylistCategory {
     pub name: String,
     pub group: String,
@@ -56,11 +56,7 @@ impl Netease {
             .param("offset", &catalogue_offset(section, offset).to_string())
             .param("cat", category)
             .param("order", order);
-        let personalized = self
-            .cookie
-            .lock()
-            .map_err(|_| "登录状态锁不可用")?
-            .is_some();
+        let personalized = self.account_credentials()?.is_some();
         let body = match section {
             "recommended" if offset == 0 && personalized => {
                 checked(self.client.recommend_resource(&query)).await?

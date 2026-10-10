@@ -10,6 +10,7 @@ function harness() {
     requests = [],
     effects = [],
     libraryRefreshes = []
+  const events = new Map()
   let cursor = 0
   const react = {
     createContext: () => ({ Provider: 'provider' }),
@@ -45,6 +46,12 @@ function harness() {
     react,
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }) },
     '@tauri-apps/api/core': { isTauri: () => true },
+    '@tauri-apps/api/event': {
+      listen: async (event, callback) => {
+        events.set(event, callback)
+        return () => events.delete(event)
+      }
+    },
     '@/features/library/library-api': {
       resetAccountCache() {},
       invalidateMusicLibrary() {
@@ -74,7 +81,12 @@ function harness() {
     effects.splice(0).forEach((fn) => fn())
     return value
   }
-  return { requests, render, libraryRefreshes }
+  return {
+    requests,
+    render,
+    libraryRefreshes,
+    emit: (event, payload) => events.get(event)?.({ payload })
+  }
 }
 const settle = () => new Promise((resolve) => setImmediate(resolve))
 async function loggedIn() {
@@ -141,4 +153,24 @@ test('switching account discards old liked list responses', async () => {
   app.requests[1].resolve([123])
   await settle()
   assert.deepEqual([...app.render().likedIds], [456])
+})
+
+test('backend account changes discard pending likes and reload the selected account', async () => {
+  const app = await loggedIn()
+  const oldWrite = app.render().toggleLike(123)
+  app.emit('music-account-changed', 'netease')
+  app.render()
+  const profile = app.requests.findLast((request) => request.command === 'account_profile')
+  profile.resolve({ userId: 2 })
+  await settle()
+  app.render()
+  const likes = app.requests.findLast((request) => request.command === 'liked_song_ids')
+  likes.resolve([456])
+  app.requests.find((request) => request.command === 'set_song_liked').resolve()
+  await oldWrite
+  await settle()
+  const state = app.render()
+  assert.equal(state.profile.userId, 2)
+  assert.deepEqual([...state.likedIds], [456])
+  assert.deepEqual(app.libraryRefreshes, [])
 })

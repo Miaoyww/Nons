@@ -12,7 +12,7 @@ use ncm_api_rs::{
     request::{ApiClient, ApiResponse},
     Query,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{future::Future, sync::Mutex, time::Duration};
 
@@ -20,24 +20,25 @@ pub struct Netease {
     client: ApiClient,
     music_client: ApiClient,
     cookie: Mutex<Option<String>>,
-    credential: keyring::Entry,
+    pub(crate) accounts: Option<std::sync::Arc<crate::music::accounts::AccountManager>>,
+    frozen: bool,
     session_generation: std::sync::atomic::AtomicU64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QrLogin {
     pub key: String,
     pub image: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct LoginStatus {
     pub code: i64,
     pub message: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountProfile {
     pub user_id: u64,
@@ -45,14 +46,14 @@ pub struct AccountProfile {
     pub avatar_url: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SongInformation {
     pub artists: Vec<SongCredit>,
     pub album_id: Option<u64>,
     pub published_at: Option<u64>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SongCredit {
     pub name: String,
     pub id: Option<u64>,
@@ -60,6 +61,15 @@ pub struct SongCredit {
 
 impl Netease {
     pub(crate) fn invalidate_session(&self, expected_generation: u64) {
+        if let Some(accounts) = &self.accounts {
+            let context = accounts.session(
+                &crate::music::identity::SourceId::try_from("netease".to_owned()).unwrap(),
+            );
+            if context.generation == expected_generation {
+                accounts.invalidate(&context);
+            }
+            return;
+        }
         // A late unauthenticated response from an old account cannot revoke a new login.
         let _ = self.session_generation.compare_exchange(
             expected_generation,
@@ -69,15 +79,85 @@ impl Netease {
         );
     }
     pub(crate) fn session_generation(&self) -> u64 {
+        if let Some(accounts) = &self.accounts {
+            return accounts
+                .session(&crate::music::identity::SourceId::try_from("netease".to_owned()).unwrap())
+                .generation;
+        }
         self.session_generation
             .load(std::sync::atomic::Ordering::Acquire)
     }
     pub(crate) fn account_credentials(&self) -> AppResult<Option<String>> {
+        if !self.frozen {
+            if let Some(accounts) = &self.accounts {
+                return accounts
+                    .provider_credential(
+                        &crate::music::identity::SourceId::try_from("netease".to_owned()).unwrap(),
+                    )
+                    .map_err(|e| e.to_string())?
+                    .map(|v| {
+                        String::from_utf8(v.expose().to_vec())
+                            .map_err(|_| "网易云凭据格式无效".to_owned())
+                    })
+                    .transpose();
+            }
+        }
         self.cookie
             .lock()
             .map(|cookie| cookie.clone())
             .map_err(|_| "登录状态锁不可用".into())
     }
+    pub fn with_accounts(accounts: std::sync::Arc<crate::music::accounts::AccountManager>) -> Self {
+        let client = ncm_api_rs::create_client(None);
+        let mut music_client = client.clone();
+        music_client.set_response_limit(2 * 1024 * 1024);
+        Self {
+            client,
+            music_client,
+            cookie: Mutex::new(None),
+            accounts: Some(accounts),
+            frozen: false,
+            session_generation: Default::default(),
+        }
+    }
+    pub(crate) fn scoped(
+        &self,
+        context: &crate::music::adapter::RequestContext,
+    ) -> crate::music::MusicResult<Self> {
+        use crate::music::account::AccountAccess;
+        if context.session.source.as_str() != "netease" {
+            return Err(crate::music::ErrorCode::PermissionDenied.into());
+        }
+        let bytes = if let Some(accounts) = &self.accounts {
+            if context.session.account.is_some() {
+                Some(accounts.scoped_access(context)?.read(context)?)
+            } else {
+                accounts.provider_credential(&context.session.source)?
+            }
+        } else {
+            self.account_credentials()
+                .map_err(|_| crate::music::ErrorCode::Internal)?
+                .map(|s| crate::music::account::OpaqueCredential::new(s.into_bytes()))
+                .transpose()?
+        };
+        let cookie = bytes
+            .map(|v| {
+                String::from_utf8(v.expose().to_vec())
+                    .map_err(|_| crate::music::ErrorCode::InvalidData)
+            })
+            .transpose()?;
+        let mut client = self.client.clone();
+        client.set_response_limit(2 * 1024 * 1024);
+        Ok(Self {
+            client,
+            music_client: self.music_client.clone(),
+            cookie: Mutex::new(cookie),
+            accounts: self.accounts.clone(),
+            frozen: true,
+            session_generation: std::sync::atomic::AtomicU64::new(context.session.generation),
+        })
+    }
+
     pub(crate) async fn song(&self, id: u64) -> crate::music::MusicResult<Track> {
         if id == 0 || id > 9_007_199_254_740_991 {
             return Err(crate::music::ErrorCode::InvalidData.into());
@@ -95,6 +175,7 @@ impl Netease {
             .and_then(track_from_json)
             .ok_or_else(|| crate::music::ErrorCode::NotFound.into())
     }
+    #[allow(dead_code)] // Read-only standalone probes; the application uses with_accounts.
     pub fn new() -> AppResult<Self> {
         let credential = keyring::Entry::new("NonsPlayer", "netease-session")
             .map_err(|_| "系统凭据存储不可用")?;
@@ -110,19 +191,18 @@ impl Netease {
             music_client,
             client,
             cookie: Mutex::new(cookie),
-            credential,
+            accounts: None,
+            frozen: false,
             session_generation: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
     fn query(&self) -> AppResult<Query> {
         let query = Query::new();
-        Ok(
-            match self.cookie.lock().map_err(|_| "登录状态锁不可用")?.as_ref() {
-                Some(cookie) => query.cookie(cookie),
-                None => query,
-            },
-        )
+        Ok(match self.account_credentials()? {
+            Some(cookie) => query.cookie(&cookie),
+            None => query,
+        })
     }
 
     pub async fn search(&self, keyword: &str, offset: u32) -> AppResult<Vec<Track>> {
@@ -316,7 +396,10 @@ impl Netease {
         Ok(QrLogin { key, image })
     }
 
-    pub async fn poll_login(&self, key: &str) -> AppResult<LoginStatus> {
+    pub(crate) async fn poll_completion(
+        &self,
+        key: &str,
+    ) -> AppResult<(LoginStatus, Option<crate::music::account::OpaqueCredential>)> {
         if key.is_empty() || key.len() > 256 {
             return Err("登录二维码已失效，请重新生成".into());
         }
@@ -327,6 +410,7 @@ impl Netease {
             .get("code")
             .and_then(Value::as_i64)
             .unwrap_or(response.status);
+        let mut completion = None;
         if code == 803 {
             let mut tokens = std::collections::BTreeMap::new();
             for cookie in &response.cookie {
@@ -344,13 +428,10 @@ impl Netease {
                 .map(|(k, v)| format!("{k}={v}"))
                 .collect::<Vec<_>>()
                 .join("; ");
-            self.credential
-                .set_password(&value)
-                .map_err(|_| "无法保存登录会话到系统凭据存储")?;
-            let mut cookie = self.cookie.lock().map_err(|_| "登录状态锁不可用")?;
-            *cookie = Some(value);
-            self.session_generation
-                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            completion = Some(
+                crate::music::account::OpaqueCredential::new(value.into_bytes())
+                    .map_err(|e| e.to_string())?,
+            );
         }
         let message = match code {
             800 => "二维码已过期",
@@ -359,45 +440,47 @@ impl Netease {
             803 => "登录成功",
             _ => "登录状态异常，请重试",
         };
-        Ok(LoginStatus {
-            code,
-            message: message.into(),
-        })
-    }
-
-    pub async fn session(&self) -> AppResult<bool> {
-        Ok(self.profile().await?.is_some())
+        Ok((
+            LoginStatus {
+                code,
+                message: message.into(),
+            },
+            completion,
+        ))
     }
 
     pub async fn profile(&self) -> AppResult<Option<AccountProfile>> {
-        if self
-            .cookie
-            .lock()
-            .map_err(|_| "登录状态锁不可用")?
-            .is_none()
-        {
+        if self.account_credentials()?.is_none() {
             return Ok(None);
         }
         let generation = self.session_generation();
         let query = self.query()?;
         let body = checked(self.client.login_status(&query)).await?;
         let profile = account_profile(&body);
-        if profile.is_none() {
+        if profile.is_none() && !self.frozen {
             self.invalidate_session(generation);
         }
         Ok(profile)
     }
 
-    pub fn logout(&self) -> AppResult<()> {
-        match self.credential.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => {}
-            Err(_) => return Err("无法清除系统凭据".into()),
-        }
-        let mut cookie = self.cookie.lock().map_err(|_| "登录状态锁不可用")?;
-        *cookie = None;
-        self.session_generation
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    pub(crate) async fn remote_logout(&self) -> crate::music::MusicResult<()> {
+        music_checked(
+            self.music_client.logout(
+                &self
+                    .query()
+                    .map_err(|_| crate::music::ErrorCode::Internal)?,
+            ),
+        )
+        .await?;
         Ok(())
+    }
+    pub(crate) async fn profile_with_credential(
+        &self,
+        credential: &crate::music::account::OpaqueCredential,
+    ) -> AppResult<Option<AccountProfile>> {
+        let cookie = std::str::from_utf8(credential.expose()).map_err(|_| "网易云凭据格式无效")?;
+        let body = checked(self.client.login_status(&Query::new().cookie(cookie))).await?;
+        Ok(account_profile(&body))
     }
 }
 
@@ -434,17 +517,9 @@ async fn timed<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>>>(
 async fn checked<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>>>(
     future: F,
 ) -> AppResult<Value> {
-    let response = timed(future).await?;
-    match response
-        .body
-        .get("code")
-        .and_then(Value::as_i64)
-        .unwrap_or(response.status)
-    {
-        200 => Ok(response.body),
-        301 | 302 => Err("网易云登录已失效，请重新扫码登录".into()),
-        _ => Err("网易云暂未完成请求，请稍后重试".into()),
-    }
+    music_checked(future)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 fn qr_key(body: &Value) -> AppResult<&str> {

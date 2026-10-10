@@ -10,10 +10,14 @@ pub type ResolvedPlayback = (ResolvedTrack, Option<Arc<ResourceTicket>>);
 
 pub struct MusicService {
     pub adapters: Arc<AdapterManager>,
+    pub accounts: Option<Arc<super::accounts::AccountManager>>,
 }
 impl MusicService {
     pub fn new(adapters: Arc<AdapterManager>) -> Self {
-        Self { adapters }
+        Self {
+            adapters,
+            accounts: None,
+        }
     }
     pub fn legacy_stamp(&self) -> AppResult<(super::account::SessionContext, u64)> {
         self.adapters

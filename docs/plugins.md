@@ -14,11 +14,11 @@ Nons 在现有播放器上增量提供 `Manifest + WASM Backend + React Frontend
 | 构建         | `scripts/build-plugin.mjs`、`plugin-build-ui.mjs`、`package-plugin.py`：两端构建、React 外部化与 ZIP |
 | 测试 fixture | `plugins/runtime-fixture/`：资源耗尽／错误验证，不随包安装                                           |
 
-宿主启动、IPC 和协议注册接入原 `lib.rs`；歌曲读取继续使用 `netease.rs` 的现有 Client 和曲目解析。App 增加通用 Provider／Slot，已有工作区和导航增加插件页面分支，设置增加插件管理。Theme 共享原偏好与 CSS tokens，播放 facade 订阅原状态及进度，不创建另一套播放器。
+宿主启动、IPC 和协议注册接入原 `lib.rs`；音乐读取经统一 MusicService／AdapterManager 路由到内置网易云适配器。App 增加通用 Provider／Slot，已有工作区和导航增加插件页面分支，设置增加插件管理。Theme 共享原偏好与 CSS tokens，播放 facade 订阅原状态及进度，不创建另一套播放器。
 
 职责归属见 [插件职责边界](adr/0005-plugin-capability-boundary.md)。通用能力提供系统操作；播放器领域能力复用已有业务服务；插件组合这些能力完成自己的业务。下面列出的接口为当前实现，不代表提前实现所有系统能力。
 
-[ADR 0006](adr/0006-music-provider-adapters.md) 阶段一已定义独立音乐适配器契约，规格与迁移注意事项见 [音乐适配器契约与迁移记录](music-adapters.md)。当前尚未开放音乐适配器包格式、运行管理入口或统一 SDK；本文的 `netease.*` 与兼容别名仍是现有功能插件接口，不能用功能插件 Manifest 注册音乐适配器。
+[ADR 0006](adr/0006-music-provider-adapters.md) 阶段一至三已完成，统一客户端与账号管理已接入，规格与迁移注意事项见 [音乐适配器契约与迁移记录](music-adapters.md)。音乐适配器包格式、外部 ABI 与安装管理入口尚未开放，不能用功能插件 Manifest 注册音乐适配器。本文 netease.* 保留为迁移兼容接口，新音乐能力使用文末统一客户端。
 
 ## 构建与安装
 
@@ -159,7 +159,7 @@ flowchart LR
   H --> W[插件筛选网易云链接／解析短链／识别歌曲 ID]
   W --> R[Host 通用 HTTP／域名范围授权]
   R --> W
-  W --> N[Host netease.get-song／既有网易云 Client]
+  W --> N[Host music.read-track／统一音乐服务]
   N --> W
   W --> E[plugin-scoped song-detected]
   E --> U[动态 ui.mjs／公共 SDK]
@@ -301,3 +301,33 @@ export function activate(client: PluginClient) {
 组件收到 `{ collection }`：`source`、`kind`、`id`、`name`、`subtitle`、`cover` 和 `trackCount`。网易云 ID 为数字，本地 ID 为曲库标识；仅交付 HTTP(S) 封面，不暴露本地封面路径。网络访问与登录凭证仍需分别申请对应权限，宿主不会代为提供评论接口。
 
 注册返回可重复调用的清理函数；插件停用、重载、卸载或激活失败时宿主自动清理。未完成加载的实例不会展示 tab；选中 tab 消失后自动回到“歌曲”。只挂载当前选择的插件内容，切换收藏重置到“歌曲”，组件应清理自身请求、订阅和定时器。
+
+## 统一音乐客户端（ADR 0006 阶段三）
+
+宿主现已开放来源无关的音乐 DTO 和受控能力。TypeScript 定义位于 `packages/plugin-sdk/music.d.ts`，由 `@app/plugin-sdk` 导出；React 插件调用 `useMusicSource()` 的 `sources/getTrack/query/write`，WASM 后端通过既有 host.call 调用 `music.sources`、`music.read-track`、`music.query`、`music.write`。
+
+公开来源／单曲／搜索／详情读取需要 `music:metadata`，账号相关曲库、历史、推荐与喜欢读取需要 `music:library`，收藏和歌单写入需要 `music:write`。扩大权限后需要重新授权；写入权限在管理界面标为敏感。query 不能携带写操作，write 不能携带读取。后端重新判断权限、来源能力和当前账号，不依赖前端 SDK 检查。
+
+```tsx
+import { useMusicSource } from '@app/plugin-sdk'
+
+function SearchButton() {
+  const music = useMusicSource()
+  async function search() {
+    const result = await music.query('netease', {
+      operation: 'search',
+      keyword: '音乐',
+      kind: 'track',
+      page: { cursor: null, limit: 50 }
+    })
+    if (result.type === 'tracks') console.log(result.data.items)
+  }
+  return <button onClick={() => void search()}>搜索</button>
+}
+```
+
+EntityRef 使用 `{source,kind,id}`，ID 为不透明字符串；调用 getTrack 时传完整引用。分页结果 nextCursor 原样回传，不能从它推导 offset；变更查询、账号、实例或写入后从首页重新读取。业务结果为 `{type,data}`，错误为稳定 MusicError。插件响应仍受既有 64KiB host.call 上限限制，大页或很大的喜欢列表可能无法交付；不要把管理器 2MiB 上限当作插件单次返回预算，在支持可变页数的操作中降低 limit；内置网易云分类搜索、歌手专辑、收藏列表和推荐歌单当前要求 limit=30，超出插件返回预算时不能靠截断结果隐藏错误。普通插件不能调用账号管理或取得临时播放 URL、请求头和原始凭据。
+
+`useNetease/getSong`、`netease.get-song` 与 `music.get-song` 已作为 deprecated 兼容接口，保持旧数字 ID／DTO，内部转统一路由。新通用能力使用 music.*；`netease.account-credentials` 保留独立的敏感 `account:credentials` 授权，用于现有平台专有工具，不作为统一音乐客户端前提。内置灵动岛后端已改用 music.read-track；下载插件的 EAPI 和凭据访问继续按现有敏感权限运行。
+
+这组能力是功能插件消费宿主的客户端接口，不是外部音乐适配器 ABI。外部适配器登录展示、包安装和不同平台验证属于 ADR 0006 阶段四。完整修改和继续开发注意事项见 [适配器记录](music-adapters.md#阶段三修改记录与注意事项2026-10-10)。
