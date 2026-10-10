@@ -76,6 +76,7 @@ impl PluginManager {
         app: tauri::AppHandle,
         data: &Path,
         netease: Arc<Netease>,
+        music: Arc<crate::music::service::MusicService>,
         player: Arc<Player>,
     ) -> AppResult<Arc<Self>> {
         let root = data.join("plugins");
@@ -92,7 +93,7 @@ impl PluginManager {
             database,
             configurations,
             files,
-            songs: Arc::new(SongService::new(netease)),
+            songs: Arc::new(SongService::new(netease, music)),
             http: Arc::new(http::Http::new()?),
             transfers: Arc::new(transfers::Transfers::default()),
             player,

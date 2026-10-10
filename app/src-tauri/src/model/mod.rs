@@ -338,12 +338,22 @@ pub struct Lyrics {
     pub romanization: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ResolvedTrack {
     pub decoded_audio: Option<std::sync::Arc<tempfile::NamedTempFile>>,
     pub track: Track,
     pub uri: String,
     pub quality: Option<String>,
+}
+
+impl std::fmt::Debug for ResolvedTrack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResolvedTrack")
+            .field("track", &self.track.key)
+            .field("quality", &self.quality)
+            .field("access", &"[redacted]")
+            .finish()
+    }
 }
 
 pub type AppResult<T> = Result<T, String>;

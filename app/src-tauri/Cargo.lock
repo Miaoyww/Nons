@@ -3511,7 +3511,6 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 [[package]]
 name = "ncm-api-rs"
 version = "0.1.0"
-source = "git+https://github.com/SPlayer-Dev/ncm-api-rs.git?rev=133b65bfe482e41ebccf018870d3fce07bf58eb3#133b65bfe482e41ebccf018870d3fce07bf58eb3"
 dependencies = [
  "aes",
  "base64 0.22.1",

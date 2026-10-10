@@ -742,6 +742,7 @@ pub fn run() {
                 store.set_setting("localIndexVersion", "1")?;
             }
             let netease = Arc::new(Netease::new()?);
+            let music = Arc::new(crate::music::netease::builtin_service(netease.clone())?);
             let cache = Arc::new(ttml_cache::TtmlCache::new(
                 store.clone(),
                 app.path().app_cache_dir()?,
@@ -768,13 +769,14 @@ pub fn run() {
             let player = Arc::new(Player::start(
                 app.handle().clone(),
                 store.clone(),
-                netease.clone(),
+                music.clone(),
                 hwnd,
             )?);
             let plugin_manager = plugins::PluginManager::new(
                 app.handle().clone(),
                 &data,
                 netease.clone(),
+                music.clone(),
                 player.clone(),
             )?;
             app.manage(plugin_manager.clone());

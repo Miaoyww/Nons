@@ -5,6 +5,12 @@ mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
+#[path = "../src/music/mod.rs"]
+#[allow(dead_code)]
+mod music;
+#[path = "../src/local/playback_resource.rs"]
+#[allow(dead_code)]
+mod playback_resource;
 mod storage {
     pub use crate::model::MAX_LYRIC_BYTES;
 }

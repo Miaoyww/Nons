@@ -6,7 +6,7 @@ mod search;
 #[allow(unused_imports)] // Standalone probes do not use the Tauri command return type.
 pub use discovery::PlaylistCategory;
 
-use crate::model::{AppResult, Lyrics, ResolvedTrack, Track, TrackSource};
+use crate::model::{AppResult, Lyrics, Track, TrackSource};
 use base64::Engine;
 use ncm_api_rs::{
     request::{ApiClient, ApiResponse},
@@ -18,8 +18,10 @@ use std::{future::Future, sync::Mutex, time::Duration};
 
 pub struct Netease {
     client: ApiClient,
+    music_client: ApiClient,
     cookie: Mutex<Option<String>>,
     credential: keyring::Entry,
+    session_generation: std::sync::atomic::AtomicU64,
 }
 
 #[derive(Serialize)]
@@ -57,24 +59,41 @@ pub struct SongCredit {
 }
 
 impl Netease {
+    pub(crate) fn invalidate_session(&self, expected_generation: u64) {
+        // A late unauthenticated response from an old account cannot revoke a new login.
+        let _ = self.session_generation.compare_exchange(
+            expected_generation,
+            expected_generation.wrapping_add(1),
+            std::sync::atomic::Ordering::AcqRel,
+            std::sync::atomic::Ordering::Acquire,
+        );
+    }
+    pub(crate) fn session_generation(&self) -> u64 {
+        self.session_generation
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
     pub(crate) fn account_credentials(&self) -> AppResult<Option<String>> {
         self.cookie
             .lock()
             .map(|cookie| cookie.clone())
             .map_err(|_| "登录状态锁不可用".into())
     }
-    pub async fn song(&self, id: u64) -> AppResult<Track> {
+    pub(crate) async fn song(&self, id: u64) -> crate::music::MusicResult<Track> {
         if id == 0 || id > 9_007_199_254_740_991 {
-            return Err("歌曲 ID 无效".into());
+            return Err(crate::music::ErrorCode::InvalidData.into());
         }
-        let body = checked(
-            self.client
-                .song_detail(&self.query()?.param("ids", &id.to_string())),
+        let body = music_checked(
+            self.music_client.song_detail(
+                &self
+                    .query()
+                    .map_err(|_| crate::music::ErrorCode::Internal)?
+                    .param("ids", &id.to_string()),
+            ),
         )
         .await?;
         body.pointer("/songs/0")
             .and_then(track_from_json)
-            .ok_or_else(|| "歌曲详情缺失".into())
+            .ok_or_else(|| crate::music::ErrorCode::NotFound.into())
     }
     pub fn new() -> AppResult<Self> {
         let credential = keyring::Entry::new("NonsPlayer", "netease-session")
@@ -84,10 +103,15 @@ impl Netease {
             Err(keyring::Error::NoEntry) => None,
             Err(_) => return Err("无法读取系统凭据存储，请检查系统钥匙串权限".into()),
         };
+        let client = ncm_api_rs::create_client(None);
+        let mut music_client = client.clone();
+        music_client.set_response_limit(2 * 1024 * 1024);
         Ok(Self {
-            client: ncm_api_rs::create_client(None),
+            music_client,
+            client,
             cookie: Mutex::new(cookie),
             credential,
+            session_generation: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -163,83 +187,69 @@ impl Netease {
         Ok(information)
     }
 
-    pub async fn resolve(
+    pub(crate) async fn resolve_resource(
         &self,
-        track: Track,
+        id: u64,
         quality: &str,
         allow_downgrade: bool,
-    ) -> AppResult<ResolvedTrack> {
-        if let TrackSource::Local { path, .. } = &track.source {
-            let decoded_audio = if crate::encoded_audio::is_encoded(std::path::Path::new(path)) {
-                let path = path.clone();
-                static DECODING: std::sync::OnceLock<std::sync::Arc<tokio::sync::Semaphore>> =
-                    std::sync::OnceLock::new();
-                let permit = DECODING
-                    .get_or_init(|| std::sync::Arc::new(tokio::sync::Semaphore::new(2)))
-                    .clone()
-                    .try_acquire_owned()
-                    .map_err(|_| "音频解析繁忙，请稍后重试")?;
-                Some(
-                    tauri::async_runtime::spawn_blocking(move || {
-                        let _permit = permit;
-                        crate::encoded_audio::prepare(&path)
-                    })
-                    .await
-                    .map_err(|e| e.to_string())??,
-                )
-            } else {
-                None
-            };
-            let playable_path = decoded_audio
-                .as_ref()
-                .map(|f| f.path())
-                .unwrap_or_else(|| std::path::Path::new(path));
-            let uri = url::Url::from_file_path(playable_path)
-                .map_err(|_| "本地文件路径无效")?
-                .to_string();
-            if !std::path::Path::new(path).is_file() {
-                return Err("本地音乐文件已移动或删除，请重新导入".into());
-            }
-            return Ok(ResolvedTrack {
-                decoded_audio,
-                track,
-                uri,
-                quality: None,
-            });
-        }
-        let id = track.netease_id().ok_or("网易云歌曲 ID 缺失")?;
+    ) -> crate::music::MusicResult<crate::music::resource::PlaybackResource> {
+        use crate::music::{resource::*, ErrorCode};
         let query = self
-            .query()?
+            .query()
+            .map_err(|_| ErrorCode::Internal)?
             .param("id", &id.to_string())
             .param("level", quality);
-        let body = checked(self.client.song_url_v1(&query)).await?;
-        let item = body.pointer("/data/0").ok_or("没有可用的播放资源")?;
+        let body = music_checked(self.music_client.song_url_v1(&query)).await?;
+        let item = body.pointer("/data/0").ok_or(ErrorCode::NotFound)?;
+        if item.get("id").and_then(Value::as_u64) != Some(id) {
+            return Err(ErrorCode::InvalidData.into());
+        }
         let uri = item
             .get("url")
             .and_then(Value::as_str)
             .filter(|s| !s.is_empty())
-            .ok_or("此歌曲暂不可播放，请检查账号权限或音质设置")?;
-        let parsed = url::Url::parse(uri).map_err(|_| "播放地址无效")?;
-        if !matches!(parsed.scheme(), "https" | "http") {
-            return Err("播放地址协议不支持".into());
-        }
+            .ok_or(ErrorCode::PermissionDenied)?;
         let actual = item
             .get("level")
             .and_then(Value::as_str)
-            .unwrap_or(quality)
+            .filter(|v| !v.is_empty())
+            .ok_or(ErrorCode::InvalidData)?
             .to_string();
         if !allow_downgrade && actual != quality {
-            return Err("所选音质不可用；可在音质设置中允许降级".into());
+            return Err(ErrorCode::PermissionDenied.into());
         }
-        // Trial segments are not silently presented as complete tracks.
-        if !item.get("freeTrialInfo").unwrap_or(&Value::Null).is_null() {
-            return Err("当前账号只能试听此歌曲，暂不作为完整歌曲播放".into());
-        }
-        Ok(ResolvedTrack {
-            decoded_audio: None,
-            track,
-            uri: uri.into(),
-            quality: Some(actual),
+        let extent = match item.get("freeTrialInfo").filter(|v| !v.is_null()) {
+            Some(trial) => PlaybackExtent::Preview {
+                start_ms: trial
+                    .get("start")
+                    .and_then(Value::as_u64)
+                    .ok_or(ErrorCode::InvalidData)?
+                    .checked_mul(1000)
+                    .ok_or(ErrorCode::InvalidData)?,
+                end_ms: trial
+                    .get("end")
+                    .and_then(Value::as_u64)
+                    .ok_or(ErrorCode::InvalidData)?
+                    .checked_mul(1000)
+                    .ok_or(ErrorCode::InvalidData)?,
+            },
+            None => PlaybackExtent::Full,
+        };
+        let expires_at_ms = item
+            .get("expi")
+            .and_then(Value::as_u64)
+            .and_then(|seconds| seconds.checked_mul(1000))
+            .and_then(|ttl| crate::music::manager::now_ms().checked_add(ttl));
+        Ok(PlaybackResource {
+            metadata: ResourceMetadata {
+                actual_quality: actual,
+                extent,
+                expires_at_ms,
+            },
+            access: ResourceAccess::Http(HttpAccess {
+                url: uri.into(),
+                headers: vec![],
+            }),
         })
     }
 
@@ -337,7 +347,10 @@ impl Netease {
             self.credential
                 .set_password(&value)
                 .map_err(|_| "无法保存登录会话到系统凭据存储")?;
-            *self.cookie.lock().map_err(|_| "登录状态锁不可用")? = Some(value);
+            let mut cookie = self.cookie.lock().map_err(|_| "登录状态锁不可用")?;
+            *cookie = Some(value);
+            self.session_generation
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         }
         let message = match code {
             800 => "二维码已过期",
@@ -365,9 +378,14 @@ impl Netease {
         {
             return Ok(None);
         }
+        let generation = self.session_generation();
         let query = self.query()?;
         let body = checked(self.client.login_status(&query)).await?;
-        Ok(account_profile(&body))
+        let profile = account_profile(&body);
+        if profile.is_none() {
+            self.invalidate_session(generation);
+        }
+        Ok(profile)
     }
 
     pub fn logout(&self) -> AppResult<()> {
@@ -375,7 +393,10 @@ impl Netease {
             Ok(()) | Err(keyring::Error::NoEntry) => {}
             Err(_) => return Err("无法清除系统凭据".into()),
         }
-        *self.cookie.lock().map_err(|_| "登录状态锁不可用")? = None;
+        let mut cookie = self.cookie.lock().map_err(|_| "登录状态锁不可用")?;
+        *cookie = None;
+        self.session_generation
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         Ok(())
     }
 }
@@ -534,6 +555,63 @@ fn track_from_json(song: &Value) -> Option<Track> {
             .into(),
         source: TrackSource::Netease { id },
     })
+}
+
+// The patched pinned client also bounds the body before JSON decoding.
+async fn music_checked<F: Future<Output = ncm_api_rs::error::Result<ApiResponse>>>(
+    future: F,
+) -> crate::music::MusicResult<Value> {
+    use crate::music::ErrorCode;
+    let response = tokio::time::timeout(Duration::from_secs(12), future)
+        .await
+        .map_err(|_| ErrorCode::DeadlineExceeded)?
+        .map_err(music_error)?;
+    match response
+        .body
+        .get("code")
+        .and_then(Value::as_i64)
+        .unwrap_or(response.status)
+    {
+        200 => {
+            if serde_json::to_vec(&response.body)
+                .map_err(|_| ErrorCode::InvalidData)?
+                .len()
+                > 2 * 1024 * 1024
+            {
+                return Err(ErrorCode::InvalidData.into());
+            }
+            Ok(response.body)
+        }
+        301 | 302 => Err(ErrorCode::Unauthenticated.into()),
+        403 => Err(ErrorCode::PermissionDenied.into()),
+        404 => Err(ErrorCode::NotFound.into()),
+        429 => Err(ErrorCode::RateLimited.into()),
+        _ => Err(ErrorCode::Network.into()),
+    }
+}
+
+fn music_error(error: ncm_api_rs::error::NcmError) -> crate::music::MusicError {
+    use crate::music::ErrorCode;
+    use ncm_api_rs::error::NcmError;
+    let code = match error {
+        NcmError::AuthRequired(_) => ErrorCode::Unauthenticated,
+        NcmError::RateLimited(_) => ErrorCode::RateLimited,
+        NcmError::Timeout(_) => ErrorCode::DeadlineExceeded,
+        NcmError::InvalidParam(_) | NcmError::ResponseTooLarge | NcmError::Json(_) => {
+            ErrorCode::InvalidData
+        }
+        NcmError::Api { code: 403, .. } => ErrorCode::PermissionDenied,
+        NcmError::Api { code: 404, .. } => ErrorCode::NotFound,
+        NcmError::Api { code: 451, .. } => ErrorCode::RegionRestricted,
+        NcmError::Api {
+            code: 429 | 503, ..
+        } => ErrorCode::RateLimited,
+        NcmError::Api {
+            code: 301 | 302, ..
+        } => ErrorCode::Unauthenticated,
+        _ => ErrorCode::Network,
+    };
+    code.into()
 }
 
 #[cfg(test)]

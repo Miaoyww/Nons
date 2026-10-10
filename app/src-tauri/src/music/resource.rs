@@ -40,7 +40,7 @@ pub struct ResourceMetadata {
 }
 
 /// Backend-only transport data. No serialization; Debug always redacts the entire access.
-/// Phase two must validate protocol, URL/header sizes and redirect policy before use.
+/// AdapterManager validates access before registering the backend-only resource.
 pub struct HttpAccess {
     pub url: String,
     pub headers: Vec<(String, String)>,
@@ -101,7 +101,14 @@ impl ResourceLease {
         adapter_generation: u64,
         playback_generation: u64,
     ) -> MusicResult<()> {
-        self.context.check(session, adapter_generation)?;
+        // The request deadline governs resolution, not the lifetime of a prepared resource.
+        if self.context.cancellation.is_cancelled() {
+            return Err(ErrorCode::Cancelled.into());
+        }
+        if &self.context.session != session || self.context.adapter_generation != adapter_generation
+        {
+            return Err(ErrorCode::StaleContext.into());
+        }
         if self.playback_generation != playback_generation {
             return Err(ErrorCode::StaleContext.into());
         }

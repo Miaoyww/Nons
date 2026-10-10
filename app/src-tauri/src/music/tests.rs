@@ -322,3 +322,26 @@ fn cache_identity_isolated_by_source_account_operation_and_generations() {
         assert_ne!(serde_json::to_string(&variant).unwrap(), key);
     }
 }
+
+#[test]
+fn prepared_resource_lease_uses_its_own_lifetime_after_request_completion() {
+    let mut request = context();
+    request.deadline = Instant::now();
+    let lease = ResourceLease {
+        handle: ResourceHandle::try_from("prepared-resource".to_owned()).unwrap(),
+        context: request.clone(),
+        playback_generation: 4,
+        valid_until: Instant::now() + Duration::from_secs(60),
+    };
+    lease
+        .check(&request.session, request.adapter_generation, 4)
+        .unwrap();
+    request.cancellation.cancel();
+    assert_eq!(
+        lease
+            .check(&request.session, request.adapter_generation, 4)
+            .unwrap_err()
+            .code,
+        ErrorCode::Cancelled
+    );
+}

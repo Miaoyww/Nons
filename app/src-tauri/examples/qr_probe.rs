@@ -5,9 +5,15 @@ mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
+#[path = "../src/music/mod.rs"]
+#[allow(dead_code)]
+mod music;
 #[path = "../src/netease/mod.rs"]
 #[allow(dead_code)]
 mod netease;
+#[path = "../src/local/playback_resource.rs"]
+#[allow(dead_code)]
+mod playback_resource;
 use base64::Engine;
 
 #[tokio::main]

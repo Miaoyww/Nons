@@ -7,6 +7,11 @@ Source: https://crates.io/crates/gst-plugin-reqwest/0.15.4
 
 Nons changes:
 
+- Redact media URI, request headers and response Debug from diagnostics; strip
+  URLs from network errors.
+- Disable automatic HTTP redirects for adapter resource handoff; the provider must
+  resolve the final resource again rather than forwarding access to another URL.
+
 - Statically register as plugin `nonsreqwest`, factory `nonshttpsrc`, GObject
   `NonsReqwestHttpSrc` to avoid collisions with runtime-installed plugins.
 - Rank above the standard HTTP sources for consistent behavior across installs.

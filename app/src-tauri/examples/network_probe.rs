@@ -5,22 +5,29 @@ mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
+#[path = "../src/music/mod.rs"]
+#[allow(dead_code)]
+mod music;
 #[path = "../src/netease/mod.rs"]
 #[allow(dead_code)]
 mod netease;
 #[path = "../src/playback/network.rs"]
 mod network;
+#[path = "../src/local/playback_resource.rs"]
+#[allow(dead_code)]
+mod playback_resource;
 use gstreamer::{self as gst, prelude::*};
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let api = netease::Netease::new()?;
+    let api = std::sync::Arc::new(netease::Netease::new()?);
+    let music = music::netease::builtin_service(api.clone())?;
     let tracks = api.search("纯音乐", 0).await?;
     println!("Search returned {} tracks", tracks.len());
     let mut selected = None;
     for track in tracks.into_iter().take(3) {
-        if let Ok(resource) = api.resolve(track, "standard", true).await {
-            selected = Some(resource);
+        if let Ok(resource) = music.resolve(track, "standard", true, 0).await {
+            selected = Some(resource.0);
             break;
         }
     }
