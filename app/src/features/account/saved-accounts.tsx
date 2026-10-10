@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, RefreshCw, Trash2, UserRound } from 'lucide-react'
+import { Check, RefreshCw, Trash2 } from 'lucide-react'
+import { AccountAvatar } from './account-avatar'
 import { ActionButton } from '@/components/music/action-button'
 import { musicClient } from '@/features/music/client'
 import type { AccountRecord, AccountRef } from '@/features/music/types'
@@ -109,12 +110,16 @@ export function SavedAccounts({
                 }
                 onClick={() => void change(record)}
               >
-                {record.reference.source === current?.source &&
-                record.reference.id === current?.id ? (
-                  <Check aria-hidden="true" />
-                ) : (
-                  <UserRound aria-hidden="true" />
-                )}
+                <span className="relative shrink-0">
+                  <AccountAvatar avatar={record.avatar} />
+                  {record.reference.source === current?.source &&
+                    record.reference.id === current?.id && (
+                      <Check
+                        className="absolute -right-1 -bottom-1 size-3 rounded-full bg-background text-primary"
+                        aria-hidden="true"
+                      />
+                    )}
+                </span>
                 <span className="truncate">{record.displayName}</span>
                 <span className="ml-auto shrink-0 text-xs text-muted-foreground">{sourceName}</span>
               </ActionButton>

@@ -48,7 +48,6 @@ import { useAccount } from '@/features/account/account'
 import { ActionButton } from '@/components/music/action-button'
 import { Cover } from '@/components/music/cover'
 import { InfiniteLoad } from '@/components/music/infinite-load'
-import { LoginDialog } from '@/features/account/login-dialog'
 import { PlaylistCard } from '@/features/library/playlist-card'
 import { TrackList } from '@/components/music/track-list'
 import { useMusicNavigation, type MusicCollection } from '@/features/workspace/music-navigation'
@@ -157,6 +156,7 @@ function CategoryPicker({ value, onChange }: { value: string; onChange: (value: 
 }
 
 function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
+  const { navigate } = useMusicNavigation()
   const { profile } = useAccount()
   const player = usePlayer()
   const [tracks, setTracks] = useState<Track[]>([])
@@ -323,7 +323,9 @@ function PrivateFM({ onError }: { onError: (cause: unknown) => void }) {
         )}
         {!profile && (
           <div className="mt-2">
-            <LoginDialog />
+            <ActionButton variant="secondary" onClick={() => navigate('accounts', 'netease')}>
+              登录账号
+            </ActionButton>
           </div>
         )}
       </div>
@@ -432,7 +434,9 @@ export default function Discovery({
           {!profile ? (
             <div className="library-empty">
               <p>登录后发现今天为你推荐的音乐。</p>
-              <LoginDialog />
+              <ActionButton variant="secondary" onClick={() => navigate('accounts', 'netease')}>
+                登录账号
+              </ActionButton>
             </div>
           ) : (
             <>

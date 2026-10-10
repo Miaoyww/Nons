@@ -5,7 +5,7 @@ import type { UnlistenFn } from '@tauri-apps/api/event'
 import { ChevronLeft, ChevronRight, ChevronDown, Copy, Minus, Square, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SettingsDialog } from '@/features/settings/settings-dialog'
-import { LoginDialog } from '@/features/account/login-dialog'
+import { AccountMenu } from '@/features/account/account-menu'
 import { useMusicNavigation } from '@/features/workspace/music-navigation'
 import { MusicSearch } from '@/features/search/music-search'
 import appIcon from '@/assets/icon.png'
@@ -161,7 +161,7 @@ export function Titlebar({
                   key={view}
                   variant={
                     page.view === view ||
-                    (view === 'library' && page.view === 'collection') ||
+                    (view === 'library' && ['collection', 'accounts'].includes(page.view)) ||
                     (view === 'discover' && page.view === 'search') ||
                     (view === 'local' && page.view.startsWith('local-')) ||
                     (view === 'tools' &&
@@ -176,7 +176,7 @@ export function Titlebar({
                   }
                   aria-current={
                     page.view === view ||
-                    (view === 'library' && page.view === 'collection') ||
+                    (view === 'library' && ['collection', 'accounts'].includes(page.view)) ||
                     (view === 'discover' && page.view === 'search') ||
                     (view === 'local' && page.view.startsWith('local-')) ||
                     (view === 'tools' &&
@@ -226,7 +226,7 @@ export function Titlebar({
 
           <div className="flex h-full shrink-0 items-center gap-1 pr-1.5">
             <div className={playerMode ? 'hidden' : 'flex items-center gap-1'}>
-              <LoginDialog />
+              <AccountMenu />
               <SettingsDialog />
             </div>
 

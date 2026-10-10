@@ -35,6 +35,9 @@ test('saved accounts select references, confirm deletion and ignore responses af
         React.createElement('button', props, children)
     },
     '@/lib/player': { errorText: String },
+    './account-avatar': {
+      AccountAvatar: ({ avatar }) => React.createElement('img', { src: avatar, alt: '' })
+    },
     '@/features/music/client': {
       musicClient: {
         accounts: (source) => request('accounts', source),
@@ -72,7 +75,7 @@ test('saved accounts select references, confirm deletion and ignore responses af
   const records = [1, 2].map((id) => ({
     reference: { source: 'netease', id: String(id) },
     displayName: `User ${id}`,
-    avatar: ''
+    avatar: `https://example.com/avatar-${id}.jpg`
   }))
   try {
     await render(false)
@@ -81,6 +84,7 @@ test('saved accounts select references, confirm deletion and ignore responses af
     assert.equal(requests[0].reference, 'netease')
     await act(async () => requests[0].resolve(records))
     assert.equal(button('User 1').disabled, true)
+    assert.equal(button('User 1').querySelector('img').src, records[0].avatar)
     await click(button('User 2'))
     assert.equal(requests[1].operation, 'select')
     assert.deepEqual(JSON.parse(JSON.stringify(requests[1].reference)), records[1].reference)

@@ -22,6 +22,8 @@ WASM 无法调用 WebUI 的 `nativeCall`，因此 `plugins/netease.rs` 的 `Song
 
 账号卡片通过 `adapter_list` 获取来源，`music_current_account` 与 `music_accounts` 实时读取当前选择和保存账号，不缓存、不返回凭证；账号来源切换丢弃旧响应。退出仅取消当前来源的选择，保留记录和系统凭证；删除账号才清理凭证。两种操作沿用账号代次和 `music-account-changed` 通知，使旧请求和查询缓存失效。
 
+聚合账号登录页沿用同一账号读取和事件路径，仅为当前选择的适配器生成二维码并轮询；切换来源或离开页面时停止轮询、丢弃旧登录结果。账号头像通过 `useCoverImageSource` 复用有界图片缓存与图片失败回退策略。
+
 适配器列表、启停及重载经 nativeCall 实时调用，不加入查询缓存。`musicAdapterEnabledV1:<source>` 是设备设置，保存在现有 SQLite settings，停用重启后保持；账号切换与缓存清理不删除它。保存失败不改变运行启停。成功变更发出 `adapters-changed` 与 `music-changed`，清理查询缓存并推进实例代次；nativeCall 与插件 Rust 歌曲缓存继续在命中/发布时复核来源上下文，旧查询及预加载不能发布。停用保留账号和队列，歌词磁盘缓存不删除，既有资源/本地缓存策略继续有效。
 
 ## 运行时缓存的接入

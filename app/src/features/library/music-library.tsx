@@ -1,3 +1,4 @@
+import AccountLoginPage from '@/features/account/account-login-page'
 import { CollectionTabs } from '@/features/library/collection-tabs'
 import { MusicPage } from '@/components/music/music-page'
 import { CollectionContextMenu, useCollectionActions } from '@/features/library/collection-actions'
@@ -38,7 +39,6 @@ import {
 import { ActionButton } from '@/components/music/action-button'
 import { useAccount } from '@/features/account/account'
 import { Cover } from '@/components/music/cover'
-import { LoginDialog } from '@/features/account/login-dialog'
 import { useMusicNavigation, type MusicCollection } from '@/features/workspace/music-navigation'
 import { TrackList } from '@/components/music/track-list'
 import { InfiniteLoad } from '@/components/music/infinite-load'
@@ -239,6 +239,8 @@ export default function MusicLibrary({
     </ActionButton>
   )
 
+  if (!showingDetail && !profile && !accountLoading) return <AccountLoginPage />
+
   return (
     <MusicPage aria-label="网易云音乐库">
       {showingDetail ? (
@@ -260,7 +262,9 @@ export default function MusicLibrary({
             {!profile ? (
               <div className="library-empty">
                 <p>登录网易云音乐后查看这个收藏。</p>
-                <LoginDialog />
+                <ActionButton variant="secondary" onClick={() => navigate('accounts', 'netease')}>
+                  登录账号
+                </ActionButton>
               </div>
             ) : detailBusy && !detail.tracks.length ? (
               <p role="status" className="library-empty">
@@ -369,7 +373,9 @@ export default function MusicLibrary({
               {!profile && !accountLoading ? (
                 <div className="library-empty">
                   <p>登录网易云音乐，找回你喜欢的旋律。</p>
-                  <LoginDialog />
+                  <ActionButton variant="secondary" onClick={() => navigate('accounts', 'netease')}>
+                    登录账号
+                  </ActionButton>
                 </div>
               ) : summaryError || summary?.likedError ? (
                 <div role="alert" className="library-empty text-destructive">

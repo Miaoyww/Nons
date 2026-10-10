@@ -28,6 +28,7 @@ const ArtistPage = lazy(() => import('@/features/library/artist-page'))
 const AlbumPage = lazy(() => import('@/features/library/album-page'))
 const Discovery = lazy(() => import('@/features/discovery/discovery'))
 const LyricsView = lazy(() => import('@/features/lyrics/lyrics-view'))
+const AccountLoginPage = lazy(() => import('@/features/account/account-login-page'))
 const MusicLibrary = lazy(() => import('@/features/library/music-library'))
 interface ImportReport {
   imported: number
@@ -265,6 +266,16 @@ export function MusicWorkspace({
                       onNotice={showNotice}
                     />
                   )}
+                </Suspense>
+              ) : view === 'accounts' ? (
+                <Suspense
+                  fallback={
+                    <p role="status" className="m-auto">
+                      正在加载登录页…
+                    </p>
+                  }
+                >
+                  <AccountLoginPage />
                 </Suspense>
               ) : view === 'tools' ? (
                 <ToolsPage />
