@@ -63,6 +63,28 @@ impl Default for PlayerSnapshot {
 }
 
 impl PlayerSnapshot {
+    pub fn deduplicate_queue(&mut self) {
+        let mut indices = std::collections::HashMap::new();
+        let mut remap = Vec::with_capacity(self.queue.len());
+        let mut queue = Vec::with_capacity(self.queue.len());
+        for track in std::mem::take(&mut self.queue) {
+            let index = *indices.entry(track.key.clone()).or_insert_with(|| {
+                queue.push(track);
+                queue.len() - 1
+            });
+            remap.push(index);
+        }
+        self.index = self.index.and_then(|i| remap.get(i).copied());
+        let mut seen = std::collections::HashSet::new();
+        self.shuffle_order = self
+            .shuffle_order
+            .iter()
+            .filter_map(|i| remap.get(*i).copied())
+            .filter(|i| seen.insert(*i))
+            .collect();
+        self.queue = queue;
+    }
+
     pub fn toggle_shuffle(&mut self, current: Option<usize>) {
         self.shuffle = !self.shuffle;
         if self.shuffle {
@@ -189,8 +211,26 @@ impl PlayerSnapshot {
     }
 
     pub fn insert_next(&mut self, tracks: Vec<Track>) -> AppResult<usize> {
-        if tracks.len() + self.queue.len() > 1000 {
+        // The current track stays in place; requesting it again never duplicates it.
+        let current = self.current().map(|t| t.key.clone());
+        let mut seen = std::collections::HashSet::new();
+        let tracks: Vec<_> = tracks
+            .into_iter()
+            .filter(|t| Some(&t.key) != current.as_ref() && seen.insert(t.key.clone()))
+            .collect();
+        if tracks.is_empty() {
+            return Ok(self.index.unwrap_or(0));
+        }
+        let existing: std::collections::HashSet<_> = self.queue.iter().map(|t| &t.key).collect();
+        let new_count = tracks.iter().filter(|t| !existing.contains(&t.key)).count();
+        if new_count + self.queue.len() > 1000 {
             return Err("播放队列最多支持 1000 首歌曲".into());
+        }
+        for index in (0..self.queue.len()).rev() {
+            if seen.contains(&self.queue[index].key) {
+                let key = self.queue[index].key.clone();
+                self.remove_track(index, &key)?;
+            }
         }
         let position = self
             .index
@@ -486,6 +526,96 @@ mod tests {
         }
     }
     #[test]
+    fn next_insertion_moves_existing_tracks_and_keeps_current_and_shuffle_order() {
+        for shuffle in [false, true] {
+            let mut state = PlayerSnapshot {
+                queue: (1..=5).map(track).collect(),
+                index: Some(2),
+                shuffle,
+                shuffle_order: if shuffle { vec![2, 4, 0, 3, 1] } else { vec![] },
+                position_ms: 500,
+                status: PlaybackStatus::Playing,
+                ..Default::default()
+            };
+            assert_eq!(
+                state
+                    .insert_next(vec![track(1), track(5), track(1), track(3)])
+                    .unwrap(),
+                2
+            );
+            assert_eq!(
+                state
+                    .queue
+                    .iter()
+                    .map(|t| t.key.as_str())
+                    .collect::<Vec<_>>(),
+                vec!["2", "3", "1", "5", "4"]
+            );
+            assert_eq!(state.index, Some(1));
+            assert_eq!(state.current().unwrap().key, "3");
+            assert_eq!(state.position_ms, 500);
+            assert_eq!(state.status, PlaybackStatus::Playing);
+            assert_eq!(state.following(true), Some(2));
+            if shuffle {
+                assert_eq!(state.shuffle_order, vec![1, 2, 3, 4, 0]);
+            }
+            state.insert_next(vec![track(3)]).unwrap();
+            assert_eq!(state.queue.len(), 5);
+            assert_eq!(state.index, Some(1));
+        }
+    }
+
+    #[test]
+    fn full_queue_allows_moves_and_checks_unique_additions_atomically() {
+        let mut state = PlayerSnapshot {
+            queue: (0..1000).map(track).collect(),
+            index: Some(500),
+            ..Default::default()
+        };
+        state
+            .insert_next(vec![track(1), track(999), track(1)])
+            .unwrap();
+        assert_eq!(state.queue.len(), 1000);
+        assert_eq!(state.current().unwrap().key, "500");
+        assert_eq!(state.queue[state.index.unwrap() + 1].key, "1");
+        let before = state
+            .queue
+            .iter()
+            .map(|t| t.key.clone())
+            .collect::<Vec<_>>();
+        assert!(state.insert_next(vec![track(2), track(1001)]).is_err());
+        assert_eq!(
+            state
+                .queue
+                .iter()
+                .map(|t| t.key.clone())
+                .collect::<Vec<_>>(),
+            before
+        );
+        let mut empty = PlayerSnapshot::default();
+        empty.insert_next(vec![track(1); 1001]).unwrap();
+        assert_eq!(empty.queue.len(), 1);
+    }
+
+    #[test]
+    fn queue_deduplication_remaps_selected_duplicate_and_shuffle_indices() {
+        let mut state = PlayerSnapshot {
+            queue: vec![track(1), track(2), track(1), track(3)],
+            index: Some(2),
+            shuffle: true,
+            shuffle_order: vec![2, 3, 0, 1],
+            position_ms: 500,
+            ..Default::default()
+        };
+        state.deduplicate_queue();
+        assert_eq!(state.queue.len(), 3);
+        assert_eq!(state.index, Some(0));
+        assert_eq!(state.current().unwrap().key, "1");
+        assert_eq!(state.shuffle_order, vec![0, 2, 1]);
+        assert_eq!(state.position_ms, 500);
+    }
+
+    #[test]
     fn next_insertion_preserves_current_playback_and_batch_order() {
         let mut state = PlayerSnapshot {
             queue: vec![track(1), track(2), track(3)],
@@ -517,7 +647,7 @@ mod tests {
         assert_eq!(state.status, PlaybackStatus::Stopped);
         state.insert_next(vec![track(2)]).unwrap();
         assert_eq!(state.queue[1].key, "2");
-        assert!(state.insert_next(vec![track(3); 999]).is_err());
+        assert!(state.insert_next((3..1002).map(track).collect()).is_err());
         assert_eq!(state.queue.len(), 2);
     }
     #[test]

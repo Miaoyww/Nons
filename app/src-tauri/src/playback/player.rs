@@ -61,6 +61,7 @@ fn previous_command(state: &PlayerSnapshot) -> Option<Command> {
 }
 
 fn restore_player(mut state: PlayerSnapshot) -> PlayerSnapshot {
+    state.deduplicate_queue();
     state.status = PlaybackStatus::Stopped;
     state.error = None;
     state.media_error = None;
@@ -390,6 +391,9 @@ impl Actor {
                 }
                 self.state.private_fm_session = None;
                 self.state.queue = queue;
+                self.state.index = Some(index);
+                self.state.deduplicate_queue();
+                let index = self.state.index.unwrap_or(0);
                 self.state.reset_shuffle_order(Some(index));
                 self.load(index, true)?;
             }
@@ -451,7 +455,11 @@ impl Actor {
                 self.publish();
             }
             Command::PlayNext(tracks) => {
-                if tracks.is_empty() {
+                if tracks.iter().all(|t| {
+                    self.state
+                        .current()
+                        .is_some_and(|current| current.key == t.key)
+                }) {
                     return Ok(());
                 }
                 let position = self.state.insert_next(tracks)?;
