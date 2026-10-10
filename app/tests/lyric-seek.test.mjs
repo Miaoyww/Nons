@@ -47,14 +47,14 @@ function lyricControl({ failure, desktop = true } = {}) {
     '@/features/playback/now-playing-menu': {}
   }
   const source = readFileSync(
-    new URL('../src/features/lyrics/lyrics-view.tsx', import.meta.url),
+    new URL('../src/features/lyrics/lyric-renderer.tsx', import.meta.url),
     'utf8'
   )
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX }
   })
   const exports = {}
-  runInNewContext(`${outputText}\nexports.testRenderer = LyricRenderer;`, {
+  runInNewContext(`${outputText}\nexports.testRenderer = exports.default;`, {
     exports,
     document: { visibilityState: 'visible' },
     require: (name) => {

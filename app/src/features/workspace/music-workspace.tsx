@@ -22,13 +22,13 @@ import { QueuePage } from '@/features/queue/queue-page'
 import { ToolsPage } from '@/features/tools/tools-page'
 import { PluginPageHost } from '@/plugins/host'
 import { useInterfaceDensity } from '@/features/settings/use-interface-density'
+import LyricsView from '@/features/lyrics/lyrics-view'
 
 const LocalPage = lazy(() => import('@/features/local/local-page'))
 const SearchPage = lazy(() => import('@/features/search/search-page'))
 const ArtistPage = lazy(() => import('@/features/library/artist-page'))
 const AlbumPage = lazy(() => import('@/features/library/album-page'))
 const Discovery = lazy(() => import('@/features/discovery/discovery'))
-const LyricsView = lazy(() => import('@/features/lyrics/lyrics-view'))
 const AccountLoginPage = lazy(() => import('@/features/account/account-login-page'))
 const MusicLibrary = lazy(() => import('@/features/library/music-library'))
 interface ImportReport {
@@ -201,11 +201,9 @@ export function MusicWorkspace({
           data-playback-bar={barMode}
           data-density={density}
         >
-          <Suspense fallback={<MusicPageSkeleton tracks />}>
-            <AnimatePresence onExitComplete={onPlayerExitComplete}>
-              {nowPlaying && <LyricsView key="now-playing" onQueue={openQueue} />}
-            </AnimatePresence>
-          </Suspense>
+          <AnimatePresence onExitComplete={onPlayerExitComplete}>
+            {nowPlaying && <LyricsView key="now-playing" onQueue={openQueue} />}
+          </AnimatePresence>
           <div className={nowPlaying ? 'hidden' : 'flex min-h-0 flex-1'}>
             <main
               id="music-content"

@@ -23,7 +23,8 @@ const streamLyrics = {
   content: 'stream word lyrics with translation'
 }
 
-function harness(track) {
+function harness(track, settle = true) {
+  let present = true
   let player = { queue: [track], index: 0, status: 'playing', revision: 0 }
   const states = []
   const effects = []
@@ -51,7 +52,9 @@ function harness(track) {
       },
       useEffect: (fn) => effects.push(fn),
       useCallback: (fn) => fn,
-      useMemo: (fn) => fn()
+      useMemo: (fn) => fn(),
+      lazy: () => 'DeferredLyricRenderer',
+      Suspense: 'Suspense'
     },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     '@/lib/player': { usePlayer: () => player, getPlayer: () => player, errorText: String },
@@ -84,7 +87,7 @@ function harness(track) {
     },
     'motion/react': {
       motion: { section: 'section' },
-      useIsPresent: () => true,
+      useIsPresent: () => present,
       useReducedMotion: () => false
     }
   }
@@ -98,9 +101,14 @@ function harness(track) {
     cursor = 0
     return exports.default({ onQueue() {} })
   }
-  render()
+  const initial = render()
+  if (settle) initial.props.onAnimationComplete?.()
   effects.forEach((fn) => fn())
   return {
+    initial,
+    setPresent: (value) => {
+      present = value
+    },
     parsed,
     pending,
     events,
@@ -110,6 +118,35 @@ function harness(track) {
     }
   }
 }
+
+test('opening a song reserves the same lyrics layout before and after loading starts', () => {
+  const app = harness(streamed)
+  const layout = (tree) => {
+    if (!tree || typeof tree !== 'object') return
+    if (tree.props?.className?.includes('now-playing-layout')) return tree.props.className
+    for (const child of [tree.props?.children].flat()) {
+      const found = layout(child)
+      if (found) return found
+    }
+  }
+  assert.equal(layout(app.initial), layout(app.render()))
+})
+
+test('cached lyrics wait until entry completes and stop rendering during exit', async () => {
+  const app = harness(streamed, false)
+  app.pending[0](streamLyrics)
+  await Promise.resolve()
+  const count = (tree) => {
+    if (!tree || typeof tree !== 'object') return 0
+    if (tree.type?.name === 'LyricRenderer') return 1
+    return [tree.props?.children].flat().reduce((sum, child) => sum + count(child), 0)
+  }
+  assert.equal(count(app.render()), 0, 'no AMLL initialization during entry')
+  app.initial.props.onAnimationComplete()
+  assert.equal(count(app.render()), 1)
+  app.setPresent(false)
+  assert.equal(count(app.render()), 0, 'AMLL stops as soon as exit starts')
+})
 
 test('a local lyrics response cannot replace stream lyrics after playback switches, before React effects clean up', async () => {
   const app = harness(local)

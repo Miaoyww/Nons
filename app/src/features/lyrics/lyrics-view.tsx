@@ -1,22 +1,12 @@
 import { useLocalPreferences } from '@/features/local/use-local-preferences'
 import { TrackArtists } from '@/components/music/music-links'
-import { LyricPlayer, type LyricPlayerRef } from '@applemusic-like-lyrics/react'
 import type { LyricLine } from '@applemusic-like-lyrics/core'
-import '@applemusic-like-lyrics/core/style.css'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { isTauri } from '@tauri-apps/api/core'
 import { motion, useIsPresent, useReducedMotion } from 'motion/react'
 import { AudioLines, Languages } from 'lucide-react'
-import {
-  currentPosition,
-  errorText,
-  getPlayer,
-  nativeCall,
-  usePlayer,
-  useProgress,
-  type Lyrics
-} from '@/lib/player'
+import { errorText, getPlayer, usePlayer, type Lyrics } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
 import { Cover } from '@/components/music/cover'
 import { AlbumBackground } from '@/features/lyrics/album-background'
@@ -25,7 +15,7 @@ import { NowPlayingMenu } from '@/features/playback/now-playing-menu'
 import { useLyricSources } from '@/features/lyrics/use-lyric-sources'
 import { loadLyrics } from '@/features/lyrics/load-lyrics'
 import { EmptyLyricsError, parseLyrics } from '@/features/lyrics/parse-lyrics'
-import { useFontSettings } from '@/features/settings/use-font-settings'
+import { LyricLoading } from './lyric-loading'
 
 function isCurrentPlayback(key: string, revision: number) {
   const active = getPlayer()
@@ -34,114 +24,26 @@ function isCurrentPlayback(key: string, revision: number) {
   )
 }
 
-function LyricRenderer({
-  lines,
-  showTranslation = true,
-  showPronunciation = true,
-  onError
-}: {
+const DeferredLyricRenderer = lazy(() => import('./lyric-renderer'))
+
+function LyricRenderer(props: {
   lines: LyricLine[]
-  showTranslation?: boolean
-  showPronunciation?: boolean
+  showTranslation: boolean
+  showPronunciation: boolean
   onError: (cause: unknown) => void
 }) {
-  const { fonts } = useFontSettings()
-  const lyricFont = fonts.lyrics || fonts.app
-  // AMLL consumes immutable lyric lines; retain the original auxiliary lyrics for restoring them.
-  const displayedLines = useMemo(
-    () =>
-      showTranslation && showPronunciation
-        ? lines
-        : lines.map((line) => ({
-            ...line,
-            translatedLyric: showTranslation ? line.translatedLyric : '',
-            romanLyric: showPronunciation ? line.romanLyric : '',
-            words: showPronunciation
-              ? line.words
-              : line.words.map((word) => ({ ...word, romanWord: undefined, ruby: undefined }))
-          })),
-    [lines, showTranslation, showPronunciation]
+  return (
+    <Suspense fallback={<LyricLoading />}>
+      <DeferredLyricRenderer {...props} />
+    </Suspense>
   )
-  const [visible, setVisible] = useState(document.visibilityState !== 'hidden')
-  const progress = useProgress(visible)
-  const [renderer, setRenderer] = useState<LyricPlayerRef | null>(null)
-  const retainRenderer = useCallback((value: LyricPlayerRef | null) => setRenderer(value), [])
-  const [layoutVersion, setLayoutVersion] = useState(0)
-  const reduced = useReducedMotion()
-  const playing = progress.status === 'playing'
-  const pausedPosition = playing ? 0 : progress.positionMs
-  useEffect(() => {
-    const player = renderer?.lyricPlayer
-    if (!visible || !player) return
-    let disposed = false
-    let frame = 0
-    // Font metrics affect word masks as well as line positions, including while paused.
-    void document.fonts.ready.then(() => {
-      if (disposed) return
-      frame = requestAnimationFrame(() => {
-        player.rebuildLyricView()
-        setLayoutVersion((version) => version + 1)
-      })
-    })
-    return () => {
-      disposed = true
-      cancelAnimationFrame(frame)
-    }
-  }, [lyricFont, renderer, visible])
-  useEffect(() => {
-    const changed = () => setVisible(document.visibilityState !== 'hidden')
-    document.addEventListener('visibilitychange', changed)
-    return () => document.removeEventListener('visibilitychange', changed)
-  }, [])
-  useEffect(() => {
-    if (!renderer?.wrapperEl || !visible) return
-    const observer = new ResizeObserver(() => setLayoutVersion((version) => version + 1))
-    observer.observe(renderer.wrapperEl)
-    return () => observer.disconnect()
-  }, [renderer, visible])
-  useEffect(() => {
-    const player = renderer?.lyricPlayer
-    if (!visible || !player) return
-    let frame = 0
-    let previous = performance.now()
-    const started = previous
-    const tick = (now: number) => {
-      player.setCurrentTime(playing ? currentPosition(now) : pausedPosition)
-      player.update(Math.min(50, now - previous))
-      previous = now
-      // Let initial/seek/resize layout settle even when entering a paused song.
-      if (playing || now - started < 1000) frame = requestAnimationFrame(tick)
-    }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [visible, playing, pausedPosition, renderer, displayedLines, layoutVersion])
-  // AMLL's automatic frame loop is disabled; only the visible lyric subtree
-  // receives an interpolated clock. React does not render on every frame.
-  return visible ? (
-    <LyricPlayer
-      ref={retainRenderer}
-      className="h-full w-full"
-      lyricLines={displayedLines}
-      disabled
-      playing={playing}
-      currentTime={progress.positionMs}
-      onLyricLineClick={(event) => {
-        if (!isTauri()) return
-        void nativeCall('player_seek', { positionMs: event.line.getLine().startTime }).catch(
-          onError
-        )
-      }}
-      enableBlur={!reduced}
-      enableScale={!reduced}
-      enableSpring={!reduced}
-      alignPosition={0.4}
-    />
-  ) : null
 }
 
 export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const reduced = useReducedMotion()
   const isPresent = useIsPresent()
+  const [entered, setEntered] = useState(!!reduced)
+  const rendering = isPresent && (entered || !!reduced)
   const state = usePlayer()
   const track = state.index !== null ? state.queue[state.index] : undefined
   const [display, setDisplay] = useState<{
@@ -156,7 +58,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
   const source = currentDisplay?.source
   const { sources } = useLyricSources()
   const { options: localPreferences } = useLocalPreferences()
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [showTranslation, setShowTranslation] = useState(true)
   const [showPronunciation, setShowPronunciation] = useState(true)
@@ -249,7 +151,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
     }
   }, [track?.key, state.revision, apply, sources, localPreferences])
 
-  const showLyrics = lines.length > 0 || loading
+  const showLyrics = !!track
   return (
     <motion.section
       className="nons-lyrics now-playing absolute inset-0 z-[5] flex flex-col pt-12"
@@ -258,7 +160,11 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
       inert={!isPresent}
       initial={{ y: reduced ? 0 : '100%' }}
       animate={{ y: 0 }}
-      transition={{ type: 'tween', duration: reduced ? 0 : 0.42, ease: [0.22, 0, 0.18, 1] }}
+      onAnimationComplete={() => {
+        if (isPresent) setEntered(true)
+      }}
+      style={{ willChange: entered && isPresent ? undefined : 'transform' }}
+      transition={{ type: 'tween', duration: reduced ? 0 : 0.36, ease: [0.22, 1, 0.36, 1] }}
       exit={{
         y: reduced ? 0 : '100%',
         transition: { type: 'tween', duration: reduced ? 0 : 0.3, ease: [0.4, 0, 1, 1] }
@@ -268,6 +174,8 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
         cover={track?.cover}
         playing={state.status === 'playing'}
         hasLyrics={lines.length > 0}
+        active={rendering}
+        enabled={entered || !!reduced}
       />
       <div className="lyrics-display-controls" role="group" aria-label="歌词显示">
         <ActionButton
@@ -323,7 +231,7 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
         </div>
         {showLyrics && (
           <div className="now-playing-lyrics min-h-0 min-w-0 overflow-hidden">
-            {lines.length ? (
+            {lines.length && rendering ? (
               <LyricRenderer
                 key={track?.key}
                 lines={lines}
@@ -331,12 +239,14 @@ export default function LyricsView({ onQueue }: { onQueue: () => void }) {
                 showPronunciation={showPronunciation}
                 onError={(cause) => setError(errorText(cause))}
               />
+            ) : loading || lines.length ? (
+              <LyricLoading />
             ) : (
               <div
                 role="status"
                 className="flex h-full items-center justify-center text-sm text-muted-foreground"
               >
-                正在查找歌词…
+                暂无歌词
               </div>
             )}
           </div>

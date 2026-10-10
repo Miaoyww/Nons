@@ -54,7 +54,10 @@ function harness(initialMode = 'collapsible') {
     '@/plugins/host': { PluginProvider: 'PluginProvider', PluginSlot: 'PluginSlot' }
   }).default
   const MusicWorkspace = load('../src/features/workspace/music-workspace.tsx', {
-    '@/components/music/loading': { MusicPageSkeleton: 'div', LibraryPageSkeleton: 'div' },
+    '@/components/music/loading': {
+      MusicPageSkeleton: 'MusicPageSkeleton',
+      LibraryPageSkeleton: 'LibraryPageSkeleton'
+    },
     react: {
       useState: (value) => [value, () => {}],
       useRef: (current) => ({ current }),
@@ -78,6 +81,7 @@ function harness(initialMode = 'collapsible') {
       PersistentPlaybackBar: 'PersistentPlaybackBar'
     },
     '@/features/playback/shortcuts/use-playback-shortcuts': { usePlaybackShortcuts() {} },
+    '@/features/lyrics/lyrics-view': { default: 'LyricsView' },
     '@/lib/player': { usePlayer: () => ({ index: null, queue: [] }) },
     '@/components/music/action-button': { ActionButton: 'ActionButton' },
     '@/components/music/music-page': { MusicPage: 'MusicPage' },
@@ -100,6 +104,7 @@ function harness(initialMode = 'collapsible') {
     const workspace = MusicWorkspace(props)
     return {
       ...props,
+      workspace,
       bar: find(workspace, 'PlaybackBar') ?? find(workspace, 'PersistentPlaybackBar'),
       exitComplete: find(workspace, 'AnimatePresence').props.onExitComplete
     }
@@ -123,6 +128,18 @@ test('playback bar waits for the actual fullscreen exit completion', () => {
   assert.equal(closing.bar, undefined, 'exit animation still owns the screen')
   closing.exitComplete()
   assert.ok(render().bar, 'bar returns when Motion reports exit complete')
+})
+
+test('opening fullscreen cannot render the default search page while its module loads', () => {
+  const { render } = harness()
+  render().onNowPlayingChange(true)
+  const opening = render()
+  const boundary = find(opening.workspace, 'Suspense')
+  assert.ok(
+    boundary.props.fallback.type !== 'MusicPageSkeleton' ||
+      boundary.props.fallback.props.view !== undefined,
+    'the unspecified MusicPageSkeleton displays 搜索音乐 during fullscreen loading'
+  )
 })
 
 test('a delayed exit callback cannot show the bar after reopening fullscreen', () => {
