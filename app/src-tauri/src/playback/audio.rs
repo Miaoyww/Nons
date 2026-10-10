@@ -36,9 +36,48 @@ pub fn start_stream(
     Ok(())
 }
 
+pub fn seek_stream(playbin: &gst::Element, position_ms: u64) -> Result<(), gst::glib::BoolError> {
+    playbin.seek_simple(
+        gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
+        gst::ClockTime::from_mseconds(position_ms),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restored_position_is_applied_before_the_first_playing_buffer() {
+        gst::init().unwrap();
+        let pipeline = gst::parse::launch(
+            "audiotestsrc num-buffers=240 ! fakesink name=output sync=true signal-handoffs=true",
+        )
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+        let sink = pipeline.by_name("output").unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        sink.connect("handoff", false, move |values| {
+            let buffer = values[1].get::<gst::Buffer>().unwrap();
+            let _ = sender.send(buffer.pts().unwrap().mseconds());
+            None
+        });
+        pipeline.set_state(gst::State::Paused).unwrap();
+        assert_eq!(
+            pipeline.state(gst::ClockTime::from_seconds(2)).1,
+            gst::State::Paused
+        );
+        assert!(
+            receiver.try_recv().is_err(),
+            "preroll must not output audio"
+        );
+        seek_stream(pipeline.upcast_ref(), 2_000).unwrap();
+        pipeline.set_state(gst::State::Playing).unwrap();
+        let first = receiver.recv_timeout(std::time::Duration::from_secs(2));
+        pipeline.set_state(gst::State::Null).unwrap();
+        assert_eq!(first.unwrap(), 2_000);
+    }
 
     #[test]
     fn late_completed_buffering_keeps_actual_playing_status() {

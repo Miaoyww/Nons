@@ -60,6 +60,28 @@ fn previous_command(state: &PlayerSnapshot) -> Option<Command> {
     state.previous().map(Command::Jump)
 }
 
+fn restore_player(mut state: PlayerSnapshot) -> PlayerSnapshot {
+    state.status = PlaybackStatus::Stopped;
+    state.error = None;
+    state.media_error = None;
+    state.revision = 0;
+    state.actual_quality = None;
+    if let Some(track) = state.current() {
+        if track.duration_ms > 0 {
+            state.duration_ms = track.duration_ms;
+        }
+        if state.duration_ms > 0 {
+            state.position_ms = state.position_ms.min(state.duration_ms);
+        }
+    } else {
+        state.index = None;
+        state.position_ms = 0;
+        state.duration_ms = 0;
+    }
+    state.restore_shuffle_order();
+    state
+}
+
 pub struct Player {
     sender: SyncSender<Command>,
     snapshot: Arc<RwLock<PlayerSnapshot>>,
@@ -83,16 +105,7 @@ impl Player {
         let restored = store
             .setting("player")?
             .and_then(|s| serde_json::from_str::<PlayerSnapshot>(&s).ok())
-            .map(|mut s| {
-                s.status = PlaybackStatus::Stopped;
-                s.error = None;
-                s.media_error = None;
-                s.revision = 0;
-                s.position_ms = 0;
-                s.restore_shuffle_order();
-                s.duration_ms = s.current().map_or(0, |t| t.duration_ms);
-                s
-            })
+            .map(restore_player)
             .unwrap_or_default();
         let snapshot = Arc::new(RwLock::new(restored));
         let shared = Arc::clone(&snapshot);
@@ -546,12 +559,21 @@ impl Actor {
                         self.state.status,
                         PlaybackStatus::Stopped | PlaybackStatus::Error
                     ) {
-                        self.load(self.state.index.unwrap_or(0), true)?;
+                        let position = if self.state.duration_ms > 0
+                            && self.state.position_ms >= self.state.duration_ms
+                        {
+                            0
+                        } else {
+                            self.state.position_ms
+                        };
+                        self.load_at(self.state.index.unwrap_or(0), true, position)?;
                     } else {
                         self.desired_playing = true;
-                        self.playbin
-                            .set_state(gst::State::Playing)
-                            .map_err(|e| e.to_string())?;
+                        if self.pending_seek.is_none() {
+                            self.playbin
+                                .set_state(gst::State::Playing)
+                                .map_err(|e| e.to_string())?;
+                        }
                     }
                 }
             }
@@ -670,6 +692,10 @@ impl Actor {
     }
 
     fn load(&mut self, index: usize, playing: bool) -> AppResult<()> {
+        self.load_at(index, playing, 0)
+    }
+
+    fn load_at(&mut self, index: usize, playing: bool, position: u64) -> AppResult<()> {
         let track = self
             .state
             .queue
@@ -683,11 +709,15 @@ impl Actor {
         self.decoded_audio = None;
         self.state.revision += 1;
         self.state.index = Some(index);
-        self.state.position_ms = 0;
+        self.state.position_ms = if track.duration_ms > 0 {
+            position.min(track.duration_ms)
+        } else {
+            position
+        };
         self.state.duration_ms = track.duration_ms;
         self.state.actual_quality = None;
         self.state.error = None;
-        self.pending_seek = None;
+        self.pending_seek = (self.state.position_ms > 0).then_some(self.state.position_ms);
         self.awaiting_first_stream = true;
         self.state.status = PlaybackStatus::Loading;
         self.desired_playing = playing;
@@ -758,12 +788,21 @@ impl Actor {
             return Err("当前歌曲尚不可定位".into());
         }
         let ms = ms.min(self.state.duration_ms);
-        self.playbin
-            .seek_simple(
-                gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
-                gst::ClockTime::from_mseconds(ms),
-            )
-            .map_err(|_| "当前资源不支持定位")?;
+        if matches!(
+            self.state.status,
+            PlaybackStatus::Stopped | PlaybackStatus::Error
+        ) {
+            self.state.position_ms = ms;
+            self.publish();
+            return Ok(());
+        }
+        if self.state.status == PlaybackStatus::Loading || self.pending_seek.is_some() {
+            self.pending_seek = Some(ms);
+            self.state.position_ms = ms;
+            self.publish();
+            return Ok(());
+        }
+        crate::audio::seek_stream(&self.playbin, ms).map_err(|_| "当前资源不支持定位")?;
         self.state.position_ms = ms;
         self.publish();
         Ok(())
@@ -774,8 +813,9 @@ impl Actor {
         match message.view() {
             MessageView::AsyncDone(_) => {
                 if let Some(position) = self.pending_seek.take() {
-                    if let Err(error) = self.seek(position) {
-                        self.state.error = Some(error);
+                    // The resource has finished preroll; seek the pipeline directly.
+                    if let Err(error) = crate::audio::seek_stream(&self.playbin, position) {
+                        self.state.error = Some(format!("恢复播放位置失败：{error}"));
                     }
                     if self.desired_playing {
                         let _ = self.playbin.set_state(gst::State::Playing);
@@ -818,7 +858,9 @@ impl Actor {
                     }
                 }
             }
-            MessageView::Buffering(value) if self.desired_playing => {
+            MessageView::Buffering(value)
+                if self.desired_playing && self.pending_seek.is_none() =>
+            {
                 match crate::audio::update_buffering(&self.playbin, value.percent()) {
                     Ok(status) => self.state.status = status,
                     Err(error) => self.state.error = Some(error.to_string()),
@@ -878,10 +920,12 @@ impl Actor {
                 | PlaybackStatus::Buffering
                 | PlaybackStatus::Loading
         ) {
-            self.state.position_ms = self
-                .playbin
-                .query_position::<gst::ClockTime>()
-                .map_or(self.state.position_ms, |t| t.mseconds());
+            if self.pending_seek.is_none() {
+                self.state.position_ms = self
+                    .playbin
+                    .query_position::<gst::ClockTime>()
+                    .map_or(self.state.position_ms, |t| t.mseconds());
+            }
             self.state.duration_ms = self
                 .playbin
                 .query_duration::<gst::ClockTime>()
@@ -990,12 +1034,9 @@ impl Actor {
         // Device changes restart the pipeline. The normal resolver and state
         // messages remain the sole source of truth; never promise gapless here.
         if let Some(index) = index {
-            self.load(index, playing)?;
+            self.load_at(index, playing, position)?;
         } else {
             self.publish();
-        }
-        if index.is_some() && position > 0 {
-            self.pending_seek = Some(position);
         }
         Ok(())
     }
@@ -1029,6 +1070,47 @@ mod tests {
             status: PlaybackStatus::Playing,
             ..PlayerSnapshot::default()
         }
+    }
+
+    #[test]
+    fn saved_progress_survives_reopening_the_player_store() {
+        let directory = crate::test_support::TestDir::new();
+        let path = directory.0.join("player.sqlite3");
+        let mut saved = snapshot(1, 42_000, RepeatMode::Off);
+        saved.error = Some("old playback error".into());
+        saved.media_error = Some("old media error".into());
+        saved.actual_quality = Some("lossless".into());
+        saved.revision = 7;
+        let store = Store::open(&path).unwrap();
+        store.save_player(&saved).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        let restored = restore_player(
+            serde_json::from_str(&store.setting("player").unwrap().unwrap()).unwrap(),
+        );
+        assert_eq!(restored.index, Some(1));
+        assert_eq!(restored.position_ms, 42_000);
+        assert_eq!(restored.duration_ms, 180_000);
+        assert_eq!(restored.status, PlaybackStatus::Stopped);
+        assert_eq!(restored.revision, 0);
+        assert!(restored.error.is_none());
+        assert!(restored.media_error.is_none());
+        assert!(restored.actual_quality.is_none());
+    }
+
+    #[test]
+    fn restored_progress_is_bounded_and_invalid_selection_is_cleared() {
+        let restored = restore_player(snapshot(1, 200_000, RepeatMode::Off));
+        assert_eq!(restored.position_ms, 180_000);
+        let restored = restore_player(snapshot(3, 42_000, RepeatMode::Off));
+        assert_eq!(restored.index, None);
+        assert_eq!(restored.position_ms, 0);
+        assert_eq!(restored.duration_ms, 0);
+        let mut saved = snapshot(1, 42_000, RepeatMode::Off);
+        saved.queue[1].duration_ms = 0;
+        let restored = restore_player(saved);
+        assert_eq!(restored.duration_ms, 180_000);
+        assert_eq!(restored.position_ms, 42_000);
     }
 
     #[test]
