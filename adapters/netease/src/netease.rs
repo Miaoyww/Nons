@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     model::{Track, TrackSource},
-    netease::Netease,
+    platform::Netease,
 };
 use std::sync::Arc;
 
@@ -51,15 +51,11 @@ impl NeteaseAdapter {
             .is_err_and(|error| error.code == ErrorCode::Unauthenticated)
         {
             if let Some(accounts) = &self.client.accounts {
-                let expected = context.session.clone();
-                let _ = accounts
-                    .blocking(move |accounts| {
-                        accounts.invalidate(&expected);
-                        Ok(())
-                    })
-                    .await;
+                let _ = accounts.invalidate(context.session.clone()).await;
             } else {
-                self.client.invalidate_session(context.session.generation);
+                self.client
+                    .invalidate_session(context.session.generation)
+                    .await;
             }
         }
         result
@@ -90,7 +86,7 @@ impl NeteaseAdapter {
         }
     }
 }
-pub(super) fn numeric_id(reference: &EntityRef) -> MusicResult<u64> {
+pub fn numeric_id(reference: &EntityRef) -> MusicResult<u64> {
     let id = reference
         .id
         .as_str()
@@ -170,10 +166,10 @@ impl MusicAdapter for NeteaseAdapter {
         })
     }
 }
-pub(super) fn session(client: &Netease) -> SessionContext {
+pub fn session(client: &Netease) -> SessionContext {
     let source = SourceId::try_from("netease".to_owned()).unwrap();
     if let Some(accounts) = &client.accounts {
-        return accounts.session(&source);
+        return accounts.session();
     }
     SessionContext {
         source,
@@ -181,14 +177,14 @@ pub(super) fn session(client: &Netease) -> SessionContext {
         generation: client.session_generation(),
     }
 }
-pub(crate) fn reference(id: u64) -> MusicResult<EntityRef> {
+pub fn reference(id: u64) -> MusicResult<EntityRef> {
     Ok(EntityRef {
         source: SourceId::try_from("netease".to_owned())?,
         kind: EntityKind::Track,
         id: OpaqueId::try_from(id.to_string())?,
     })
 }
-pub(crate) fn legacy(track: MusicTrack) -> MusicResult<Track> {
+pub fn legacy(track: MusicTrack) -> MusicResult<Track> {
     let id = numeric_id(&track.reference)?;
     Ok(Track {
         key: format!("netease:{id}"),
@@ -211,25 +207,4 @@ pub(crate) fn legacy(track: MusicTrack) -> MusicResult<Track> {
         cover: track.cover,
         source: TrackSource::Netease { id },
     })
-}
-
-/// Platform-specific startup wiring; callers receive only the uniform music service.
-pub(crate) fn builtin_service(
-    client: Arc<Netease>,
-) -> crate::model::AppResult<super::service::MusicService> {
-    let adapters = Arc::new(super::manager::AdapterManager::default());
-    if let Some(accounts) = &client.accounts {
-        accounts.bind(&adapters);
-    }
-    let accounts = client.accounts.clone();
-    let session_client = client.clone();
-    adapters
-        .register(
-            Arc::new(NeteaseAdapter::new(client)),
-            Arc::new(move || session(&session_client)),
-        )
-        .map_err(|e| e.to_string())?;
-    let mut service = super::service::MusicService::new(adapters);
-    service.accounts = accounts;
-    Ok(service)
 }

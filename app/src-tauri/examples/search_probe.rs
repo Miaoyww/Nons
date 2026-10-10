@@ -1,26 +1,14 @@
 //! Read-only search smoke test. Prints counts, never account data or cookies.
-#[path = "../src/local/encoded_audio.rs"]
-#[allow(dead_code)]
-mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
-#[path = "../src/music/mod.rs"]
-#[allow(dead_code)]
-mod music;
 #[path = "../src/netease/mod.rs"]
 #[allow(dead_code, unused_imports)]
 mod netease;
-#[path = "../src/local/playback_resource.rs"]
-#[allow(dead_code)]
-mod playback_resource;
-#[path = "../src/infrastructure/wasm_runtime.rs"]
-#[allow(dead_code)]
-mod wasm_runtime;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let api = netease::Netease::new()?;
+    let api = netease::probe_client()?;
     let keyword = "周杰伦";
     let suggestions = api.search_suggestions(keyword).await?;
     assert!(!suggestions.is_empty() && suggestions.len() <= 5);

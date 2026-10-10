@@ -12,7 +12,7 @@ fn reference(kind: &str, id: u64) -> AppResult<EntityRef> {
         "artist" => EntityKind::Artist,
         _ => return Err("音乐实体类型无效".into()),
     };
-    super::netease_business::reference(kind, id).map_err(|e| e.to_string())
+    nons_adapter_netease::entity_reference(kind, id).map_err(|e| e.to_string())
 }
 fn kind(value: &str) -> AppResult<EntityKind> {
     Ok(reference(value, 1)?.kind)
@@ -41,8 +41,8 @@ fn profile(record: AccountRecord) -> AppResult<old::AccountProfile> {
 }
 fn entity(value: MusicEntity) -> AppResult<old::Collection> {
     Ok(old::Collection {
-        id: super::netease::numeric_id(&value.reference).map_err(|e| e.to_string())?,
-        kind: super::netease_business::kind(value.reference.kind).to_owned(),
+        id: nons_adapter_netease::numeric_id(&value.reference).map_err(|e| e.to_string())?,
+        kind: nons_adapter_netease::kind(value.reference.kind).to_owned(),
         name: value.name,
         cover: value.cover,
         subtitle: value.subtitle,
@@ -68,7 +68,7 @@ fn old_credit(value: MusicCredit) -> AppResult<crate::model::MusicCredit> {
         name: value.name,
         id: value
             .reference
-            .map(|r| super::netease::numeric_id(&r).map_err(|e| e.to_string()))
+            .map(|r| nons_adapter_netease::numeric_id(&r).map_err(|e| e.to_string()))
             .transpose()?,
     })
 }
@@ -80,7 +80,7 @@ fn legacy(response: BusinessResponse) -> AppResult<serde_json::Value> {
                 .page
                 .items
                 .into_iter()
-                .map(|t| super::netease::legacy(t).map_err(|e| e.to_string()))
+                .map(|t| nons_adapter_netease::legacy(t).map_err(|e| e.to_string()))
                 .collect::<AppResult<_>>()?,
             total: p.total.unwrap_or(0) as usize,
             more: p.page.next_cursor.is_some(),
@@ -101,14 +101,14 @@ fn legacy(response: BusinessResponse) -> AppResult<serde_json::Value> {
             liked_tracks: s
                 .liked_tracks
                 .into_iter()
-                .map(|t| super::netease::legacy(t).map_err(|e| e.to_string()))
+                .map(|t| nons_adapter_netease::legacy(t).map_err(|e| e.to_string()))
                 .collect::<AppResult<_>>()?,
             liked_error: s.liked_error.map(|e| e.to_string()),
         }),
         BusinessResponse::Favorites(items) => serde_json::to_value(
             items
                 .iter()
-                .map(|r| super::netease::numeric_id(r).map_err(|e| e.to_string()))
+                .map(|r| nons_adapter_netease::numeric_id(r).map_err(|e| e.to_string()))
                 .collect::<AppResult<Vec<_>>>()?,
         ),
         BusinessResponse::Suggestions(items) => serde_json::to_value(items),
@@ -127,7 +127,7 @@ fn legacy(response: BusinessResponse) -> AppResult<serde_json::Value> {
                 .collect::<AppResult<_>>()?,
             album_id: info
                 .album_reference
-                .map(|r| super::netease::numeric_id(&r).map_err(|e| e.to_string()))
+                .map(|r| nons_adapter_netease::numeric_id(&r).map_err(|e| e.to_string()))
                 .transpose()?,
             published_at: info.published_at,
         }),
@@ -136,6 +136,21 @@ fn legacy(response: BusinessResponse) -> AppResult<serde_json::Value> {
     value.map_err(|e| e.to_string())
 }
 impl MusicService {
+    pub fn legacy_stamp(&self) -> AppResult<(super::account::SessionContext, u64)> {
+        self.adapters
+            .stamp(&super::identity::SourceId::try_from("netease".to_owned()).unwrap())
+            .map_err(|e| e.to_string())
+    }
+    pub async fn legacy_track(&self, id: u64) -> AppResult<Track> {
+        let reference = nons_adapter_netease::reference(id).map_err(|e| e.to_string())?;
+        let track = self
+            .adapters
+            .read_track(&reference)
+            .await
+            .map_err(|e| e.to_string())?;
+        nons_adapter_netease::legacy(track).map_err(|e| e.to_string())
+    }
+
     async fn old_call<T: serde::de::DeserializeOwned>(
         &self,
         request: BusinessRequest,

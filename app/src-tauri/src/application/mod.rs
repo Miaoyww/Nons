@@ -5,9 +5,7 @@ use crate::{
 
 use crate::platform::{autostart, desktop, main_webview};
 use model::{AppResult, Lyrics, OutputDevice, PlayerSnapshot, Track, TrackSource};
-use netease::{
-    AccountProfile, CollectionPage, LibrarySummary, LoginStatus, Netease, QrLogin, TrackPage,
-};
+use netease::{AccountProfile, CollectionPage, LibrarySummary, LoginStatus, QrLogin, TrackPage};
 use player::{Command, Player};
 use std::{path::PathBuf, sync::Arc};
 use tauri::{Manager, State};
@@ -879,8 +877,12 @@ pub fn run() {
                 use tauri::Emitter;
                 let _ = account_events.emit("music-account-changed", source);
             }));
-            let netease = Arc::new(Netease::with_accounts(accounts));
-            let music = Arc::new(crate::music::netease::builtin_service(netease.clone())?);
+            let (music, netease) = crate::music::bundled::service(accounts)?;
+            let music = Arc::new(music);
+            app.manage(Arc::new(crate::music::settings::AdapterSettings::new(
+                store.clone(),
+                music.adapters.clone(),
+            )?));
             let cache = Arc::new(ttml_cache::TtmlCache::new(
                 store.clone(),
                 app.path().app_cache_dir()?,
@@ -913,7 +915,6 @@ pub fn run() {
             let plugin_manager = plugins::PluginManager::new(
                 app.handle().clone(),
                 &data,
-                netease.clone(),
                 music.clone(),
                 player.clone(),
             )?;
@@ -966,6 +967,9 @@ pub fn run() {
             plugins::plugin_fault,
             fonts::system_fonts,
             player_snapshot,
+            crate::music::settings::adapter_list,
+            crate::music::settings::adapter_set_enabled,
+            crate::music::settings::adapter_reload,
             music_sources,
             music_context,
             music_query,

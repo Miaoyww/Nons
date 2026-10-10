@@ -1,19 +1,7 @@
 //! Read-only online lyrics probe; optionally pass a local audio file.
-#[path = "../src/local/encoded_audio.rs"]
-#[allow(dead_code)]
-mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
-#[path = "../src/music/mod.rs"]
-#[allow(dead_code)]
-mod music;
-#[path = "../src/local/playback_resource.rs"]
-#[allow(dead_code)]
-mod playback_resource;
-#[path = "../src/infrastructure/wasm_runtime.rs"]
-#[allow(dead_code)]
-mod wasm_runtime;
 mod storage {
     pub use crate::model::MAX_LYRIC_BYTES;
 }
@@ -93,7 +81,7 @@ async fn main() -> Result<(), String> {
             lyrics.content.len()
         );
     }
-    let api = netease::Netease::new()?;
+    let api = netease::probe_client()?;
     let fallback = netease_lyrics::lookup(&api, &track, &separators).await?;
     if let Some(lyrics) = &fallback {
         println!(

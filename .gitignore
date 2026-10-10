@@ -33,3 +33,7 @@ plugins/*/backend/src/bindings.rs
 *.njsproj
 *.sln
 *.sw?
+
+# Independent native adapter packages
+adapters/*/target/
+packages/music-adapter-sdk/target/

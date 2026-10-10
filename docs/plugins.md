@@ -1,6 +1,6 @@
 # 插件开发与使用
 
-Nons 在现有播放器上增量提供 `Manifest + WASM Backend + React Frontend + Contributions`。网易云仍是宿主的数据源，插件不接管搜索、歌单、登录或播放核心。第一版随包分发灵动岛，默认关闭。
+Nons 在现有播放器上增量提供 `Manifest + WASM Backend + React Frontend + Contributions`。网易云由默认随包的独立原生适配器提供，功能插件调用统一音乐服务，不接管来源注册或播放核心。第一版随包分发灵动岛，默认关闭。
 
 ## 架构与文件
 
@@ -18,7 +18,7 @@ Nons 在现有播放器上增量提供 `Manifest + WASM Backend + React Frontend
 
 职责归属见 [插件职责边界](adr/0005-plugin-capability-boundary.md)。通用能力提供系统操作；播放器领域能力复用已有业务服务；插件组合这些能力完成自己的业务。下面列出的接口为当前实现，不代表提前实现所有系统能力。
 
-[ADR 0006](adr/0006-music-provider-adapters.md) 阶段一至四已完成，统一客户端、账号管理与受限外部 WASM 验证桥已接入，规格与迁移注意事项见 [音乐适配器契约与迁移记录](music-adapters.md)。外部测试适配器复用 WIT transport，但使用独立的音乐方法、描述符校验和来源注册表，不获得功能插件 Host Capability。音乐适配器包格式与安装管理入口尚未开放，不能用功能插件 Manifest 注册音乐适配器。本文 netease.* 保留为迁移兼容接口，新音乐能力使用文末统一客户端。
+[ADR 0006](adr/0006-music-provider-adapters.md) 阶段一至五已完成，统一客户端、账号管理与受限外部 WASM 验证桥已接入，规格与迁移注意事项见 [音乐适配器契约与迁移记录](music-adapters.md)。外部测试适配器复用 WIT transport，但使用独立的音乐方法、描述符校验和来源注册表，不获得功能插件 Host Capability。默认网易云已拆为 `adapters/netease` 原生源码包，并有独立适配器设置入口；它随宿主编译链接，第三方音乐适配器运行时安装尚未开放，不能用功能插件 Manifest 注册音乐适配器。本文 netease.* 保留为迁移兼容接口，新音乐能力使用文末统一客户端。
 
 ## 构建与安装
 

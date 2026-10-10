@@ -1,8 +1,5 @@
 use super::capability::MAX_JSON;
-use crate::{
-    model::{AppResult, Track},
-    netease::Netease,
-};
+use crate::model::{AppResult, Track};
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
@@ -17,23 +14,32 @@ type CacheStamp = String;
 type CacheEntry = (CacheStamp, u64, Instant, crate::music::identity::MusicTrack);
 
 pub struct SongService {
-    netease: Arc<Netease>,
     generation: AtomicU64,
     pub(super) music: Arc<crate::music::service::MusicService>,
     cache: tokio::sync::Mutex<HashMap<crate::music::identity::EntityRef, CacheEntry>>,
 }
 impl SongService {
-    pub(super) fn account_credentials(&self) -> AppResult<Value> {
-        let (session, _) = self.music.legacy_stamp()?;
-        let cookie = self.netease.account_credentials()?;
-        if session != self.music.legacy_stamp()?.0 {
-            return Err("账号状态已变化".into());
+    pub(super) async fn account_credentials(&self) -> AppResult<Value> {
+        let stamp = self.music.legacy_stamp()?;
+        let accounts = self.music.accounts.as_ref().ok_or("账号管理不可用")?;
+        let source = stamp.0.source.clone();
+        let credential = accounts
+            .blocking(move |accounts| accounts.provider_credential(&source))
+            .await
+            .map_err(|e| e.to_string())?;
+        if self.music.legacy_stamp()? != stamp {
+            return Err("账号或来源状态已变化".into());
         }
-        Ok(json!({"cookie":cookie,"generation":session.generation}))
+        let cookie = credential
+            .map(|value| {
+                String::from_utf8(value.expose().to_vec())
+                    .map_err(|_| "兼容凭据格式无效".to_owned())
+            })
+            .transpose()?;
+        Ok(json!({"cookie":cookie,"generation":stamp.0.generation}))
     }
-    pub fn new(netease: Arc<Netease>, music: Arc<crate::music::service::MusicService>) -> Self {
+    pub fn new(music: Arc<crate::music::service::MusicService>) -> Self {
         Self {
-            netease,
             music,
             generation: AtomicU64::new(0),
             cache: Default::default(),
@@ -46,8 +52,8 @@ impl SongService {
         Ok(song_value(id, &self.track(id).await?))
     }
     pub(super) async fn track(&self, id: u64) -> AppResult<Track> {
-        let reference = crate::music::netease::reference(id).map_err(|e| e.to_string())?;
-        crate::music::netease::legacy(self.read_track(&reference).await?).map_err(|e| e.to_string())
+        let reference = nons_adapter_netease::reference(id).map_err(|e| e.to_string())?;
+        nons_adapter_netease::legacy(self.read_track(&reference).await?).map_err(|e| e.to_string())
     }
     pub async fn read_track(
         &self,

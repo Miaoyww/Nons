@@ -1,27 +1,15 @@
 //! Opt-in QR generation probe. Never prints keys, URLs, cookies, or image contents.
-#[path = "../src/local/encoded_audio.rs"]
-#[allow(dead_code)]
-mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;
-#[path = "../src/music/mod.rs"]
-#[allow(dead_code)]
-mod music;
 #[path = "../src/netease/mod.rs"]
 #[allow(dead_code)]
 mod netease;
-#[path = "../src/local/playback_resource.rs"]
-#[allow(dead_code)]
-mod playback_resource;
-#[path = "../src/infrastructure/wasm_runtime.rs"]
-#[allow(dead_code)]
-mod wasm_runtime;
 use base64::Engine;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let qr = netease::Netease::new()?.qr_login().await?;
+    let qr = netease::probe_client()?.qr_login().await?;
     let image = qr
         .image
         .strip_prefix("data:image/svg+xml;base64,")

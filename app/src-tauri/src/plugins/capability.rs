@@ -68,7 +68,7 @@ impl Context {
             "files.pick-audio" => super::audio_files::pick(self, &args).await?,
             "netease.account-credentials" => {
                 self.check(Some("account:credentials"))?;
-                self.songs.account_credentials()?
+                self.songs.account_credentials().await?
             }
             "clipboard.read-text" => {
                 self.check(Some("clipboard:read"))?;

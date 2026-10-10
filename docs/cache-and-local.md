@@ -18,6 +18,10 @@ WASM 无法调用 WebUI 的 `nativeCall`，因此 `plugins/netease.rs` 的 `Song
 
 单曲缓存命中和写回同时检查适配器启用、实例代次与旧会话桥接代次，停用或重载不能命中旧条目；扫码登录成功、会话失效和退出推进账号代次并清空该缓存；旧请求不得写回。缓存只保存公开歌曲元数据，不提供 Cookie、临时播放地址或本地文件路径。插件专属键值存储位于 `plugins.sqlite3`，不属于可清理资源缓存；关闭插件保留数据；卸载默认保留分区，用户主动关闭保留选项后才删除。动态 UI／资产使用加载代次 URL 和 no-store，禁用后拒绝新资源请求；浏览器已经加载的 ESM 模块记录不能主动回收。
 
+## 音乐适配器管理
+
+适配器列表、启停及重载经 nativeCall 实时调用，不加入查询缓存。`musicAdapterEnabledV1:<source>` 是设备设置，保存在现有 SQLite settings，停用重启后保持；账号切换与缓存清理不删除它。保存失败不改变运行启停。成功变更发出 `adapters-changed` 与 `music-changed`，清理查询缓存并推进实例代次；nativeCall 与插件 Rust 歌曲缓存继续在命中/发布时复核来源上下文，旧查询及预加载不能发布。停用保留账号和队列，歌词磁盘缓存不删除，既有资源/本地缓存策略继续有效。
+
 ## 运行时缓存的接入
 
 前端资源读取统一调用 `app/src/lib/player.ts` 的 `nativeCall`。`app/src/lib/runtime-cache.ts` 使用 lru-cache 实现 10 分钟 TTL、LRU 容量限制和同键并发请求合并；读取不延长 TTL。页面组件保留展示状态，资源缓存由统一入口管理。

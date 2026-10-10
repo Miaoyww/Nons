@@ -61,3 +61,15 @@ pub trait AccountAccess: Send + Sync {
         credential: OpaqueCredential,
     ) -> MusicResult<()>;
 }
+
+/// Trusted native backend bridge bound by the host to one provider.
+/// The host verifies active instance/session before credential reads. No storage is exposed.
+pub trait ProviderAccounts: Send + Sync {
+    fn session(&self) -> SessionContext;
+    fn credential(&self) -> MusicResult<Option<OpaqueCredential>>;
+    fn read(
+        &self,
+        context: &super::adapter::RequestContext,
+    ) -> MusicResult<Option<OpaqueCredential>>;
+    fn invalidate<'a>(&'a self, expected: SessionContext) -> super::adapter::AdapterFuture<'a, ()>;
+}

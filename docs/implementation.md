@@ -72,7 +72,7 @@ Rust 后端位于 `app/src-tauri/src/`，`lib.rs` 声明模块并导出启动入
 
 - `model/mod.rs` 定义歌曲、本地/网易云资源和播放状态；当前没有多来源插件框架。
 - `playback/player.rs` 单线程拥有 GStreamer playbin3、设备监视和 SMTC；有界命令队列、可取消资源解析、仅一首下一曲预加载。流线程回调只消费已准备 URI。
-- `netease/mod.rs` 直接嵌入固定提交的 ncm-api-rs，不运行额外 API 服务。Cookie 留在 Rust 与系统钥匙串，IPC 只返回二维码和登录结果。
+- `adapters/netease` 独立原生源码包拥有固定提交的 ncm-api-rs，默认随应用编译链接，不运行额外 API 服务。宿主 `netease/mod.rs` 仅作 DTO/歌词与探测兼容导入；登录、业务与资源解析由统一服务路由。凭据由宿主 AccountManager 与系统钥匙串保存，普通登录 IPC 不返回凭据。
 - `infrastructure/storage.rs` 使用 SQLite，列表分页；`local/library.rs` 使用 Lofty 读取元数据，批量入库。
 - `lyrics/mod.rs` 管理歌词来源、超时与缓存；AMLL 负责前端解析和显示。
 - `playback/media.rs` 从同一播放状态同步 Windows SMTC；StartTime/MinSeekTime 为 0，EndTime/MaxSeekTime 为曲目时长，Position 限定在有效范围。
@@ -220,3 +220,12 @@ AMLL 当前依赖标注 AGPL-3.0-only，项目现有许可证为 GPL-3.0；发�
 - Rust 库 142 项通过、2 项既有在线 QQ／系统字体测试忽略。新增 6 项真实外部 WASM 回归，覆盖两页／能力缺失／账号切换／来源和 Host 越权、资源失效与停用恢复、燃料／内存／trap／非法／超大响应、取消和保留播放预算、加载身份／版本／过大文件与编译超载。既有账号、缓存、内部 TestAdapter、灵动岛真实 Component 和本地音乐回归同时通过。首次并行测试因共享编译上限返回 rateLimited，fixture 加载改为测试内串行，另保留显式超载断言；分页 fixture 最初误套 page 层，被真实 DTO 反序列化拒绝，已按展平 DTO 修复。
 - 严格全目标／全特性 Clippy（--all-targets --all-features --locked -- -D warnings）通过，包含五个独立音乐探测入口。未执行真实账号操作、真实第二平台／扬声器／WebView 释放验收、macOS/Linux 构建与基本播放或 Release 性能测量。六个 Store 的线性内存理论上限与请求实例化成本是设计预算，未据测试耗时宣称首声／内存收益。
 - 提取共享执行器后，完整串行 cargo test --locked -- --test-threads=1 通过：库 142 通过／2 忽略；WAV 无缝 1、HTTP 无缝 1、断供恢复 5、定位 2、音量／队列 14 通过，真实 Windows 音频输出 1 项沿用忽略条件。未放宽既有 PCM／定位／恢复断言；这些本地服务和 fakesink 场景不替代真实平台输出验收。最终 format:check 与 git diff --check 通过。
+
+## 统一音乐适配器：ADR 0006 阶段五（2026-10-10）
+
+- 完成默认网易云独立原生源码包与共享后端契约包拆分，平台 SDK/补丁/许可证移入适配器；宿主不再直接依赖平台 SDK，功能插件管理器不再持有平台客户端。设置新增 Blocks 图标的适配器管理入口，实时显示来源与能力，支持持久化启停、重载及刷新。旧来源 ID、契约版本与账号/曲库/队列格式不变。
+- 原生库随宿主编译和链接；第三方平台的运行时安装、完整外部 HTTP/账号 ABI 与网易云 WASM 化未实现，具体边界与修改记录见 [阶段五记录](music-adapters.md#阶段五修改记录与注意事项2026-10-10)。本轮未新增第三方运行框架、账号存储或自建平台协议。
+- 实测环境：Windows x64、Rust 1.95.0、Node 24.15.0、项目私有 GStreamer 1.28.7。每轮先 `pnpm --dir app format`，再执行验证；前端 192 项测试、TypeScript/Vite 生产构建通过，保留原有大于 500kB chunk 提示。宿主 `native.ps1 -Task test` 的 `--lib --locked` 124 项通过，2 项既有在线 QQ/系统字体测试忽略；网易云独立包 `cargo test --manifest-path adapters/netease/Cargo.toml --locked --lib` 22 项通过，包括原有大歌单响应预算回归。
+- 宿主 `native.ps1 -Task clippy` 的 `--all-targets --all-features --locked -- -D warnings` 与独立包 `cargo clippy --manifest-path adapters/netease/Cargo.toml --all-targets --locked -- -D warnings` 通过，包含全部 example/测试目标编译。格式化同时覆盖新 crate，最终 `pnpm --dir app format:check` 通过；检查旧源码路径和平台 SDK 直接调用，保留历史阶段记录中的路径语境。
+- 新增回归覆盖：启停重启恢复、写盘失败不改变运行状态、停用拒绝重载、未知来源拒绝、跨来源凭据读取拒绝、旧实例/停用访问失效、恢复后凭据与账号记录保留；DOM 覆盖异步保存/失败/忙碌/刷新竞态/卸载后的旧响应。原有外部 WASM fixture、统一能力/账号/缓存/播放资源和混合队列回归继续通过，没有访问开发机真实账号。
+- 未执行真实二维码登录、远端写入/退出、真实音频/WebView 回收后播放、Windows 安装器、macOS/Linux 编译或基本播放；未测 Release 首声延迟、内存、安装包体积，也不将有界并发设计或编译耗时描述为性能实测。

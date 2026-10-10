@@ -35,7 +35,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 gstreamer = { version = "0.25", features = ["v1_24"] }
 gst-plugin-reqwest = { path = "vendor/gst-plugin-reqwest", default-features = false, features = ["static", "rustls-ring"] }
-ncm-api-rs = { path = "vendor/ncm-api-rs" }
+nons-music-adapter-sdk = { path = "../../packages/music-adapter-sdk" }
+nons-adapter-netease = { path = "../../adapters/netease" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 tokio = { version = "1", features = ["sync", "time", "fs", "macros"] }
 rusqlite = { version = "0.38", features = ["bundled"] }
@@ -49,8 +50,6 @@ walkdir = "2"
 notify = "8"
 quick-xml = "0.39"
 tauri-plugin-dialog = "2"
-cookie = "0.18"
-qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 base64 = "0.22"
 regex = "1"
 flate2 = "1"

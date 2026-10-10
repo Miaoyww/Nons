@@ -19,20 +19,6 @@ impl MusicService {
             accounts: None,
         }
     }
-    pub fn legacy_stamp(&self) -> AppResult<(super::account::SessionContext, u64)> {
-        self.adapters
-            .stamp(&super::identity::SourceId::try_from("netease".to_owned()).unwrap())
-            .map_err(|e| e.to_string())
-    }
-    pub async fn legacy_track(&self, id: u64) -> AppResult<Track> {
-        let reference = super::netease::reference(id).map_err(|e| e.to_string())?;
-        let track = self
-            .adapters
-            .read_track(&reference)
-            .await
-            .map_err(|e| e.to_string())?;
-        super::netease::legacy(track).map_err(|e| e.to_string())
-    }
     pub async fn resolve(
         &self,
         track: Track,

@@ -1,6 +1,6 @@
 # 音乐适配器契约与迁移记录
 
-本文记录 [ADR 0006](adr/0006-music-provider-adapters.md) 的契约、已完成接线与后续注意事项。2026-10-10：阶段一至四已完成，契约版本 `1`、独立适配器注册表、内置网易云播放与业务路由、AccountManager、系统凭据迁移、通用客户端和受限外部 WASM 验证桥已落地。历史曲库／队列存储仍保留旧格式；完整外部平台权限、安装管理和网易云拆包尚未实现。前文各阶段的“尚未实现”描述保留为历史记录，当前外部执行范围以末尾阶段四记录为准。
+本文记录 [ADR 0006](adr/0006-music-provider-adapters.md) 的契约、已完成接线与后续注意事项。2026-10-10：阶段一至五已完成，包括统一契约、独立适配器注册表、业务与账号迁移、受限外部 WASM 验证、默认网易云原生源码包拆分和适配器设置。历史曲库／队列存储仍保留旧格式；第三方平台的完整权限、运行时包安装及网易云 WASM 化未实现。前文各阶段的“尚未实现”保留历史语境，当前网易云执行方式与管理入口以末尾阶段五记录为准。
 
 ## 标识与曲目
 
@@ -112,7 +112,7 @@ URL 与请求头只供受控后端消费，不可序列化；`HttpAccess` 的 De
 
 目前 URI-only 音频管线仅支持内置网易云返回的无附加请求头资源。要求凭据头的外部适配器必须先补受控传输接线和对应测试，不能把头或带凭据 URL 交付 WebUI／功能插件。`HttpAccess`、资源 token 和 `ResolvedTrack` 的 Debug 隐藏访问数据；临时 URL 不写入持久队列。已经交给播放核心、无需适配器继续服务的资源可播至结束；停用后新读取和未交付预加载被拒绝，账号与队列不删除。
 
-`vendor/ncm-api-rs` 保留此前固定上游 commit `133b65bfe482e41ebccf018870d3fce07bf58eb3` 的源码与许可证，只补读取前大小限制、可配置上限、稳定过大响应错误和重定向策略；没有自建网易云协议／加密实现。普通客户端与用于基础音乐调用的克隆共享原连接池。升级须核对 [补丁记录](../app/src-tauri/vendor/ncm-api-rs/PATCHES.md)，重跑有界响应及宿主回归；不要改 Cargo 为未补丁的上游版本后继续宣称网络上限有效。上限是有效载荷限制，不是 JSON 展开、HTTP/TLS 或进程内存测量。
+`vendor/ncm-api-rs` 保留此前固定上游 commit `133b65bfe482e41ebccf018870d3fce07bf58eb3` 的源码与许可证，只补读取前大小限制、可配置上限、稳定过大响应错误和重定向策略；没有自建网易云协议／加密实现。普通客户端与用于基础音乐调用的克隆共享原连接池。升级须核对 [补丁记录](../adapters/netease/vendor/ncm-api-rs/PATCHES.md)，重跑有界响应及宿主回归；不要改 Cargo 为未补丁的上游版本后继续宣称网络上限有效。上限是有效载荷限制，不是 JSON 展开、HTTP/TLS 或进程内存测量。
 
 ### 后续阶段注意事项
 
@@ -237,3 +237,41 @@ WireResource 仅在后端反序列化；域模型 PlaybackResource／HttpAccess 
 历史 TrackSource、持久曲库／队列和播放器兼容 DTO 仍保留旧形状；本轮验证统一后端契约，未让任意外部来源在现有数字页面／混合队列 UI 中直接播放。后续接入须单独做原子数据迁移与通用播放入口，继续核对本地绑定、歌词关联、账号／缓存失效。真实外部音频、WebView 释放后播放、跨平台构建／基本播放和真实平台不同登录流程仍需对应环境验收。
 
 Wasmtime StoreLimitsBuilder 与 fuel_async_yield_interval 经 Context7 核对官方 Rust API；memory_size 限制每个线性内存，配合 memories(1) 才得到上述每 Store 上限。实际宿主固定版本继续为 46.0.1，没有新增执行框架。验收结果见 [实现记录](implementation.md)。
+
+## 阶段五修改记录与注意事项（2026-10-10）
+
+### 修改清单与当前归属
+
+- `packages/music-adapter-sdk/` 是无宿主依赖的后端契约 crate；迁入原有 account/adapter/business/identity/resource 定义、错误以及必要的历史 Track/Lyrics DTO 与纯曲目转换。宿主 `music/mod.rs` 重新导出相同类型，契约版本保持 1；播放器快照、队列事务与账号持久化仍留在宿主。
+- `adapters/netease/` 是默认随包提供的独立原生适配器源码 crate，拥有 `NeteaseAdapter`、业务/账号转换、平台客户端、搜索/详情/曲库与固定补丁版 ncm-api-rs。`vendor/ncm-api-rs` 从宿主整体迁入包内，协议、许可证、补丁、读取上限及上游 commit 不变。宿主 Cargo 移除直接 ncm-api-rs、cookie、qrcode 依赖；cookie/qrcode 随平台包归属移动。没有新增第三方协议、HTTP 框架、账号存储或播放引擎。
+- `music/bundled.rs` 只组装默认包、AdapterManager 与单来源账号桥；适配器不再持有具体 AccountManager。`ProviderAccounts` 绑定来源，读取前后检查会话/实例，账号请求结果仍经统一账号管理提交。系统凭据继续只在宿主保存；不是把 AccountManager、SQLite 或 keyring 源码复制进适配器。
+- `music/service.rs` 只处理统一资源与本地播放；旧数字 DTO/offset 转换明确归入 `music/compatibility.rs`。宿主 `netease/mod.rs` 仅保留包 DTO/歌词客户端导入及旧凭据只读探测入口，不包含平台协议实现。独立歌词服务继续复用包内平台客户端，不因音频来源拆包改变歌词来源/缓存。
+- PluginManager 与 SongService 移除 Netease 客户端依赖。`netease.account-credentials` 的敏感兼容能力仍需已有 `account:credentials` 授权，通过 AccountManager 的有界阻塞任务实时读取，返回前核对账号和适配器实例；不缓存，不作为通用音乐接口前提。
+- `music/settings.rs` 与 `features/settings/pages/adapters.tsx` 接入独立管理入口，设置导航使用 `lucide-react` 的 Blocks；复用 SettingsCard、Button、Switch、设置弹窗滚动 shell 和主题 tokens，显示能力与启停状态，提供刷新及重载。没有混入功能插件的注册表、授权、配置或贡献管理。
+- 五个在线只读 example 更新包/契约入口，移除无关宿主模块包含；format/format:check 同时覆盖两个新 crate。适配器独立 Cargo.lock 沿用宿主已锁定版本，没有顺带升级依赖。两个 README 记录构建、职责与执行方式。
+
+### 原生源码包与外部 ABI 的区别
+
+当前默认网易云包是 Rust 原生库，随应用编译和链接。独立源码/依赖/测试可以单独维护，稳定业务接口仍由 AdapterManager 调度；它不是可拖入安装的 WASM/ZIP，不提供运行时原生库替换或卸载。升级包需重新构建应用。运行时可安装的第三方平台包、其受控 HTTP/凭据与登录 ABI 仍未开放；阶段四 fixture 的全拒绝 Host 和 Search/Browse 限制不变。
+
+选择此方式保留现有成熟 SDK、共享连接池和登录协议，避免以受限测试桥冒充完整平台运行时。原生代码必须受信任；没有 Wasmtime 的线性内存/fuel 沙箱，不宣称凭据无法被恶意原生代码复制。阶段四“拆包前须补”的外部能力门槛适用于迁入 WASM 执行器的路线；本阶段没有越过这些门槛向第三方开放权限。
+
+### 设置、缓存与生命周期
+
+| IPC                   | 参数               | 返回/行为                            |
+| --------------------- | ------------------ | ------------------------------------ |
+| `adapter_list`        | 无                 | `{descriptor,enabled}[]`，含停用来源 |
+| `adapter_set_enabled` | `{source,enabled}` | 保存设备偏好后推进启停代次           |
+| `adapter_reload`      | `{source}`         | 仅启用来源可重载，推进实例代次       |
+
+以上管理调用通过既有 nativeCall 执行，不加入查询缓存。`musicAdapterEnabledV1:<source>` 存在宿主 SQLite settings，默认启用，启动组装之后恢复；未知来源拒绝，不产生无效设置，数据库保存失败不改变运行启停。设置变更串行，涉及磁盘的操作进入阻塞任务；关闭弹窗后丢弃旧 UI 响应，订阅清理后不会回写。
+
+成功启停/重载发出 `adapters-changed` 和 `music-changed`；当前窗口同时显式清理 nativeCall 查询缓存。缓存命中前后仍核对 music_context，插件 Rust 歌曲缓存实时核对实例，旧代次请求与预加载拒绝发布。状态通知不等于删除账号或队列；停用保留保存账号、选择、混合队列和本地歌词绑定，恢复可重新解析。已交付核心的独立 URL 可播放到结束，下一次解析若来源停用会报不可用。
+
+原生重载只更新管理器实例代次，并非重新 dlopen/释放原生库；共享 HTTP 连接池继续复用。查询/播放凭据预算 4/2、账号阻塞任务预算 4、业务/账号/响应上限沿用前文；这里只记录设计与回归，不把数量限制当作 Release 延迟或进程内存实测。管理操作不会清除歌词磁盘缓存、原始本地文件或平台保存账号。
+
+### 验证与维护注意事项
+
+回归覆盖设备启停重启恢复、停用拒绝重载、未知来源拒绝、写盘失败保留运行状态、账号桥跨来源/旧实例/停用拒绝、恢复凭据及保存记录保留；DOM 回归覆盖保存完成前不改变开关、失败提示、重复操作禁用、缓存失效、过期列表响应与卸载后响应丢弃。独立网易云包保留全部 22 项平台转换与有界大歌单响应回归；统一宿主契约、WASM fixture 和混合队列回归继续执行。
+
+后续新增原生包必须由宿主显式组装并绑定专用 ProviderAccounts，不能复用网易云的原始凭据桥；新增通用业务不得导入平台客户端或扩展旧数字 DTO。迁入外部 WASM 时先实现/验证网络、账号与包权限，不将 native crate 的完整能力直接写入现有受限外部描述符。历史数据库原子迁移、真实第二平台、不同登录展示、跨平台编译/基本播放、真实登录/远端写入/WebView 回收后播放和 Release 性能仍需对应实现与环境验收。实际命令与结果见 [实现记录](implementation.md#统一音乐适配器adr-0006-阶段五2026-10-10)。

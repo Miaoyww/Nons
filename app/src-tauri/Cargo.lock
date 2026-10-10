@@ -3602,7 +3602,6 @@ dependencies = [
  "cipher",
  "clipboard-rs",
  "clipboard-win",
- "cookie",
  "fastrand",
  "flate2",
  "font-kit",
@@ -3613,11 +3612,11 @@ dependencies = [
  "jsonschema",
  "keyring",
  "lofty",
- "ncm-api-rs",
  "ncmdump",
+ "nons-adapter-netease",
+ "nons-music-adapter-sdk",
  "notify",
  "percent-encoding",
- "qrcode",
  "quick-xml 0.39.4",
  "regex 1.13.1",
  "reqwest 0.12.28",
@@ -3642,6 +3641,30 @@ dependencies = [
  "windows 0.62.2",
  "winreg 0.55.0",
  "zip",
+]
+
+[[package]]
+name = "nons-adapter-netease"
+version = "1.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "cookie",
+ "ncm-api-rs",
+ "nons-music-adapter-sdk",
+ "qrcode",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "nons-music-adapter-sdk"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "url",
 ]
 
 [[package]]

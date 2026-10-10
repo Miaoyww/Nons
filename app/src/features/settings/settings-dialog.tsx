@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import {
+  Blocks,
   FolderCog,
   Info,
   Keyboard,
@@ -30,6 +31,7 @@ import { AboutPage } from '@/features/settings/pages/about'
 import { PlaybackPage } from '@/features/settings/pages/playback'
 import { LyricsPage } from '@/features/settings/pages/lyrics'
 import { LocalCachePage } from '@/features/settings/pages/local-cache'
+import { AdaptersPage } from '@/features/settings/pages/adapters'
 import { PluginsPage } from '@/features/settings/pages/plugins'
 import { version } from '../../../package.json'
 import { nativeCall } from '@/lib/player'
@@ -85,6 +87,7 @@ export function SettingsDialog() {
     | 'playback'
     | 'lyrics'
     | 'local-cache'
+    | 'adapters'
     | 'plugins'
     | 'shortcuts'
     | 'about'
@@ -214,6 +217,15 @@ export function SettingsDialog() {
                 <span>本地与缓存</span>
               </Button>
               <Button
+                variant={section === 'adapters' ? 'secondary' : 'ghost'}
+                className="justify-start gap-2.5 rounded-lg px-3"
+                aria-current={section === 'adapters' ? 'page' : undefined}
+                onClick={() => setSection('adapters')}
+              >
+                <Blocks aria-hidden="true" />
+                <span>适配器设置</span>
+              </Button>
+              <Button
                 variant={section === 'plugins' ? 'secondary' : 'ghost'}
                 className="justify-start gap-2.5 rounded-lg px-3"
                 aria-current={section === 'plugins' ? 'page' : undefined}
@@ -249,11 +261,13 @@ export function SettingsDialog() {
                       ? '歌词设置'
                       : section === 'local-cache'
                         ? '本地与缓存'
-                        : section === 'plugins'
-                          ? '插件设置'
-                          : section === 'shortcuts'
-                            ? '快捷键设置'
-                            : '关于 Nons'
+                        : section === 'adapters'
+                          ? '适配器设置'
+                          : section === 'plugins'
+                            ? '插件设置'
+                            : section === 'shortcuts'
+                              ? '快捷键设置'
+                              : '关于 Nons'
             }
             className="min-w-0 flex-1 overflow-auto bg-background p-5 pt-14 sm:p-10"
           >
@@ -273,6 +287,8 @@ export function SettingsDialog() {
                 <LyricsPage />
               ) : section === 'local-cache' ? (
                 <LocalCachePage />
+              ) : section === 'adapters' ? (
+                <AdaptersPage />
               ) : section === 'plugins' ? (
                 <PluginsPage initialPluginId={pluginId} />
               ) : section === 'shortcuts' ? (

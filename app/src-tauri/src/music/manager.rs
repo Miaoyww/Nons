@@ -85,6 +85,18 @@ impl ResourceTicket {
     }
 }
 impl AdapterManager {
+    pub fn statuses(&self) -> MusicResult<Vec<AdapterStatus>> {
+        Ok(self
+            .entries
+            .lock()
+            .map_err(|_| ErrorCode::Internal)?
+            .values()
+            .map(|entry| AdapterStatus {
+                descriptor: entry.adapter.descriptor().clone(),
+                enabled: !entry.generation.load(Ordering::Acquire).is_multiple_of(2),
+            })
+            .collect())
+    }
     pub fn register(
         &self,
         adapter: Arc<dyn MusicAdapter>,
@@ -518,6 +530,13 @@ impl AdapterManager {
         ticket.check(playback_generation)?;
         Ok(ticket)
     }
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdapterStatus {
+    pub descriptor: SourceDescriptor,
+    pub enabled: bool,
 }
 fn cursor_scope(
     request: &super::business::BusinessRequest,

@@ -7,9 +7,9 @@ use super::{
     netease::{numeric_id, NeteaseAdapter},
     ErrorCode, MusicResult,
 };
-use crate::{model::Track, netease as legacy};
+use crate::{model::Track, platform as legacy};
 
-pub(super) fn kind(kind: EntityKind) -> &'static str {
+pub fn kind(kind: EntityKind) -> &'static str {
     match kind {
         EntityKind::Track => "track",
         EntityKind::Playlist => "playlist",
@@ -17,7 +17,7 @@ pub(super) fn kind(kind: EntityKind) -> &'static str {
         EntityKind::Artist => "artist",
     }
 }
-pub(super) fn reference(kind: EntityKind, id: u64) -> MusicResult<EntityRef> {
+pub fn reference(kind: EntityKind, id: u64) -> MusicResult<EntityRef> {
     Ok(EntityRef {
         source: SourceId::try_from("netease".to_owned())?,
         kind,
