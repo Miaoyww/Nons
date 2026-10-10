@@ -38,6 +38,9 @@ pub(crate) struct ReadyState {
 }
 
 pub(crate) fn setup(app: &tauri::App) -> AppResult<()> {
+    if let Some(webview) = app.get_webview("main") {
+        configure_browser_shortcuts(&webview)?;
+    }
     let (sender, receiver) = mpsc::channel();
     app.manage(MainWebview(sender));
     app.manage(SleepShortcuts::default());
@@ -153,14 +156,44 @@ fn ensure_webview(app: &AppHandle) -> AppResult<bool> {
     app.global_shortcut()
         .unregister_all()
         .map_err(|e| e.to_string())?;
-    window
+    let webview = window
         .add_child(
             WebviewBuilder::from_config(config).auto_resize(),
             PhysicalPosition::new(0, 0),
             size,
         )
         .map_err(|e| e.to_string())?;
+    configure_browser_shortcuts(&webview)?;
     Ok(true)
+}
+
+fn configure_browser_shortcuts(webview: &tauri::Webview) -> AppResult<()> {
+    #[cfg(windows)]
+    if !cfg!(debug_assertions) {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+        use windows::core::Interface;
+
+        webview
+            .with_webview(|platform| {
+                // WebView2 browser accelerators can run before DOM keydown handlers.
+                let result = (|| -> windows::core::Result<()> {
+                    unsafe {
+                        let settings = platform.controller().CoreWebView2()?.Settings()?;
+                        settings
+                            .cast::<ICoreWebView2Settings3>()?
+                            .SetAreBrowserAcceleratorKeysEnabled(false)?;
+                    }
+                    Ok(())
+                })();
+                if let Err(error) = result {
+                    eprintln!("禁用浏览器快捷键失败：{error}");
+                }
+            })
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(windows))]
+    let _ = webview;
+    Ok(())
 }
 
 pub(crate) fn open(app: &AppHandle, settings: bool) -> AppResult<()> {

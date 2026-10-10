@@ -53,17 +53,19 @@ export function AboutPage({ version }: { version: string }) {
       <SettingsCard title="版本号" description="当前应用版本。">
         <span className="text-sm tabular-nums">v{version}</span>
       </SettingsCard>
-      <SettingsCard title="开发者工具" description="打开开发者工具进行调试。">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!isTauri()}
-          onClick={() => void run(() => nativeCall('open_devtools'))}
-        >
-          <Terminal aria-hidden="true" />
-          打开开发者工具
-        </Button>
-      </SettingsCard>
+      {import.meta.env.DEV && (
+        <SettingsCard title="开发者工具" description="打开开发者工具进行调试。">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!isTauri()}
+            onClick={() => void run(() => nativeCall('open_devtools'))}
+          >
+            <Terminal aria-hidden="true" />
+            打开开发者工具
+          </Button>
+        </SettingsCard>
+      )}
       <SettingsCard title="版本更新" description="检查新版本，暂未开放。">
         <Button variant="outline" size="sm" disabled>
           <RefreshCw aria-hidden="true" />

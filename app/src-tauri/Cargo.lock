@@ -3624,6 +3624,7 @@ dependencies = [
  "url",
  "walkdir",
  "wasmtime",
+ "webview2-com",
  "windows 0.62.2",
  "winreg 0.55.0",
  "zip",

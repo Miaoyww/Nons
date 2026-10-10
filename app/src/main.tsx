@@ -8,6 +8,28 @@ import { installPluginBridge } from '@/plugins/host'
 initializeFontSettings()
 installPluginBridge()
 
+// Release WebViews are application surfaces, not browser windows.
+if (!import.meta.env.DEV) {
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      const key = event.key.toLowerCase()
+      const command = event.ctrlKey || event.metaKey
+      const browserShortcut =
+        key === 'f12' ||
+        key === 'f5' ||
+        (command &&
+          !event.altKey &&
+          ['f', 'g', 'p', 'r', 's', 'u', '+', '=', '-', '0'].includes(key)) ||
+        (command && (event.shiftKey || event.altKey) && ['i', 'j', 'c'].includes(key))
+      if (!browserShortcut) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    },
+    { capture: true }
+  )
+}
+
 // Let custom menus handle the event first, then suppress the WebView default menu.
 window.addEventListener('contextmenu', (event) => {
   event.preventDefault()

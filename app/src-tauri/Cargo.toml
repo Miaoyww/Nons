@@ -28,7 +28,7 @@ plugin-probe = []
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset", "devtools", "tray-icon", "unstable"] }
+tauri = { version = "2", features = ["protocol-asset", "tray-icon", "unstable"] }
 tauri-plugin-opener = "2"
 tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
@@ -67,6 +67,7 @@ tauri-plugin-autostart = "2"
 tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
+webview2-com = "0.39.1"
 clipboard-win = { version = "5.4", features = ["monitor"] }
 windows = { version = "0.62", features = ["Foundation", "Media", "Media_Control", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT", "Win32_System_Com"] }
 keyring = { version = "3.6", features = ["windows-native"] }
