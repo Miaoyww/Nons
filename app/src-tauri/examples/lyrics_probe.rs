@@ -11,6 +11,9 @@ mod music;
 #[path = "../src/local/playback_resource.rs"]
 #[allow(dead_code)]
 mod playback_resource;
+#[path = "../src/infrastructure/wasm_runtime.rs"]
+#[allow(dead_code)]
+mod wasm_runtime;
 mod storage {
     pub use crate::model::MAX_LYRIC_BYTES;
 }

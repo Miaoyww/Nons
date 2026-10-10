@@ -18,7 +18,7 @@ Nons 在现有播放器上增量提供 `Manifest + WASM Backend + React Frontend
 
 职责归属见 [插件职责边界](adr/0005-plugin-capability-boundary.md)。通用能力提供系统操作；播放器领域能力复用已有业务服务；插件组合这些能力完成自己的业务。下面列出的接口为当前实现，不代表提前实现所有系统能力。
 
-[ADR 0006](adr/0006-music-provider-adapters.md) 阶段一至三已完成，统一客户端与账号管理已接入，规格与迁移注意事项见 [音乐适配器契约与迁移记录](music-adapters.md)。音乐适配器包格式、外部 ABI 与安装管理入口尚未开放，不能用功能插件 Manifest 注册音乐适配器。本文 netease.* 保留为迁移兼容接口，新音乐能力使用文末统一客户端。
+[ADR 0006](adr/0006-music-provider-adapters.md) 阶段一至四已完成，统一客户端、账号管理与受限外部 WASM 验证桥已接入，规格与迁移注意事项见 [音乐适配器契约与迁移记录](music-adapters.md)。外部测试适配器复用 WIT transport，但使用独立的音乐方法、描述符校验和来源注册表，不获得功能插件 Host Capability。音乐适配器包格式与安装管理入口尚未开放，不能用功能插件 Manifest 注册音乐适配器。本文 netease.* 保留为迁移兼容接口，新音乐能力使用文末统一客户端。
 
 ## 构建与安装
 
@@ -330,4 +330,4 @@ EntityRef 使用 `{source,kind,id}`，ID 为不透明字符串；调用 getTrack
 
 `useNetease/getSong`、`netease.get-song` 与 `music.get-song` 已作为 deprecated 兼容接口，保持旧数字 ID／DTO，内部转统一路由。新通用能力使用 music.*；`netease.account-credentials` 保留独立的敏感 `account:credentials` 授权，用于现有平台专有工具，不作为统一音乐客户端前提。内置灵动岛后端已改用 music.read-track；下载插件的 EAPI 和凭据访问继续按现有敏感权限运行。
 
-这组能力是功能插件消费宿主的客户端接口，不是外部音乐适配器 ABI。外部适配器登录展示、包安装和不同平台验证属于 ADR 0006 阶段四。完整修改和继续开发注意事项见 [适配器记录](music-adapters.md#阶段三修改记录与注意事项2026-10-10)。
+这组能力是功能插件消费宿主的客户端接口。阶段四外部测试 ABI 的方法、范围与执行预算见 [阶段四记录](music-adapters.md#阶段四修改记录与注意事项2026-10-10)；完整外部登录展示、包安装和真实平台验证继续在阶段五接线。通用客户端的修改和兼容注意事项见 [阶段三记录](music-adapters.md#阶段三修改记录与注意事项2026-10-10)。

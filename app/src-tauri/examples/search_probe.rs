@@ -14,6 +14,9 @@ mod netease;
 #[path = "../src/local/playback_resource.rs"]
 #[allow(dead_code)]
 mod playback_resource;
+#[path = "../src/infrastructure/wasm_runtime.rs"]
+#[allow(dead_code)]
+mod wasm_runtime;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

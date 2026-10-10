@@ -211,3 +211,12 @@ AMLL 当前依赖标注 AGPL-3.0-only，项目现有许可证为 GPL-3.0；发�
 - 合法的 3MiB 歌单原始响应在旧 checked 业务路径下复现“音乐来源返回了无效数据”；阶段三同时把 scoped 传输和业务检查缩至 2MiB，导致还未提取预览歌曲就失败。恢复平台业务原始响应的既有 16MiB 上限，保留单曲／播放解析和公开业务 DTO 的 2MiB 上限。
 - 回归经过本地 HTTP 服务、实际平台请求客户端与 scoped 克隆，验证读取前与解码后的预算一致；并验证单曲严格预算和超过 16MiB 的业务拒绝。Windows 环境下先执行 format，Rust 库 136 项通过、2 项既有测试忽略，严格全部目标 Clippy 和最终 format:check 通过。开发进程持有资源 DLL 时默认 Clippy 的 Tauri 资源复制遇到 os error 32，检查进程临时使用 TAURI_CONFIG 的 bundle.resources=[] 跳过复制后通过，未修改持久打包配置。仅 Rust 与文档变化，未重复无关前端构建。
 - 临时只读探测没有取得开发版登录会话，不能据此宣称用户实际歌单页面已通过在线验收；探测没有写入／删除真实凭据，已移除临时源码。详细限制见适配器阶段三后续修复记录。
+
+## 外部音乐适配器验证：ADR 0006 阶段四（2026-10-10）
+
+- 独立 `music-fixture` Component 经 ExternalAdapter → AdapterManager 执行，使用非数字／Unicode ID 和真实两页 continuation。仅验证受限外部 ABI，不注册为功能插件、不随包安装，没有真实平台 HTTP／登录、通用外部包安装或多来源播放 UI；完整范围与阶段五注意事项见 [阶段四记录](music-adapters.md#阶段四修改记录与注意事项2026-10-10)。
+- 共享 Wasmtime 执行器提取到 infrastructure，既有功能插件 Context 和外部全拒绝 Host 分别绑定；五个既有只读探测 example 同步引入共享模块。未改音频线程、歌词、本地目录、队列持久格式或真实账号凭据，没有新增宿主依赖和用户可见 CHANGELOG 条目。
+- 验证环境：Windows x64、Rust 1.95.0、项目私有 GStreamer 1.28.7、Wasmtime 46.0.1。按约定先执行 pnpm --dir app format；pnpm --dir app plugins:fixtures 以 --locked 重建运行 fixture 和音乐 fixture。前端 191 项测试及 TypeScript/Vite 生产构建通过，保留既有大于 500kB chunk 提示。
+- Rust 库 142 项通过、2 项既有在线 QQ／系统字体测试忽略。新增 6 项真实外部 WASM 回归，覆盖两页／能力缺失／账号切换／来源和 Host 越权、资源失效与停用恢复、燃料／内存／trap／非法／超大响应、取消和保留播放预算、加载身份／版本／过大文件与编译超载。既有账号、缓存、内部 TestAdapter、灵动岛真实 Component 和本地音乐回归同时通过。首次并行测试因共享编译上限返回 rateLimited，fixture 加载改为测试内串行，另保留显式超载断言；分页 fixture 最初误套 page 层，被真实 DTO 反序列化拒绝，已按展平 DTO 修复。
+- 严格全目标／全特性 Clippy（--all-targets --all-features --locked -- -D warnings）通过，包含五个独立音乐探测入口。未执行真实账号操作、真实第二平台／扬声器／WebView 释放验收、macOS/Linux 构建与基本播放或 Release 性能测量。六个 Store 的线性内存理论上限与请求实例化成本是设计预算，未据测试耗时宣称首声／内存收益。
+- 提取共享执行器后，完整串行 cargo test --locked -- --test-threads=1 通过：库 142 通过／2 忽略；WAV 无缝 1、HTTP 无缝 1、断供恢复 5、定位 2、音量／队列 14 通过，真实 Windows 音频输出 1 项沿用忽略条件。未放宽既有 PCM／定位／恢复断言；这些本地服务和 fakesink 场景不替代真实平台输出验收。最终 format:check 与 git diff --check 通过。

@@ -1,4 +1,4 @@
-//! ADR 0006 contracts and built-in adapter runtime. External ABI is not exposed.
+//! ADR 0006 contracts, built-in adapter and backend external execution bridge.
 //! See docs/music-adapters.md before wiring these types into persistence or playback.
 
 pub mod account;
@@ -6,6 +6,7 @@ pub mod accounts;
 pub mod adapter;
 pub mod business;
 pub(crate) mod compatibility;
+pub mod external;
 pub mod identity;
 pub mod manager;
 pub mod migration;

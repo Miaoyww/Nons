@@ -16,6 +16,9 @@ mod network;
 #[path = "../src/local/playback_resource.rs"]
 #[allow(dead_code)]
 mod playback_resource;
+#[path = "../src/infrastructure/wasm_runtime.rs"]
+#[allow(dead_code)]
+mod wasm_runtime;
 use gstreamer::{self as gst, prelude::*};
 
 #[tokio::main]
