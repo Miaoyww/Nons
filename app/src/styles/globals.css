@@ -2806,6 +2806,27 @@
   outline-offset: 2px;
 }
 
+.music-cover-image[data-ready='true'] {
+  animation: music-cover-reveal 320ms ease-out backwards;
+}
+.music-cover-skeleton[data-ready='true'] {
+  animation: music-cover-reveal 320ms ease-out reverse backwards;
+}
+@keyframes music-cover-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .music-cover-image[data-ready='true'],
+  .music-cover-skeleton[data-ready='true'] {
+    animation: none;
+  }
+}
+
 @keyframes music-content-enter {
   from {
     opacity: 0;

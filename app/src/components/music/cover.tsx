@@ -28,13 +28,21 @@ export function Cover({ cover, className = '' }: { cover?: string; className?: s
       ref={host}
       className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted ${className}`}
     >
-      {loading && <Skeleton className="absolute inset-0 rounded-[inherit]" />}
+      {(loading || !!source) && (
+        <Skeleton
+          key={`skeleton:${source ?? cover}`}
+          data-ready={!loading}
+          className={`music-cover-skeleton pointer-events-none absolute inset-0 rounded-[inherit] ${loading ? '' : 'opacity-0'}`}
+        />
+      )}
       {source ? (
         <img
+          key={source}
           src={source}
           alt=""
           loading="lazy"
-          className={`h-full w-full object-cover transition-opacity duration-200 motion-reduce:transition-none ${readySource === source ? 'opacity-100' : 'opacity-0'}`}
+          data-ready={readySource === source}
+          className={`music-cover-image h-full w-full object-cover ${readySource === source ? 'opacity-100' : 'opacity-0'}`}
           onLoad={() => setReadySource(source)}
           onError={onError}
         />
