@@ -3533,6 +3533,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ncmdump"
+version = "0.8.0"
+dependencies = [
+ "aes",
+ "base64 0.21.7",
+ "cipher",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3585,8 +3597,10 @@ dependencies = [
 name = "nons"
 version = "1.0.0"
 dependencies = [
+ "aes",
  "base64 0.22.1",
  "cap-std",
+ "cipher",
  "clipboard-rs",
  "clipboard-win",
  "cookie",
@@ -3601,6 +3615,7 @@ dependencies = [
  "keyring",
  "lofty",
  "ncm-api-rs",
+ "ncmdump",
  "notify",
  "percent-encoding",
  "qrcode",

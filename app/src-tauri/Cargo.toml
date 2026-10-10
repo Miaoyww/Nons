@@ -40,6 +40,8 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 tokio = { version = "1", features = ["sync", "time", "fs", "macros"] }
 rusqlite = { version = "0.38", features = ["bundled"] }
 lofty = "0.25"
+ncmdump = { path = "vendor/ncmdump" }
+tempfile = "3"
 url = "2"
 sha2 = "0.10"
 fastrand = "2"
@@ -64,7 +66,8 @@ cap-std = "4"
 tauri-plugin-autostart = "2"
 
 [dev-dependencies]
-tempfile = "3"
+aes = "0.8"
+cipher = { version = "0.4", features = ["alloc", "block-padding"] }
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39.1"

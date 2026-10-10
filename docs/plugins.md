@@ -125,6 +125,28 @@ WIT Host 的 `call(operation, args-json)` 返回 JSON 或业务错误，身份�
 
 SDK 不要求手写 pluginId。所有 SDK 请求经过 `nativeCall` 和 scoped IPC；禁用／reload 后即使 Promise 晚返回，SDK 也拒绝旧结果。事件内部命名为 `plugin:<id>:<event>`，共用 Tauri transport，但 SDK 只读取自身 Scope。订阅在实例卸载时删除；每实例只保留有界的最新事件，不承诺持久历史或初始化之前的事件重放。
 
+### API 1.3.0：文件工具与任意文件权限
+
+manifest 的可选 `fileRoots: ["*"]` 须同时声明 `files:selected`。启用界面明确提示可读取、创建、修改和删除当前用户能够访问的任意文件，具备网络权限时可能发送文件内容；扩大到 `*` 需要重新授权。省略或 `[]` 沿用已有目录授权，专属数据目录仍由 `files:data` 控制。当前只支持 `*`，不支持路径 glob 或固定目录声明。
+
+获授权插件可用 `root: "*"` 和完整绝对 `path` 调用已有文件 API；普通授权根仍使用相对路径。句柄绑定插件／加载代次，停用关闭，SDK 拒绝旧结果；通配符不绕过当前用户的系统文件权限。文件系统根最多 32 个、实例打开文件仍最多 16 个。`rename`／`publish` 的目标须在相同文件系统根内；`files.open-directory` 使用通配根时另提供绝对 `path`。
+
+| SDK／操作                                                       | 行为                                                                                                                                                                                                                       |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `usePluginFiles().pickAudio(extensions?)`／`files.pick-audio`   | 原生多选音频，可筛选支持的扩展名（如 `["ncm"]`），最多 128 个，返回 `{root,path,name}[]`；已获 `*` 时返回绝对路径，否则选择器明确授权所在目录读写，返回目录根和相对文件名。取消返回空数组。                                |
+| `usePluginFiles().decodeAudio(root,path)`／`files.decode-audio` | 恢复支持的音频容器，当前支持 NCM → 原始 MP3／FLAC；返回 `{path,format,bytes}`，其中 bytes 为音频正文大小。默认同目录、保留源文件与歌曲信息／内嵌封面、同名失败不覆盖。单文件 256MiB，全局最多 2 个转换，阻塞线程流式读取。 |
+| `MusicPageHeader`                                               | 插件复用宿主页面标题。页面 shell 仍由 `MusicWorkspace` 提供。                                                                                                                                                              |
+
+工具页面在 navigation 条目声明 `category: "tool"`，宿主“工具”页显示已加载实例的入口卡片，点击沿用 `/plugins/<id>/*` 与应用历史。省略 category 保留原主导航入口；同一工具不再占用顶栏独立按钮。
+
+`plugins/ncm-converter` 是独立前端工具插件，使用 `fileRoots: ["*"]`，无网络权限。批量串行转换，失败后继续，可重试失败项；关闭页面停止后续项目，当前原生转换完成后结束。支持“完成当前文件后停止”，不承诺页面关闭／重启后的任务恢复。此工具恢复原始编码，不做 MP3 ↔ FLAC 转码。本地 NCM 播放由宿主音频格式支持提供，无需启用转换页面。
+
+```powershell
+node scripts/build-plugin.mjs ncm-converter .local/plugins/ncm-converter
+```
+
+在设置 → 插件中安装 `.local/plugins/ncm-converter.zip` 并启用确认权限，随后从“工具”卡片进入。依赖来源与 NCM Rust 库的兼容补丁见 `app/src-tauri/vendor/ncmdump/NONS-PATCHES.md`；用户提供的 C++ 参考仓库克隆到播放器项目的同级 `ncmdump`，不作为运行时依赖。
+
 可选模块 `activate()` 可以返回清理函数；清理会在停用、reload 和卸载时调用。组件应使用 React effect 清理自己的定时器及其他副作用。
 
 ## 灵动岛数据流

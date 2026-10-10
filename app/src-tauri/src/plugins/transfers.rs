@@ -172,6 +172,7 @@ impl Transfers {
     }
 }
 struct TransferContext {
+    unrestricted: bool,
     id: String,
     generation: u64,
     files: Arc<super::files::Files>,
@@ -181,6 +182,7 @@ struct TransferContext {
 impl From<&Context> for TransferContext {
     fn from(context: &Context) -> Self {
         Self {
+            unrestricted: context.file_roots.iter().any(|r| r == "*"),
             id: context.id.clone(),
             generation: context.generation,
             files: context.files.clone(),
@@ -205,8 +207,16 @@ async fn run(
         let generation = context.generation;
         let active = context.active.clone();
         let operation = operation.to_string();
+        let unrestricted = context.unrestricted;
         tauri::async_runtime::spawn_blocking(move || {
-            files.call(&plugin, generation, &operation, &args, &active)
+            files.call_with_access(
+                &plugin,
+                generation,
+                &operation,
+                &args,
+                &active,
+                unrestricted,
+            )
         })
     };
     let opened = io(
@@ -345,6 +355,50 @@ mod tests {
         (Arc::new(super::super::http::Http(client)), server)
     }
     #[test]
+    fn wildcard_transfer_writes_selected_absolute_path_without_directory_grant() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let tmp = tempfile::tempdir().unwrap();
+                let db = Arc::new(
+                    super::super::database::Database::open(Path::new(":memory:")).unwrap(),
+                );
+                let files = Arc::new(super::super::files::Files::new(tmp.path().join("data"), db));
+                let (http, server) = fixture(vec![42; 1000], Duration::ZERO);
+                let context = TransferContext {
+                    id: "one".into(),
+                    generation: 1,
+                    unrestricted: true,
+                    files,
+                    http,
+                    active: Arc::new(AtomicBool::new(true)),
+                };
+                let state = Arc::new(Mutex::new(Snapshot {
+                    id: 1,
+                    state: "running".into(),
+                    bytes: 0,
+                    total: None,
+                    error: None,
+                }));
+                let path = tmp.path().join("absolute.part");
+                run(
+                    &context,
+                    url::Url::parse("http://example.org/file").unwrap(),
+                    "*",
+                    path.to_str().unwrap(),
+                    1000,
+                    &state,
+                    (&AtomicBool::new(false), &AtomicBool::new(false)),
+                )
+                .await
+                .unwrap();
+                server.join().unwrap();
+                assert_eq!(std::fs::read(path).unwrap(), vec![42; 1000]);
+            });
+    }
+    #[test]
     fn pause_preserves_partial_file_then_resumes_and_cancel_cleans_paused_transfer() {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -360,6 +414,7 @@ mod tests {
                 for cancel_while_paused in [false, true] {
                     let (http, server) = fixture(vec![42; 100_000], Duration::from_millis(5));
                     let context = TransferContext {
+                        unrestricted: false,
                         id: "one".into(),
                         generation: 1,
                         files: files.clone(),
@@ -436,6 +491,7 @@ mod tests {
                 }));
                 let (http, server) = fixture(vec![42; 100_000], Duration::ZERO);
                 let mut context = TransferContext {
+                    unrestricted: false,
                     id: "one".into(),
                     generation: 1,
                     files,

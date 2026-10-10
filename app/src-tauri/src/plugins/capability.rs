@@ -21,6 +21,7 @@ pub struct Context {
     pub generation: u64,
     pub permissions: HashSet<String>,
     pub http_hosts: Vec<String>,
+    pub file_roots: Vec<String>,
     pub http: Arc<super::http::Http>,
     pub transfers: Arc<super::transfers::Transfers>,
     pub active: Arc<AtomicBool>,
@@ -37,12 +38,13 @@ impl Context {
     async fn file_location(&self, args: Value) -> AppResult<Value> {
         let context = self.clone();
         tauri::async_runtime::spawn_blocking(move || {
-            context.files.call(
+            context.files.call_with_access(
                 &context.id,
                 context.generation,
                 "files.resolve",
                 &args,
                 &context.active,
+                context.file_roots.iter().any(|r| r == "*"),
             )
         })
         .await
@@ -63,6 +65,7 @@ impl Context {
         }
         let args: Value = serde_json::from_str(args).map_err(|_| "插件参数必须为 JSON")?;
         let result = match operation {
+            "files.pick-audio" => super::audio_files::pick(self, &args).await?,
             "netease.account-credentials" => {
                 self.check(Some("account:credentials"))?;
                 self.songs.account_credentials()?
@@ -169,7 +172,7 @@ impl Context {
                     Value::Null
                 } else if op == "files.open-directory" {
                     let location = self
-                        .file_location(json!({"root":args.get("root"),"path":""}))
+                        .file_location(json!({"root":args.get("root"),"path":if args.get("root").and_then(Value::as_str) == Some("*") { args.get("path").and_then(Value::as_str).ok_or("任意目录访问须提供绝对路径")? } else { "" }}))
                         .await?;
                     self.check(None)?;
                     tauri_plugin_opener::OpenerExt::opener(&self.app)
@@ -180,6 +183,9 @@ impl Context {
                     let mut roots = Vec::new();
                     if self.permissions.contains("files:data") {
                         roots.push(serde_json::json!({"id":"data","writable":true}));
+                    }
+                    if self.file_roots.iter().any(|r| r == "*") {
+                        roots.push(json!({"id":"*","writable":true}));
                     }
                     if self.permissions.contains("files:selected") {
                         roots.extend(
@@ -196,8 +202,16 @@ impl Context {
                     let generation = self.generation;
                     let active = self.active.clone();
                     let operation = op.to_string();
+                    let unrestricted = self.file_roots.iter().any(|r| r == "*");
                     tauri::async_runtime::spawn_blocking(move || {
-                        files.call(&id, generation, &operation, &args, &active)
+                        files.call_with_access(
+                            &id,
+                            generation,
+                            &operation,
+                            &args,
+                            &active,
+                            unrestricted,
+                        )
                     })
                     .await
                     .map_err(|e| e.to_string())??

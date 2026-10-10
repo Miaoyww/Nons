@@ -9,11 +9,12 @@ export interface PluginManifest {
   configuration?: string | null
   permissions: string[]
   httpHosts?: string[]
+  fileRoots?: string[]
   engines: { app: string; pluginApi: string; uiApi: string }
   contributes: {
     views: { id: string; slot: string; export: string }[]
     pages: { id: string; path: string; export: string }[]
-    navigation: { id: string; label: string; page: string }[]
+    navigation: { id: string; label: string; page: string; category?: 'tool' | null }[]
     contextMenus?: {
       id: string
       target: 'song'

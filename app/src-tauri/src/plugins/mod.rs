@@ -1,3 +1,4 @@
+mod audio_files;
 mod capability;
 mod clipboard;
 mod configuration;
@@ -220,6 +221,7 @@ impl PluginManager {
             generation,
             permissions: manifest.permissions.iter().cloned().collect(),
             http_hosts: manifest.http_hosts.clone(),
+            file_roots: manifest.file_roots.clone(),
             http: self.http.clone(),
             transfers: self.transfers.clone(),
             active: Arc::new(AtomicBool::new(false)),
@@ -452,6 +454,7 @@ impl PluginManager {
         if manifest.id != id
             || manifest.permissions != old.permissions
             || manifest.http_hosts != old.http_hosts
+            || manifest.file_roots != old.file_roots
             || manifest.version != old.version
         {
             return Err("插件权限或版本已改变，请重新安装并授权".into());
@@ -765,7 +768,7 @@ fn host_module(module: &str) -> AppResult<(Vec<u8>, &'static str)> {
     let (object, exports) = match module {
         "react.mjs" => ("react", "Children,Fragment,Profiler,StrictMode,Suspense,Component,PureComponent,createContext,createElement,cloneElement,isValidElement,forwardRef,memo,lazy,startTransition,useActionState,useCallback,useContext,useDebugValue,useDeferredValue,useEffect,useId,useImperativeHandle,useInsertionEffect,useLayoutEffect,useMemo,useOptimistic,useReducer,useRef,useState,useSyncExternalStore,useTransition,use,act,cache,version"),
         "jsx-runtime.mjs" => ("jsx", "Fragment,jsx,jsxs"),
-        "sdk.mjs" => ("sdk", "usePluginClipboard,usePluginHttp,useNetease,usePluginBackend,usePluginEvent,usePluginStorage,usePluginConfig,usePluginFiles,usePluginNavigate,usePluginRoute,usePlayer,useTheme,useCoverSource,useSongPlayback,SongArtists,SongLikeButton,SongIdentity,DownloadedSongList,Button,Progress,Input,Icon,Tabs,TabsList,TabsTab,TabsPanel,TabsPanels"),
+        "sdk.mjs" => ("sdk", "usePluginClipboard,usePluginHttp,useNetease,usePluginBackend,usePluginEvent,usePluginStorage,usePluginConfig,usePluginFiles,usePluginNavigate,usePluginRoute,usePlayer,useTheme,useCoverSource,useSongPlayback,SongArtists,SongLikeButton,SongIdentity,DownloadedSongList,MusicPageHeader,Button,Progress,Input,Icon,Tabs,TabsList,TabsTab,TabsPanel,TabsPanels"),
         _ => return Err("未知宿主桥接模块".into()),
     };
     Ok((format!("const host=globalThis.__NONS_PLUGIN_HOST__.{object};export default host;export const {{{exports}}}=host;").into_bytes(), "text/javascript"))

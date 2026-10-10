@@ -46,6 +46,7 @@ function harness(
     '@/features/settings/use-theme': {},
     '@/components/music/use-cover-source': {},
     '@/features/workspace/music-navigation': {},
+    '@/components/music/music-page': { MusicPageHeader: 'header' },
     '@/components/ui/button': {},
     '@/components/ui/progress': {},
     '@/components/ui/input': {},

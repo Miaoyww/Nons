@@ -1,4 +1,7 @@
 //! Opt-in read-only live probe. Never prints cookies or expiring media URLs.
+#[path = "../src/local/encoded_audio.rs"]
+#[allow(dead_code)]
+mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;

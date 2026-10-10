@@ -1,4 +1,7 @@
 //! Read-only search smoke test. Prints counts, never account data or cookies.
+#[path = "../src/local/encoded_audio.rs"]
+#[allow(dead_code)]
+mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;

@@ -65,6 +65,11 @@ export interface PluginFile {
   close(): Promise<void>
 }
 export function usePluginFiles(): {
+  pickAudio(extensions?: string[]): Promise<{ root: string; path: string; name: string }[]>
+  decodeAudio(
+    root: string,
+    path: string
+  ): Promise<{ path: string; format: 'mp3' | 'flac'; bytes: number }>
   roots(): Promise<{ id: string; writable: boolean }[]>
   stat(root: string, path?: string): Promise<{ isDirectory: boolean; size: number }>
   list(
@@ -93,6 +98,7 @@ export function usePlayer(): {
   track: Omit<PluginSong, 'id' | 'key'> | null
   control(action: 'pause' | 'resume' | 'next' | 'previous' | 'stop'): Promise<void>
 }
+export const MusicPageHeader: ComponentType<{ title: ReactNode; children?: ReactNode }>
 export const Button: ComponentType<{
   children?: ReactNode
   onClick?: () => void

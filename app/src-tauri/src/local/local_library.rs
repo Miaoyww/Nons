@@ -3,7 +3,7 @@ use crate::{
     storage::Store,
     Backend,
 };
-use lofty::{prelude::*, probe::Probe};
+use lofty::prelude::*;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, State};
@@ -75,10 +75,7 @@ pub struct LocalInformation {
     pub format: String,
 }
 pub fn read_information(path: &str) -> AppResult<LocalInformation> {
-    let file = Probe::open(path)
-        .map_err(|e| e.to_string())?
-        .read()
-        .map_err(|e| e.to_string())?;
+    let (file, _, _) = super::encoded_audio::read_tags(path)?;
     Ok(information(&file, path))
 }
 pub fn information(file: &lofty::file::TaggedFile, path: &str) -> LocalInformation {

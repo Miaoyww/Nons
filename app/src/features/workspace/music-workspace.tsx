@@ -18,6 +18,7 @@ import { useMusicNavigation } from '@/features/workspace/music-navigation'
 import { QualitySelect } from '@/features/playback/music-options'
 import { SongActionsProvider } from '@/components/music/song-actions'
 import { QueuePage } from '@/features/queue/queue-page'
+import { ToolsPage } from '@/features/tools/tools-page'
 import { PluginPageHost } from '@/plugins/host'
 import { useInterfaceDensity } from '@/features/settings/use-interface-density'
 
@@ -156,7 +157,19 @@ export function MusicWorkspace({
           : [
               {
                 name: '音频',
-                extensions: ['mp3', 'flac', 'wav', 'm4a', 'aac', 'ogg', 'opus', 'aiff', 'ape', 'wv']
+                extensions: [
+                  'mp3',
+                  'flac',
+                  'wav',
+                  'm4a',
+                  'aac',
+                  'ogg',
+                  'opus',
+                  'aiff',
+                  'ape',
+                  'wv',
+                  'ncm'
+                ]
               }
             ]
       })
@@ -253,6 +266,8 @@ export function MusicWorkspace({
                     />
                   )}
                 </Suspense>
+              ) : view === 'tools' ? (
+                <ToolsPage />
               ) : view === 'plugin' ? (
                 <MusicPage>
                   <PluginPageHost path={page.query} />

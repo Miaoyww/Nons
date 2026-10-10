@@ -37,6 +37,7 @@ const Switch = ({ checked, onCheckedChange, ...props }) =>
 const base = {
   react: React,
   'react/jsx-runtime': jsx,
+  '@/components/music/music-page': { MusicPageHeader: 'header' },
   '@/components/ui/button': { Button },
   '@/components/ui/switch': { Switch }
 }
@@ -264,6 +265,7 @@ test('SDK keeps configuration navigation local and rejects stale configuration r
       './scope': scopeModule,
       './types': routing,
       './song-components': {},
+      '@/components/music/music-page': { MusicPageHeader: 'header' },
       '@/components/ui/button': { Button },
       '@/components/ui/progress': {},
       '@/components/ui/input': {},

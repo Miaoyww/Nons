@@ -14,6 +14,7 @@ mod test_support;
 use application::Backend;
 use discovery::hitokoto;
 use infrastructure::storage;
+use local::encoded_audio;
 use local::{library, local_folders, local_library};
 use lyrics::{lyric_matching, netease_lyrics, qq_lyrics, qrc_decrypt, ttml_cache};
 use platform::{about, fonts};

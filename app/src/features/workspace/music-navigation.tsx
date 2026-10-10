@@ -9,6 +9,7 @@ export type MusicView =
   | 'collection'
   | 'artist'
   | 'album'
+  | 'tools'
   | 'plugin'
   | 'local-artist'
   | 'local-album'
@@ -55,6 +56,7 @@ function restoreHistory(): NavigationHistory {
       'collection',
       'artist',
       'album',
+      'tools',
       'plugin',
       'local-artist',
       'local-album',

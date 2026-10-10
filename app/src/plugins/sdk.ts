@@ -10,6 +10,7 @@ export type { ConfigSnapshot } from './configuration-types'
 import { pluginPath, resolvePluginPath } from './types'
 import { registerCollectionTab, type CollectionTabRegistration } from './collection-tabs'
 export type { PluginCollection, CollectionTabRegistration } from './collection-tabs'
+export { MusicPageHeader } from '@/components/music/music-page'
 export { Button } from '@/components/ui/button'
 export { Progress } from '@/components/ui/progress'
 export { Input } from '@/components/ui/input'
@@ -242,6 +243,16 @@ export function usePluginFiles() {
   const scope = useScope()
   return useMemo(
     () => ({
+      pickAudio: (extensions?: string[]) =>
+        hostCall<{ root: string; path: string; name: string }[]>(scope, 'files.pick-audio', {
+          extensions
+        }),
+      decodeAudio: (root: string, path: string) =>
+        hostCall<{ path: string; format: 'mp3' | 'flac'; bytes: number }>(
+          scope,
+          'files.decode-audio',
+          { root, path }
+        ),
       roots: () => hostCall<{ id: string; writable: boolean }[]>(scope, 'files.roots', {}),
       stat: (root: string, path = '') =>
         hostCall<{ isDirectory: boolean; size: number }>(scope, 'files.stat', { root, path }),

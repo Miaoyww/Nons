@@ -6,7 +6,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-pub const API_VERSION: &str = "1.2.0";
+pub const API_VERSION: &str = "1.3.0";
 pub const PERMISSIONS: &[&str] = &[
     "clipboard:music-links",
     "clipboard:read",
@@ -38,6 +38,8 @@ pub struct Manifest {
     pub permissions: Vec<String>,
     #[serde(default, rename = "httpHosts")]
     pub http_hosts: Vec<String>,
+    #[serde(default, rename = "fileRoots")]
+    pub file_roots: Vec<String>,
     pub engines: Engines,
     #[serde(default)]
     pub contributes: Contributions,
@@ -86,6 +88,8 @@ pub struct Page {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Navigation {
+    #[serde(default)]
+    pub category: Option<String>,
     pub id: String,
     pub label: String,
     pub page: String,
@@ -188,8 +192,12 @@ impl Manifest {
         let mut hosts = self.http_hosts.clone();
         permissions.sort();
         hosts.sort();
-        serde_json::json!({"version":self.version,"permissions":permissions,"httpHosts":hosts})
-            .to_string()
+        let mut authorization =
+            serde_json::json!({"version":self.version,"permissions":permissions,"httpHosts":hosts});
+        if !self.file_roots.is_empty() {
+            authorization["fileRoots"] = serde_json::json!(self.file_roots);
+        }
+        authorization.to_string()
     }
     pub fn read(root: &Path) -> AppResult<Self> {
         Self::read_configured(root).map(|(manifest, _)| manifest)
@@ -223,6 +231,11 @@ impl Manifest {
         Ok((manifest, configuration))
     }
     pub fn validate(&self) -> AppResult<()> {
+        if !self.file_roots.is_empty()
+            && (self.file_roots != ["*"] || !self.permissions.iter().any(|p| p == "files:selected"))
+        {
+            return Err("fileRoots 当前仅支持 [\"*\"]，且须声明 files:selected".into());
+        }
         if !valid_id(&self.id) || self.name.trim().is_empty() || self.name.len() > 128 {
             return Err("插件标识或名称无效".into());
         }
@@ -351,7 +364,8 @@ impl Manifest {
             }
         }
         for nav in &c.navigation {
-            if !valid_id(&nav.id)
+            if nav.category.as_deref().is_some_and(|c| c != "tool")
+                || !valid_id(&nav.id)
                 || !ids.insert(&nav.id)
                 || nav.label.trim().is_empty()
                 || nav.label.len() > 128
@@ -367,6 +381,19 @@ impl Manifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn validates_tool_and_rejects_unsupported_file_scope() {
+        let mut manifest: Manifest = serde_json::from_str(include_str!(
+            "../../../../plugins/ncm-converter/manifest.json"
+        ))
+        .unwrap();
+        manifest.validate().unwrap();
+        manifest.file_roots = vec!["C:/".into()];
+        assert!(manifest.validate().is_err());
+        manifest.file_roots = vec!["*".into()];
+        manifest.permissions.retain(|p| p != "files:selected");
+        assert!(manifest.validate().is_err());
+    }
     #[test]
     fn validates_download_plugin_and_rejects_unknown_menu_targets() {
         let value: serde_json::Value = serde_json::from_str(include_str!(

@@ -340,6 +340,7 @@ pub struct Lyrics {
 
 #[derive(Clone, Debug)]
 pub struct ResolvedTrack {
+    pub decoded_audio: Option<std::sync::Arc<tempfile::NamedTempFile>>,
     pub track: Track,
     pub uri: String,
     pub quality: Option<String>,

@@ -135,6 +135,7 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
       'react/jsx-runtime': jsx,
       'lucide-react': { Heart: () => React.createElement('svg') },
       '@tauri-apps/api/core': { isTauri: () => true },
+      '@/components/music/music-page': { MusicPageHeader: 'header' },
       '@/components/ui/button': { Button },
       '@/features/account/account': {
         useAccount: () => ({
@@ -183,6 +184,7 @@ test('real dynamic ui.mjs uses host React and scoped events, renders and cleans 
       '@/features/settings/use-theme': {},
       '@/components/music/use-cover-source': { useCoverSource: () => undefined },
       '@/features/workspace/music-navigation': {},
+      '@/components/music/music-page': { MusicPageHeader: 'header' },
       '@/components/ui/button': { Button },
       '@/components/ui/progress': {},
       '@/components/ui/input': {},

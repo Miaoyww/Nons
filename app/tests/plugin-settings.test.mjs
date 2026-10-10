@@ -150,8 +150,15 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
           description: '保存歌曲与管理下载队列。',
           repository: 'https://github.com/Miaoyww/Nons',
           version: '1.1.0',
-          permissions: ['ui', 'account:credentials', 'http:request', 'http:transfer'],
-          httpHosts: ['*', 'example.org', 'api.example.org']
+          permissions: [
+            'ui',
+            'account:credentials',
+            'http:request',
+            'http:transfer',
+            'files:selected'
+          ],
+          httpHosts: ['*', 'example.org', 'api.example.org'],
+          fileRoots: ['*']
         },
         enabled: false,
         loaded: false
@@ -206,6 +213,7 @@ test('plugin settings scopes native drops, serializes ZIP installs and removes i
       element.textContent.includes('登录 Cookie')
     )
     assert.ok(warning.className.includes('text-destructive'))
+    assert.match(document.body.textContent, /当前用户能够访问的任意文件/)
     assert.match(document.body.textContent, /敏感权限：会请求任意 URL/)
     assert.match(document.body.textContent, /敏感权限：会请求任意 URL 并传输资源到授权目录/)
     assert.ok(!document.body.textContent.includes('example.org'))

@@ -146,7 +146,8 @@ export function Titlebar({
               [
                 ['library', '音乐库'],
                 ['discover', '发现'],
-                ['local', '本地']
+                ['local', '本地'],
+                ['tools', '工具']
               ] as const
             ).map(([view, label]) => (
               <Button
@@ -155,7 +156,14 @@ export function Titlebar({
                   page.view === view ||
                   (view === 'library' && page.view === 'collection') ||
                   (view === 'discover' && page.view === 'search') ||
-                  (view === 'local' && page.view.startsWith('local-'))
+                  (view === 'local' && page.view.startsWith('local-')) ||
+                  (view === 'tools' &&
+                    page.view === 'plugin' &&
+                    plugins.some(
+                      (p) =>
+                        p.manifest.contributes.navigation.some((n) => n.category === 'tool') &&
+                        page.query.startsWith(`/plugins/${p.manifest.id}/`)
+                    ))
                     ? 'secondary'
                     : 'ghost'
                 }
@@ -163,7 +171,14 @@ export function Titlebar({
                   page.view === view ||
                   (view === 'library' && page.view === 'collection') ||
                   (view === 'discover' && page.view === 'search') ||
-                  (view === 'local' && page.view.startsWith('local-'))
+                  (view === 'local' && page.view.startsWith('local-')) ||
+                  (view === 'tools' &&
+                    page.view === 'plugin' &&
+                    plugins.some(
+                      (p) =>
+                        p.manifest.contributes.navigation.some((n) => n.category === 'tool') &&
+                        page.query.startsWith(`/plugins/${p.manifest.id}/`)
+                    ))
                     ? 'page'
                     : undefined
                 }
@@ -175,23 +190,27 @@ export function Titlebar({
             {plugins
               .filter((p) => p.loaded)
               .flatMap((plugin) =>
-                plugin.manifest.contributes.navigation.map((item) => {
-                  const target = plugin.manifest.contributes.pages.find((p) => p.id === item.page)!
-                  const path = pluginPath(plugin.manifest.id, target.path)
-                  const selected =
-                    page.view === 'plugin' &&
-                    (page.query === path || page.query.startsWith(`${path.replace(/\/$/, '')}/`))
-                  return (
-                    <Button
-                      key={`${plugin.manifest.id}:${item.id}`}
-                      variant={selected ? 'secondary' : 'ghost'}
-                      aria-current={selected ? 'page' : undefined}
-                      onClick={() => navigate('plugin', path)}
-                    >
-                      {item.label}
-                    </Button>
-                  )
-                })
+                plugin.manifest.contributes.navigation
+                  .filter((item) => item.category !== 'tool')
+                  .map((item) => {
+                    const target = plugin.manifest.contributes.pages.find(
+                      (p) => p.id === item.page
+                    )!
+                    const path = pluginPath(plugin.manifest.id, target.path)
+                    const selected =
+                      page.view === 'plugin' &&
+                      (page.query === path || page.query.startsWith(`${path.replace(/\/$/, '')}/`))
+                    return (
+                      <Button
+                        key={`${plugin.manifest.id}:${item.id}`}
+                        variant={selected ? 'secondary' : 'ghost'}
+                        aria-current={selected ? 'page' : undefined}
+                        onClick={() => navigate('plugin', path)}
+                      >
+                        {item.label}
+                      </Button>
+                    )
+                  })
               )}
           </nav>
         )}

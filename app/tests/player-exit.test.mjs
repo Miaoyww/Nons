@@ -81,6 +81,7 @@ function harness(initialMode = 'collapsible') {
     '@/components/music/action-button': { ActionButton: 'ActionButton' },
     '@/components/music/music-page': { MusicPage: 'MusicPage' },
     '@/features/playback/playback-bar': { PlaybackBar: 'PlaybackBar' },
+    '@/features/tools/tools-page': { ToolsPage: 'ToolsPage' },
     '@/plugins/host': { PluginPageHost: 'PluginPageHost' },
     '@/features/workspace/music-navigation': {
       useMusicNavigation: () => ({ page: { view: 'local', query: '' } })

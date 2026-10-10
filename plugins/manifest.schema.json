@@ -147,6 +147,10 @@
               },
               "page": {
                 "$ref": "#/$defs/id"
+              },
+              "category": {
+                "enum": ["tool"],
+                "description": "tool 在宿主工具页以卡片显示；省略则沿用主导航入口。"
               }
             }
           }
@@ -221,6 +225,15 @@
       "format": "uri",
       "pattern": "^https?://\\S+$",
       "description": "代码仓库 HTTP(S) 链接，不含凭证；可省略，Rust 校验 URL。"
+    },
+    "fileRoots": {
+      "type": "array",
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "const": "*"
+      },
+      "description": "须声明 files:selected。* 允许读写任意文件，启用时显示敏感权限提示；省略时只允许用户授权的目录。"
     }
   },
   "$defs": {

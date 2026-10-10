@@ -2,7 +2,7 @@ use crate::{
     model::{AppResult, Track, TrackSource},
     storage::{Store, MAX_LYRIC_BYTES},
 };
-use lofty::{prelude::*, probe::Probe};
+use lofty::prelude::*;
 use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
@@ -10,7 +10,7 @@ use std::{
 };
 
 pub const AUDIO_EXTENSIONS: &[&str] = &[
-    "mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "aiff", "aif", "ape", "wv",
+    "mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "aiff", "aif", "ape", "wv", "ncm",
 ];
 
 #[derive(serde::Serialize)]
@@ -129,10 +129,7 @@ fn read_track(
             return Ok(track);
         }
     }
-    let tagged = Probe::open(&path)
-        .map_err(|_| "无法打开文件")?
-        .read()
-        .map_err(|_| "无法读取音频元数据")?;
+    let (tagged, ncm_info, ncm_image) = super::encoded_audio::read_tags(&path)?;
     let tag = tagged.primary_tag().or_else(|| tagged.first_tag());
     let mut cover = fallback.to_string();
     if let Some(picture) = tag
@@ -149,10 +146,24 @@ fn read_track(
             cover = dest.to_string_lossy().to_string();
         }
     }
+    if !ncm_image.is_empty() && cover == fallback {
+        let dest = cover_dir.join(format!("{:x}.img", Sha256::digest(&ncm_image)));
+        if dest.exists() || *cover_bytes + ncm_image.len() as u64 <= 32 * 1024 * 1024 {
+            if !dest.exists() {
+                std::fs::write(&dest, &ncm_image).map_err(|e| e.to_string())?;
+                *cover_bytes += ncm_image.len() as u64;
+            }
+            cover = dest.to_string_lossy().into_owned();
+        }
+    }
     // Re-importing a file must preserve a user's explicit lyric binding.
-    let netease_id = store.track(&key).ok().and_then(|t| t.netease_id());
+    let netease_id = store
+        .track(&key)
+        .ok()
+        .and_then(|t| t.netease_id())
+        .or_else(|| ncm_info.as_ref().map(|i| i.id).filter(|id| *id > 0));
     let information = crate::local_library::information(&tagged, &path);
-    let track = Track {
+    let mut track = Track {
         aliases: Vec::new(),
         artists: Vec::new(),
         album_id: None,
@@ -182,6 +193,26 @@ fn read_track(
         cover,
         source: TrackSource::Local { path, netease_id },
     };
+    if let Some(info) = ncm_info {
+        if !info.name.is_empty() {
+            track.title = info.name;
+        }
+        if !info.album.is_empty() {
+            track.album = info.album;
+        }
+        if !info.artist.is_empty() {
+            track.artist = info
+                .artist
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>()
+                .join("/");
+        }
+        if track.duration_ms == 0 {
+            track.duration_ms = info.duration;
+        }
+        track.aliases = info.alias.unwrap_or_default();
+    }
     store.save_local_information(&key, &information)?;
     store.save_tracks(std::slice::from_ref(&track))?;
     store.save_file_stat(&key, &modified, metadata.len())?;

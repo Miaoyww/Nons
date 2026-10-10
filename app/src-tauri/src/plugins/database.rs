@@ -228,6 +228,22 @@ fn check_key(key: &str) -> AppResult<()> {
 mod tests {
     use super::*;
     #[test]
+    fn wildcard_file_roots_require_new_authorization() {
+        let db = Database::open(Path::new(":memory:")).unwrap();
+        let mut manifest: super::super::manifest::Manifest = serde_json::from_str(include_str!(
+            "../../../../plugins/ncm-converter/manifest.json"
+        ))
+        .unwrap();
+        manifest.file_roots.clear();
+        db.authorize(&manifest.id, &manifest.authorization())
+            .unwrap();
+        manifest.file_roots = vec!["*".into()];
+        assert!(!db.enabled(&manifest.id, &manifest.authorization()).unwrap());
+        db.authorize(&manifest.id, &manifest.authorization())
+            .unwrap();
+        assert!(db.enabled(&manifest.id, &manifest.authorization()).unwrap());
+    }
+    #[test]
     fn authorization_is_bound_to_scope_and_cannot_upgrade_legacy_enablement() {
         let db = Database::open(Path::new(":memory:")).unwrap();
         db.enable("a", true).unwrap();

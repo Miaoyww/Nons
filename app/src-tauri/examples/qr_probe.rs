@@ -1,4 +1,7 @@
 //! Opt-in QR generation probe. Never prints keys, URLs, cookies, or image contents.
+#[path = "../src/local/encoded_audio.rs"]
+#[allow(dead_code)]
+mod encoded_audio;
 #[path = "../src/model/mod.rs"]
 #[allow(dead_code)]
 mod model;

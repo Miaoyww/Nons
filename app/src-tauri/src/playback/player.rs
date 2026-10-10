@@ -188,6 +188,7 @@ struct Actor {
     generation: Arc<AtomicU64>,
     prepared: Arc<Mutex<Option<Prepared>>>,
     armed: Arc<Mutex<Option<Prepared>>>,
+    decoded_audio: Option<Arc<tempfile::NamedTempFile>>,
     current_job: Option<tauri::async_runtime::JoinHandle<()>>,
     next_job: Option<tauri::async_runtime::JoinHandle<()>>,
     next_attempt: Option<Instant>,
@@ -297,6 +298,7 @@ impl Actor {
             generation,
             prepared,
             armed,
+            decoded_audio: None,
             current_job: None,
             next_job: None,
             next_attempt: None,
@@ -557,6 +559,7 @@ impl Actor {
                 self.playbin
                     .set_state(gst::State::Null)
                     .map_err(|e| e.to_string())?;
+                self.decoded_audio = None;
                 if clear {
                     self.state.private_fm_session = None;
                     self.state.queue.clear();
@@ -626,6 +629,7 @@ impl Actor {
                                 },
                             )
                             .map_err(|e| e.to_string())?;
+                            self.decoded_audio = resolved.decoded_audio;
                         }
                         Err(error) => {
                             self.state.status = PlaybackStatus::Error;
@@ -659,6 +663,7 @@ impl Actor {
         self.playbin
             .set_state(gst::State::Null)
             .map_err(|e| e.to_string())?;
+        self.decoded_audio = None;
         self.state.revision += 1;
         self.state.index = Some(index);
         self.state.position_ms = 0;
@@ -776,6 +781,7 @@ impl Actor {
                     self.state.position_ms = 0;
                     self.state.duration_ms = next.resolved.track.duration_ms;
                     self.state.actual_quality = next.resolved.quality;
+                    self.decoded_audio = next.resolved.decoded_audio;
                 }
                 self.publish();
             }
@@ -820,6 +826,7 @@ impl Actor {
                     self.state.status = PlaybackStatus::Stopped;
                     self.state.position_ms = self.state.duration_ms;
                     let _ = self.playbin.set_state(gst::State::Null);
+                    self.decoded_audio = None;
                     self.publish();
                 }
             }

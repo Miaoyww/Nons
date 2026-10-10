@@ -482,18 +482,22 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
                             key={p}
                             className={
                               p === 'account:credentials' ||
+                              (p === 'files:selected' &&
+                                plugin.manifest.fileRoots?.includes('*')) ||
                               (['http:request', 'http:transfer'].includes(p) &&
                                 plugin.manifest.httpHosts?.includes('*'))
                                 ? 'font-semibold text-destructive'
                                 : undefined
                             }
                           >
-                            {['http:request', 'http:transfer'].includes(p) &&
-                            plugin.manifest.httpHosts?.includes('*')
-                              ? p === 'http:request'
-                                ? '敏感权限：会请求任意 URL'
-                                : '敏感权限：会请求任意 URL 并传输资源到授权目录'
-                              : (permissionLabels[p] ?? p)}
+                            {p === 'files:selected' && plugin.manifest.fileRoots?.includes('*')
+                              ? '敏感权限：读写任意文件'
+                              : ['http:request', 'http:transfer'].includes(p) &&
+                                  plugin.manifest.httpHosts?.includes('*')
+                                ? p === 'http:request'
+                                  ? '敏感权限：会请求任意 URL'
+                                  : '敏感权限：会请求任意 URL 并传输资源到授权目录'
+                                : (permissionLabels[p] ?? p)}
                             {['http:request', 'http:transfer'].includes(p) &&
                               !plugin.manifest.httpHosts?.includes('*') &&
                               `：${plugin.manifest.httpHosts?.join('、') ?? ''}`}
@@ -517,6 +521,15 @@ export function PluginsPage({ initialPluginId }: { initialPluginId?: string } = 
                           此插件会请求任意
                           URL，向任意域名发送其可读取的数据。若同时授权账户凭证，登录 Cookie
                           也可能被发送到其他网站。请仅授权你信任的插件。
+                        </p>
+                      )}
+                      {plugin.manifest.fileRoots?.includes('*') && (
+                        <p
+                          role="alert"
+                          className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+                        >
+                          此插件可读取、创建、修改和删除当前用户能够访问的任意文件，不受已授权目录限制。
+                          若同时授予网络权限，它也可能发送文件内容。请仅授权你信任的插件。
                         </p>
                       )}
                       <p className="leading-6 text-muted-foreground">

@@ -25,6 +25,7 @@ pub struct Grant {
 struct Root {
     dir: Dir,
     writable: bool,
+    path: PathBuf,
 }
 struct Handle {
     plugin: String,
@@ -102,7 +103,14 @@ impl Files {
             .lock()
             .map_err(|_| "插件文件管理器不可用")?
             .roots
-            .insert((plugin.into(), id), Root { dir, writable });
+            .insert(
+                (plugin.into(), id),
+                Root {
+                    dir,
+                    writable,
+                    path,
+                },
+            );
         Ok(grant)
     }
     pub fn revoke(&self, plugin: &str, root: Option<&str>) -> AppResult<()> {
@@ -121,6 +129,9 @@ impl Files {
             state
                 .handles
                 .retain(|_, h| h.plugin != plugin || h.generation != generation);
+            state.roots.retain(|(p, r), _| {
+                p != plugin || !r.starts_with(&format!("absolute-{generation}-"))
+            });
         } else {
             let files = self.clone();
             let plugin = plugin.to_string();
@@ -129,6 +140,9 @@ impl Files {
                     state
                         .handles
                         .retain(|_, h| h.plugin != plugin || h.generation != generation);
+                    state.roots.retain(|(p, r), _| {
+                        p != &plugin || !r.starts_with(&format!("absolute-{generation}-"))
+                    });
                 }
             });
         }
@@ -186,6 +200,120 @@ impl Files {
             .sync_all()
             .map_err(|_| "保存文件失败".to_string())
     }
+    /// Absolute paths are accepted only after the caller validates wildcard authorization.
+    pub fn call_with_access(
+        &self,
+        plugin: &str,
+        generation: u64,
+        operation: &str,
+        args: &Value,
+        active: &std::sync::atomic::AtomicBool,
+        unrestricted: bool,
+    ) -> AppResult<Value> {
+        if args.get("root").and_then(Value::as_str) != Some("*") {
+            if args
+                .get("root")
+                .and_then(Value::as_str)
+                .is_some_and(|r| r.starts_with("absolute-"))
+            {
+                return Err("不能直接使用内部文件根".into());
+            }
+            return self.call(plugin, generation, operation, args, active);
+        }
+        if !unrestricted || !active.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("插件未获任意文件权限或已停用".into());
+        }
+        let path = Path::new(text(args, "path")?);
+        if !path.is_absolute()
+            || path
+                .components()
+                .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+        {
+            return Err("任意文件访问须提供完整绝对路径".into());
+        }
+        let base = path.ancestors().last().ok_or("绝对路径无效")?;
+        use sha2::{Digest, Sha256};
+        let root_id = format!(
+            "absolute-{generation}-{:x}",
+            Sha256::digest(base.to_string_lossy().as_bytes())
+        );
+        let mut normalized = args.clone();
+        normalized["root"] = json!(root_id);
+        normalized["path"] = json!(path
+            .strip_prefix(base)
+            .map_err(|e| e.to_string())?
+            .to_string_lossy()
+            .replace('\\', "/"));
+        if let Some(to) = args.get("to").and_then(Value::as_str) {
+            let to = Path::new(to);
+            if to.is_absolute() {
+                normalized["to"] = json!(to
+                    .strip_prefix(base)
+                    .map_err(|_| "目标须在相同文件系统根内")?
+                    .to_string_lossy()
+                    .replace('\\', "/"));
+            }
+        }
+        {
+            let mut state = self.state.lock().map_err(|_| "文件管理器不可用")?;
+            if !state.roots.contains_key(&(plugin.into(), root_id.clone())) {
+                if state
+                    .roots
+                    .keys()
+                    .filter(|(p, r)| p == plugin && r.starts_with("absolute-"))
+                    .count()
+                    >= 32
+                {
+                    return Err("每实例最多打开 32 个文件系统根".into());
+                }
+                let dir =
+                    Dir::open_ambient_dir(base, ambient_authority()).map_err(|e| e.to_string())?;
+                state.roots.insert(
+                    (plugin.into(), root_id),
+                    Root {
+                        dir,
+                        writable: true,
+                        path: base.into(),
+                    },
+                );
+            }
+        }
+        self.call(plugin, generation, operation, &normalized, active)
+    }
+    pub(super) fn audio_input(
+        &self,
+        plugin: &str,
+        generation: u64,
+        root: &str,
+        path: &str,
+        active: &std::sync::atomic::AtomicBool,
+    ) -> AppResult<(Dir, File, PathBuf)> {
+        self.call(
+            plugin,
+            generation,
+            "files.stat",
+            &json!({"root":root,"path":path}),
+            active,
+        )?;
+        let state = self.state.lock().map_err(|_| "插件文件管理器不可用")?;
+        let root = state
+            .roots
+            .get(&(plugin.into(), root.into()))
+            .filter(|r| r.writable)
+            .ok_or("目录未授权读写或授权已撤销")?;
+        relative(path)?;
+        let file = root.dir.open(path).map_err(|e| e.to_string())?;
+        if file.metadata().map_err(|e| e.to_string())?.len()
+            > crate::local::encoded_audio::MAX_AUDIO_BYTES + 20 * 1024 * 1024
+        {
+            return Err("NCM 文件过大".into());
+        }
+        Ok((
+            root.dir.try_clone().map_err(|e| e.to_string())?,
+            file,
+            root.path.clone(),
+        ))
+    }
     pub fn call(
         &self,
         plugin: &str,
@@ -194,6 +322,14 @@ impl Files {
         args: &Value,
         active: &std::sync::atomic::AtomicBool,
     ) -> AppResult<Value> {
+        if operation == "files.decode-audio" {
+            static JOBS: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
+            let _permit = JOBS
+                .get_or_init(|| tokio::sync::Semaphore::new(2))
+                .try_acquire()
+                .map_err(|_| "转换任务繁忙，请稍后重试")?;
+            return super::audio_files::decode(self, plugin, generation, args, active);
+        }
         let mut state = self.state.lock().map_err(|_| "插件文件管理器不可用")?;
         if !active.load(std::sync::atomic::Ordering::SeqCst) {
             return Err("插件加载代次已失效".into());
@@ -287,8 +423,15 @@ impl Files {
                 (PathBuf::from(grant.path), grant.writable)
             };
             let dir =
-                Dir::open_ambient_dir(path, ambient_authority()).map_err(|e| e.to_string())?;
-            state.roots.insert(key.clone(), Root { dir, writable });
+                Dir::open_ambient_dir(&path, ambient_authority()).map_err(|e| e.to_string())?;
+            state.roots.insert(
+                key.clone(),
+                Root {
+                    dir,
+                    writable,
+                    path,
+                },
+            );
         }
         let root = &state.roots[&key];
         let path = args.get("path").and_then(Value::as_str).unwrap_or("");
@@ -307,17 +450,7 @@ impl Files {
         }
         match operation {
             "files.resolve" => {
-                let base = if root_id == "data" {
-                    self.data_directory(plugin)?
-                } else {
-                    PathBuf::from(
-                        self.grants(plugin)?
-                            .into_iter()
-                            .find(|g| g.id == root_id)
-                            .ok_or("目录授权已撤销")?
-                            .path,
-                    )
-                };
+                let base = root.path.clone();
                 let resolved = if path.is_empty() {
                     let metadata = std::fs::symlink_metadata(&base).map_err(|e| e.to_string())?;
                     if super::manifest::is_link(&metadata) || !metadata.is_dir() {
@@ -483,6 +616,108 @@ fn relative(path: &str) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn wildcard_access_requires_authorization_and_expires_with_instance() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Arc::new(Database::open(Path::new(":memory:")).unwrap());
+        let files = Arc::new(Files::new(tmp.path().join("data"), db));
+        let active = std::sync::atomic::AtomicBool::new(true);
+        let path = tmp
+            .path()
+            .join("arbitrary.txt")
+            .to_string_lossy()
+            .into_owned();
+        let args = json!({"root":"*","path":path,"mode":"create"});
+        assert!(files
+            .call_with_access("one", 7, "files.open", &args, &active, false)
+            .is_err());
+        let handle = files
+            .call_with_access("one", 7, "files.open", &args, &active, true)
+            .unwrap()["handle"]
+            .as_u64()
+            .unwrap();
+        files
+            .write_transfer("one", 7, handle, b"content", &active)
+            .unwrap();
+        assert!(files
+            .write_transfer("other", 7, handle, b"bad", &active)
+            .is_err());
+        assert!(files
+            .call_with_access(
+                "one",
+                7,
+                "files.stat",
+                &json!({"root":"*","path":"relative.txt"}),
+                &active,
+                true
+            )
+            .is_err());
+        files.close_instance("one", 7);
+        assert!(files
+            .write_transfer("one", 7, handle, b"late", &active)
+            .is_err());
+        active.store(false, std::sync::atomic::Ordering::SeqCst);
+        assert!(files
+            .call_with_access(
+                "one",
+                7,
+                "files.remove",
+                &json!({"root":"*","path":path}),
+                &active,
+                true
+            )
+            .is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"content");
+    }
+    #[test]
+    fn conversion_preserves_metadata_and_never_overwrites_or_leaves_part_files() {
+        use crate::local::encoded_audio::tests::{fixture, flac};
+        use lofty::prelude::*;
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Arc::new(Database::open(Path::new(":memory:")).unwrap());
+        let files = Files::new(tmp.path().join("data"), db);
+        let active = std::sync::atomic::AtomicBool::new(true);
+        let source = tmp.path().join("测试.ncm");
+        std::fs::write(&source, fixture(&flac(), 128)).unwrap();
+        let args = json!({"root":"*","path":source.to_string_lossy()});
+        let value = files
+            .call_with_access("one", 7, "files.decode-audio", &args, &active, true)
+            .unwrap();
+        let destination = tmp.path().join("测试.flac");
+        assert_eq!(Path::new(value["path"].as_str().unwrap()), destination);
+        let tagged = lofty::probe::Probe::open(&destination)
+            .unwrap()
+            .read()
+            .unwrap();
+        assert_eq!(
+            tagged.primary_tag().unwrap().title().as_deref(),
+            Some("Fixture")
+        );
+        assert_eq!(
+            tagged.primary_tag().unwrap().artist().as_deref(),
+            Some("Test")
+        );
+        let before = std::fs::read(&destination).unwrap();
+        assert!(files
+            .call_with_access("one", 7, "files.decode-audio", &args, &active, true)
+            .is_err());
+        assert_eq!(std::fs::read(&destination).unwrap(), before);
+        assert!(source.exists());
+        assert!(!std::fs::read_dir(tmp.path())
+            .unwrap()
+            .flatten()
+            .any(|e| e.path().extension().is_some_and(|ext| ext == "part")));
+        let grant = files.grant("scoped", tmp.path().into(), false).unwrap();
+        assert!(files
+            .call(
+                "scoped",
+                1,
+                "files.decode-audio",
+                &json!({"root":grant.id,"path":"测试.ncm"}),
+                &active
+            )
+            .is_err());
+    }
     #[test]
     fn transfer_writes_and_publication_respect_revocation_and_never_overwrite() {
         let tmp = tempfile::tempdir().unwrap();
