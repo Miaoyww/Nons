@@ -288,7 +288,7 @@ export const TrackList = memo(function TrackList({
           <thead className="bg-background text-xs text-muted-foreground">
             <tr className="border-b border-border">
               <th className="py-3 text-center" scope="col">
-                <span className="track-column-label">#</span> {columnSizing.handle('index')}
+                # {columnSizing.handle('index')}
               </th>
               <th className="py-3" scope="col" aria-sort={ariaSort(sortable && titleActive)}>
                 {sortable ? (
@@ -305,7 +305,7 @@ export const TrackList = memo(function TrackList({
                     onClick={() => cycleSort('title')}
                   />
                 ) : (
-                  <span className="track-column-label">歌曲</span>
+                  '歌曲'
                 )}
                 {columnSizing.handle('title')}
               </th>
@@ -320,7 +320,7 @@ export const TrackList = memo(function TrackList({
                     onClick={() => cycleSort('album')}
                   />
                 ) : (
-                  <span className="track-column-label">专辑</span>
+                  '专辑'
                 )}
                 {columnSizing.handle('album')}
               </th>
@@ -347,14 +347,14 @@ export const TrackList = memo(function TrackList({
                       onClick={() => cycleSort('duration')}
                     />
                   ) : (
-                    <span className="track-column-label">时长</span>
+                    '时长'
                   )}
                   {columnSizing.handle('duration')}
                 </th>
               )}
               {extraColumns.map((column, index) => (
                 <th key={column.label} className="py-3" scope="col">
-                  <span className="track-column-label">{column.label}</span>
+                  {column.label}
                   {columnSizing.handle(`extra-${index}`)}
                 </th>
               ))}

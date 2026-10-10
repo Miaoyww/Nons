@@ -2720,13 +2720,10 @@
 }
 
 .track-sort-header {
-  position: relative;
-  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
-  width: fit-content;
-  max-width: 100%;
+  width: 100%;
   min-height: 36px;
   padding: 4px 8px;
   text-align: left;
@@ -2793,14 +2790,12 @@
   position: relative;
   padding-right: 10px;
 }
-.track-column-label {
-  position: relative;
-  z-index: 2;
-  display: inline-block;
-}
 .track-column-resizer {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: -6px;
+  bottom: 0;
+  width: 12px;
   cursor: ew-resize;
   background: transparent;
   touch-action: none;
