@@ -5,6 +5,7 @@ import { test } from 'node:test'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import * as jsx from 'react/jsx-runtime'
+import * as table from '@tanstack/react-table'
 import { JSDOM } from 'jsdom'
 import ts from 'typescript'
 
@@ -34,7 +35,8 @@ async function harness(run) {
   ].map((track) => ({ ...track, source: { kind: 'local' }, cover: '' }))
   const plays = [],
     removes = [],
-    menus = []
+    menus = [],
+    copies = []
   const virtualizer = {
     measure() {},
     measureElement() {},
@@ -45,6 +47,7 @@ async function harness(run) {
   const trackSearchContext = React.createContext(undefined)
   const modules = {
     react: React,
+    '@tanstack/react-table': table,
     'react/jsx-runtime': jsx,
     '@tanstack/react-virtual': {
       useVirtualizer: ({ count }) => {
@@ -53,12 +56,23 @@ async function harness(run) {
         return virtualizer
       }
     },
-    '@/components/music/infinite-load': { scrollParent: () => null },
+    '@/components/music/infinite-load': {
+      scrollParent: (element) => {
+        assert.equal(element.className, 'track-table-container')
+        return null
+      }
+    },
     '@/components/music/track-search-context': {
       TrackSearchContext: trackSearchContext
     },
     '@/components/ui/input': { Input: (props) => React.createElement('input', props) },
     '@/components/music/music-links': { TrackAlbum: ({ track }) => track.album },
+    './music-links': { TrackArtists: ({ track }) => track.artist },
+    './cover': { Cover: () => null },
+    './track-title': {
+      TrackTitle: ({ track }) => track.title,
+      trackDisplayTitle: (track) => track.title
+    },
     '@/components/music/action-button': {
       ActionButton: ({ size, variant, ...props }) => React.createElement('button', props)
     },
@@ -67,6 +81,7 @@ async function harness(run) {
       TrackIdentity: ({ track, cover }) => React.createElement('div', {}, cover, track.title)
     },
     '@/components/music/song-actions': {
+      useSongTitleCopy: () => (title) => copies.push(title),
       SongContextMenu: ({ render, children, ...props }) => {
         menus.push(props)
         return React.cloneElement(render, {}, children)
@@ -84,6 +99,28 @@ async function harness(run) {
       ])
     )
   }
+  function load(path) {
+    const exports = {}
+    runInNewContext(
+      ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX }
+      }).outputText,
+      {
+        exports,
+        require: (name) => {
+          assert.ok(name in modules, name)
+          return modules[name]
+        },
+        ResizeObserver: class {
+          observe() {}
+          disconnect() {}
+        }
+      }
+    )
+    return exports
+  }
+  modules['./track-column-sizing'] = load('../src/components/music/track-column-sizing.tsx')
+  modules['@/components/music/track-identity'] = load('../src/components/music/track-identity.tsx')
   const exports = {}
   runInNewContext(
     ts.transpileModule(
@@ -146,7 +183,7 @@ async function harness(run) {
   }
   try {
     await render()
-    await run({ tracks, plays, removes, menus, render, search, dom })
+    await run({ tracks, plays, removes, menus, copies, render, search, dom })
   } finally {
     await act(async () => root.unmount())
     dom.window.close()
@@ -329,5 +366,70 @@ test('detail toolbar search filters the actual list without rendering a duplicat
     )
     await render({ externalQuery: 'missing' })
     assert.match(document.body.textContent, /没有匹配的歌曲/)
+  })
+})
+
+test('selection enables title copying only on the selected occurrence and survives insertion', async () => {
+  await harness(async ({ dom, copies, tracks, render, plays }) => {
+    const row = document.querySelectorAll('.track-row')[2]
+    assert.equal(document.querySelector('.track-title-copy'), null)
+    await act(async () => row.querySelector('.track-title').click())
+    assert.equal(row.dataset.selected, 'true')
+    assert.equal(copies.length, 0)
+    await act(async () => row.querySelector('.track-title-copy').click())
+    assert.deepEqual(copies, ['Zulu'])
+    assert.equal(plays.length, 0)
+    await render({ tracks: [{ ...tracks[1], key: 'new' }, ...tracks] })
+    assert.equal(document.querySelectorAll('.track-row')[3], row)
+    assert.equal(row.dataset.selected, 'true')
+    await act(async () => row.querySelector('.track-cover').click())
+    assert.equal(plays.length, 1)
+    await act(async () =>
+      row.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    )
+    assert.equal(document.querySelector('.track-title-copy'), null)
+  })
+})
+
+test('resizing redistributes adjacent columns, clamps minimums and restores default widths', async () => {
+  await harness(async ({ dom, render }) => {
+    const separator = () => document.querySelector('[aria-label="调整标题列宽"]')
+    const widths = () =>
+      [...document.querySelectorAll('col')].map((col) => parseFloat(col.style.width))
+    const initial = widths()
+    await act(async () =>
+      separator().dispatchEvent(
+        new dom.window.MouseEvent('mousedown', { bubbles: true, clientX: 300 })
+      )
+    )
+    await act(async () =>
+      document.dispatchEvent(
+        new dom.window.MouseEvent('mousemove', { bubbles: true, clientX: 340 })
+      )
+    )
+    await act(async () =>
+      document.dispatchEvent(new dom.window.MouseEvent('mouseup', { bubbles: true, clientX: 340 }))
+    )
+    assert.ok(widths()[1] > initial[1])
+    assert.ok(widths()[2] < initial[2])
+    assert.ok(Math.abs(widths().reduce((a, b) => a + b, 0) - 100) < 0.001)
+    const resized = widths()
+    await render({ sortable: true })
+    assert.deepEqual(widths(), resized)
+    for (let i = 0; i < 20; i++)
+      await act(async () =>
+        separator().dispatchEvent(
+          new dom.window.KeyboardEvent('keydown', {
+            key: 'ArrowRight',
+            shiftKey: true,
+            bubbles: true
+          })
+        )
+      )
+    assert.equal(Math.round(widths()[2] * 9), 100)
+    await act(async () =>
+      separator().dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }))
+    )
+    assert.deepEqual(widths(), initial)
   })
 })

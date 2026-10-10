@@ -2772,3 +2772,70 @@
 .collection-content-tabs .track-list thead th {
   padding-block: 4px;
 }
+
+.track-table-container {
+  overflow-x: auto;
+}
+.track-list th {
+  position: relative;
+  padding-right: 10px;
+}
+.track-column-resizer {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  z-index: 1;
+}
+.track-column-resizer::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.track-column-resizer:hover::after,
+.track-column-resizer:focus-visible::after,
+.track-column-resizer[data-resizing='true']::after {
+  background: var(--primary);
+}
+.track-column-resizer:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.track-album-text,
+.track-album-text .music-entity-link {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.track-row[data-selected='true'] td {
+  background: var(--accent);
+}
+.track-row[data-selected='true'] td:first-child {
+  box-shadow: inset 3px 0 var(--primary);
+}
+.track-title-copy {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: copy;
+  border-radius: 3px;
+}
+.track-title-copy:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.track-title-copy:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

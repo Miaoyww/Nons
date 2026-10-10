@@ -9,7 +9,8 @@ import { errorText, formatTime, type Track } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
 import { Cover } from '@/components/music/cover'
 import { useAccount } from '@/features/account/account'
-import { SongContextMenu } from '@/components/music/song-actions'
+import { useTrackColumnSizing } from './track-column-sizing'
+import { useSongTitleCopy, SongContextMenu } from '@/components/music/song-actions'
 import { TrackIdentity } from '@/components/music/track-identity'
 import type { ReactNode } from 'react'
 import { useInterfaceDensity } from '@/features/settings/use-interface-density'
@@ -90,6 +91,8 @@ export const TrackList = memo(function TrackList({
   hasMore = false,
   showDuration = true
 }: Props) {
+  const [selectedKey, setSelectedKey] = useState<string>()
+  const copyTitle = useSongTitleCopy()
   const [sort, setSort] = useState<SortKey>('default')
   const [descending, setDescending] = useState(false)
   const [query, setQuery] = useState('')
@@ -166,7 +169,10 @@ export const TrackList = memo(function TrackList({
   const getItemKey = useCallback((index: number) => entries[index].rowKey, [entries])
   const virtualizer = useVirtualizer({
     count: entries.length,
-    getScrollElement: () => (body.current ? scrollParent(body.current) : null),
+    getScrollElement: () =>
+      body.current
+        ? scrollParent(body.current.closest<HTMLElement>('.track-table-container')!)
+        : null,
     estimateSize: () => (cardMode === 'compact' ? 52 : 72),
     scrollMargin,
     overscan: 8,
@@ -181,7 +187,7 @@ export const TrackList = memo(function TrackList({
   }, [cardMode, virtualizer])
   useLayoutEffect(() => {
     const element = body.current
-    const parent = element && scrollParent(element)
+    const parent = element && scrollParent(element.closest<HTMLElement>('.track-table-container')!)
     if (!element || !parent) return
     const measure = () =>
       setScrollMargin(
@@ -199,6 +205,24 @@ export const TrackList = memo(function TrackList({
     if (visibleIndex >= 0) virtualizer.scrollToIndex(visibleIndex, { align: 'center' })
   }, [locateRequest, scrollMargin, virtualizer])
   const showLikes = tracks.some((track) => track.source.kind === 'netease')
+  const sizingSpecs = useMemo(
+    () => [
+      { id: 'index', label: '序号', size: 48, minSize: 36 },
+      { id: 'title', label: '标题', size: 480, minSize: 180 },
+      { id: 'album', label: '专辑', size: 200, minSize: 100 },
+      ...(showLikes ? [{ id: 'likes', label: '喜欢', size: 48, minSize: 40 }] : []),
+      ...(showDuration ? [{ id: 'duration', label: '时长', size: 80, minSize: 64 }] : []),
+      ...extraColumns.map((column, index) => ({
+        id: `extra-${index}`,
+        label: column.label,
+        size: 112,
+        minSize: 64
+      })),
+      ...(onAppend ? [{ id: 'append', label: '加入队列', size: 48, minSize: 40 }] : [])
+    ],
+    [showLikes, showDuration, extraColumns, onAppend]
+  )
+  const columnSizing = useTrackColumnSizing(sizingSpecs)
   const columns =
     3 + Number(showDuration) + extraColumns.length + Number(showLikes) + Number(!!onAppend)
   const rows = virtualizer.getVirtualItems()
@@ -246,212 +270,251 @@ export const TrackList = memo(function TrackList({
           )}
         </div>
       )}
-      <table className="track-list w-full table-fixed text-left text-sm" data-mode={cardMode}>
-        <caption className="sr-only">歌曲列表</caption>
-        <thead className="bg-background text-xs text-muted-foreground">
-          <tr className="border-b border-border">
-            <th className="w-12 py-3 text-center" scope="col">
-              #
-            </th>
-            <th className="py-3" scope="col" aria-sort={ariaSort(sortable && titleActive)}>
-              {sortable ? (
-                <SortHeader
-                  label="标题"
-                  active={titleActive}
-                  descending={descending}
-                  detail={
-                    titleActive
-                      ? `${sort === 'artist' ? '歌手' : '标题'}${descending ? '降序' : '升序'}`
-                      : '默认排序'
-                  }
-                  next={nextLabel('title')}
-                  onClick={() => cycleSort('title')}
-                />
-              ) : (
-                '歌曲'
-              )}
-            </th>
-            <th
-              className="w-[22%] py-3"
-              scope="col"
-              aria-sort={ariaSort(sortable && sort === 'album')}
-            >
-              {sortable ? (
-                <SortHeader
-                  label="专辑"
-                  active={sort === 'album'}
-                  descending={descending}
-                  detail={sort === 'album' ? (descending ? '降序' : '升序') : '默认'}
-                  next={nextLabel('album')}
-                  onClick={() => cycleSort('album')}
-                />
-              ) : (
-                '专辑'
-              )}
-            </th>
-            {showLikes && (
-              <th className="w-12" scope="col">
-                <span className="sr-only">喜欢</span>
+      <div ref={columnSizing.container} className="track-table-container">
+        <table
+          className="track-list w-full table-fixed text-left text-sm"
+          data-mode={cardMode}
+          style={{ minWidth: columnSizing.total }}
+        >
+          <colgroup>
+            {columnSizing.columns.map((column) => (
+              <col
+                key={column.id}
+                style={{ width: `${(column.size / columnSizing.total) * 100}%` }}
+              />
+            ))}
+          </colgroup>
+          <caption className="sr-only">歌曲列表</caption>
+          <thead className="bg-background text-xs text-muted-foreground">
+            <tr className="border-b border-border">
+              <th className="py-3 text-center" scope="col">
+                # {columnSizing.handle('index')}
               </th>
-            )}
-            {showDuration && (
-              <th
-                className="w-20 py-3"
-                scope="col"
-                aria-sort={ariaSort(sortable && sort === 'duration')}
-              >
+              <th className="py-3" scope="col" aria-sort={ariaSort(sortable && titleActive)}>
                 {sortable ? (
                   <SortHeader
-                    compact
-                    label="时长"
-                    active={sort === 'duration'}
+                    label="标题"
+                    active={titleActive}
                     descending={descending}
-                    detail={sort === 'duration' ? (descending ? '降序' : '升序') : '默认'}
-                    next={nextLabel('duration')}
-                    onClick={() => cycleSort('duration')}
+                    detail={
+                      titleActive
+                        ? `${sort === 'artist' ? '歌手' : '标题'}${descending ? '降序' : '升序'}`
+                        : '默认排序'
+                    }
+                    next={nextLabel('title')}
+                    onClick={() => cycleSort('title')}
                   />
                 ) : (
-                  '时长'
+                  '歌曲'
                 )}
+                {columnSizing.handle('title')}
               </th>
-            )}
-            {extraColumns.map((column) => (
-              <th key={column.label} className={column.className ?? 'w-28 py-3'} scope="col">
-                {column.label}
+              <th className="py-3" scope="col" aria-sort={ariaSort(sortable && sort === 'album')}>
+                {sortable ? (
+                  <SortHeader
+                    label="专辑"
+                    active={sort === 'album'}
+                    descending={descending}
+                    detail={sort === 'album' ? (descending ? '降序' : '升序') : '默认'}
+                    next={nextLabel('album')}
+                    onClick={() => cycleSort('album')}
+                  />
+                ) : (
+                  '专辑'
+                )}
+                {columnSizing.handle('album')}
               </th>
-            ))}
-            {onAppend && (
-              <th className="w-12" scope="col">
-                <span className="sr-only">加入队列</span>
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody ref={body}>
-          {top > 0 && (
-            <tr aria-hidden="true">
-              <td colSpan={columns} style={{ height: top, padding: 0 }} />
+              {showLikes && (
+                <th scope="col">
+                  <span className="sr-only">喜欢</span>
+                  {columnSizing.handle('likes')}
+                </th>
+              )}
+              {showDuration && (
+                <th
+                  className="py-3"
+                  scope="col"
+                  aria-sort={ariaSort(sortable && sort === 'duration')}
+                >
+                  {sortable ? (
+                    <SortHeader
+                      compact
+                      label="时长"
+                      active={sort === 'duration'}
+                      descending={descending}
+                      detail={sort === 'duration' ? (descending ? '降序' : '升序') : '默认'}
+                      next={nextLabel('duration')}
+                      onClick={() => cycleSort('duration')}
+                    />
+                  ) : (
+                    '时长'
+                  )}
+                  {columnSizing.handle('duration')}
+                </th>
+              )}
+              {extraColumns.map((column, index) => (
+                <th key={column.label} className="py-3" scope="col">
+                  {column.label}
+                  {columnSizing.handle(`extra-${index}`)}
+                </th>
+              ))}
+              {onAppend && (
+                <th scope="col">
+                  <span className="sr-only">加入队列</span>
+                </th>
+              )}
             </tr>
-          )}
-          {rows.map((row) => {
-            const { index, track, rowKey } = entries[row.index]
-            return (
-              <SongContextMenu
-                key={rowKey}
-                track={track}
-                onPlay={() => onPlay(row.index, visibleTracks)}
-                busy={busy}
-                onRemove={onRemove ? () => onRemove(track, index) : undefined}
-                removeLabel={removeLabel}
-                render={
-                  <tr
-                    ref={virtualizer.measureElement}
-                    data-index={row.index}
-                    className="track-row group"
-                    data-current={
-                      currentIndex === undefined ? track.key === currentKey : index === currentIndex
-                    }
-                    aria-current={
-                      (
+          </thead>
+          <tbody ref={body}>
+            {top > 0 && (
+              <tr aria-hidden="true">
+                <td colSpan={columns} style={{ height: top, padding: 0 }} />
+              </tr>
+            )}
+            {rows.map((row) => {
+              const { index, track, rowKey } = entries[row.index]
+              return (
+                <SongContextMenu
+                  key={rowKey}
+                  track={track}
+                  onPlay={() => onPlay(row.index, visibleTracks)}
+                  busy={busy}
+                  onRemove={onRemove ? () => onRemove(track, index) : undefined}
+                  removeLabel={removeLabel}
+                  render={
+                    <tr
+                      ref={virtualizer.measureElement}
+                      data-index={row.index}
+                      data-selected={selectedKey === rowKey}
+                      aria-selected={selectedKey === rowKey}
+                      onClick={(event) => {
+                        if (
+                          !(event.target as HTMLElement).closest(
+                            'button, a, input, [role="button"]'
+                          )
+                        )
+                          setSelectedKey(rowKey)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          setSelectedKey(rowKey)
+                        } else if (event.key === 'Escape') setSelectedKey(undefined)
+                      }}
+                      className="track-row group"
+                      data-current={
                         currentIndex === undefined
                           ? track.key === currentKey
                           : index === currentIndex
-                      )
-                        ? 'true'
-                        : undefined
-                    }
-                  />
-                }
-              >
-                <td className="text-center tabular-nums text-muted-foreground">
-                  {offset + row.index + 1}
-                </td>
-                <td className="track-identity-cell pr-4">
-                  <TrackIdentity
-                    track={track}
-                    mode={cardMode}
-                    showSource
-                    cover={
-                      <button
-                        type="button"
-                        className="track-cover"
-                        disabled={busy}
-                        aria-label={`播放 ${track.title}`}
-                        onClick={() => onPlay(row.index, visibleTracks)}
-                      >
-                        <Cover cover={track.cover} className="track-identity-cover" />
-                        <span className="track-cover-play">
-                          <Play aria-hidden="true" />
-                        </span>
-                      </button>
-                    }
-                  />
-                </td>
-                <td className="truncate pr-4 text-muted-foreground" title={track.album}>
-                  <TrackAlbum track={track} />
-                </td>
-                {showLikes && (
-                  <td>
-                    {track.source.kind === 'netease' && (
+                      }
+                      aria-current={
+                        (
+                          currentIndex === undefined
+                            ? track.key === currentKey
+                            : index === currentIndex
+                        )
+                          ? 'true'
+                          : undefined
+                      }
+                    />
+                  }
+                >
+                  <td className="text-center tabular-nums text-muted-foreground">
+                    {offset + row.index + 1}
+                  </td>
+                  <td className="track-identity-cell pr-4">
+                    <TrackIdentity
+                      track={track}
+                      mode={cardMode}
+                      showSource
+                      onTitleCopy={
+                        selectedKey === rowKey ? () => copyTitle(track.title) : undefined
+                      }
+                      cover={
+                        <button
+                          type="button"
+                          className="track-cover"
+                          disabled={busy}
+                          aria-label={`播放 ${track.title}`}
+                          onClick={() => onPlay(row.index, visibleTracks)}
+                        >
+                          <Cover cover={track.cover} className="track-identity-cover" />
+                          <span className="track-cover-play">
+                            <Play aria-hidden="true" />
+                          </span>
+                        </button>
+                      }
+                    />
+                  </td>
+                  <td className="pr-4 text-muted-foreground" title={track.album}>
+                    <div className="track-album-text">
+                      <TrackAlbum track={track} />
+                    </div>
+                  </td>
+                  {showLikes && (
+                    <td>
+                      {track.source.kind === 'netease' && (
+                        <ActionButton
+                          variant="ghost"
+                          size="icon-sm"
+                          className="track-like"
+                          data-liked={likedIds.has(track.source.id)}
+                          aria-pressed={likedIds.has(track.source.id)}
+                          disabled={
+                            busy || !profile || !likesReady || pendingLikes.has(track.source.id)
+                          }
+                          aria-label={`${likedIds.has(track.source.id) ? '取消喜欢' : '喜欢'} ${track.title}`}
+                          title={!profile ? '登录后收藏歌曲' : '喜欢 / 取消喜欢'}
+                          onClick={() => {
+                            if (track.source.kind === 'netease') {
+                              setLikeError(undefined)
+                              void toggleLike(track.source.id).catch((cause) =>
+                                setLikeError(errorText(cause))
+                              )
+                            }
+                          }}
+                        >
+                          <Heart aria-hidden="true" />
+                        </ActionButton>
+                      )}
+                    </td>
+                  )}
+                  {showDuration && (
+                    <td className="tabular-nums text-muted-foreground">
+                      {formatTime(track.durationMs)}
+                    </td>
+                  )}
+                  {extraColumns.map((column) => (
+                    <td key={column.label} className="tabular-nums text-muted-foreground">
+                      {column.render(track, index)}
+                    </td>
+                  ))}
+                  {onAppend && (
+                    <td>
                       <ActionButton
                         variant="ghost"
                         size="icon-sm"
-                        className="track-like"
-                        data-liked={likedIds.has(track.source.id)}
-                        aria-pressed={likedIds.has(track.source.id)}
-                        disabled={
-                          busy || !profile || !likesReady || pendingLikes.has(track.source.id)
-                        }
-                        aria-label={`${likedIds.has(track.source.id) ? '取消喜欢' : '喜欢'} ${track.title}`}
-                        title={!profile ? '登录后收藏歌曲' : '喜欢 / 取消喜欢'}
-                        onClick={() => {
-                          if (track.source.kind === 'netease') {
-                            setLikeError(undefined)
-                            void toggleLike(track.source.id).catch((cause) =>
-                              setLikeError(errorText(cause))
-                            )
-                          }
-                        }}
+                        disabled={busy}
+                        aria-label={`下一首播放 ${track.title}`}
+                        title="下一首播放"
+                        onClick={() => onAppend(track)}
                       >
-                        <Heart aria-hidden="true" />
+                        <ListPlus aria-hidden="true" />
                       </ActionButton>
-                    )}
-                  </td>
-                )}
-                {showDuration && (
-                  <td className="tabular-nums text-muted-foreground">
-                    {formatTime(track.durationMs)}
-                  </td>
-                )}
-                {extraColumns.map((column) => (
-                  <td key={column.label} className="tabular-nums text-muted-foreground">
-                    {column.render(track, index)}
-                  </td>
-                ))}
-                {onAppend && (
-                  <td>
-                    <ActionButton
-                      variant="ghost"
-                      size="icon-sm"
-                      disabled={busy}
-                      aria-label={`下一首播放 ${track.title}`}
-                      title="下一首播放"
-                      onClick={() => onAppend(track)}
-                    >
-                      <ListPlus aria-hidden="true" />
-                    </ActionButton>
-                  </td>
-                )}
-              </SongContextMenu>
-            )
-          })}
-          {bottom > 0 && (
-            <tr aria-hidden="true">
-              <td colSpan={columns} style={{ height: bottom, padding: 0 }} />
-            </tr>
-          )}
-        </tbody>
-      </table>
+                    </td>
+                  )}
+                </SongContextMenu>
+              )
+            })}
+            {bottom > 0 && (
+              <tr aria-hidden="true">
+                <td colSpan={columns} style={{ height: bottom, padding: 0 }} />
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </>
   )
 })

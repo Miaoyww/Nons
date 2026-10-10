@@ -67,6 +67,11 @@ const SongActionsContext = createContext<{
   copy: (text: string) => void
 } | null>(null)
 
+export function useSongTitleCopy() {
+  const actions = useContext(SongActionsContext)
+  return (title: string) => actions?.copy(title)
+}
+
 export function SongActionsProvider({
   children,
   onError,
