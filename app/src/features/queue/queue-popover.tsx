@@ -6,6 +6,7 @@ import { isTauri } from '@tauri-apps/api/core'
 import { formatTime, nativeCall, usePlayer, type Track } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
 import { Cover } from '@/components/music/cover'
+import { PlayingIndicator } from '@/components/music/playing-indicator'
 import { SongContextMenu } from '@/components/music/song-actions'
 import { QueueControls } from '@/features/queue/queue-controls'
 import { trackDisplayTitle } from '@/components/music/track-title'
@@ -74,6 +75,7 @@ export const QueueTrackCard = memo(function QueueTrackCard({
           }
         />
       </div>
+      {current && <PlayingIndicator />}
       <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
         {formatTime(track.durationMs)}
       </span>

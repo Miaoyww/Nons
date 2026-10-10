@@ -9,6 +9,7 @@ import { TrackSearchContext } from '@/components/music/track-search-context'
 import { errorText, formatTime, type Track } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
 import { Cover } from '@/components/music/cover'
+import { PlayingIndicator } from '@/components/music/playing-indicator'
 import { useAccount } from '@/features/account/account'
 import { useTrackColumnSizing } from './track-column-sizing'
 import { useSongTitleCopy, SongContextMenu } from '@/components/music/song-actions'
@@ -474,7 +475,15 @@ export const TrackList = memo(function TrackList({
                     }
                   >
                     <td className="text-center tabular-nums text-muted-foreground">
-                      {offset + row.index + 1}
+                      {(
+                        currentIndex === undefined
+                          ? track.key === currentKey
+                          : index === currentIndex
+                      ) ? (
+                        <PlayingIndicator />
+                      ) : (
+                        offset + row.index + 1
+                      )}
                     </td>
                     <td className="track-identity-cell pr-4">
                       <TrackIdentity

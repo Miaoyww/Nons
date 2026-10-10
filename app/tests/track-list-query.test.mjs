@@ -80,6 +80,9 @@ async function harness(run) {
       ActionButton: ({ size, variant, ...props }) => React.createElement('button', props)
     },
     '@/components/music/cover': { Cover: () => null },
+    '@/components/music/playing-indicator': {
+      PlayingIndicator: () => React.createElement('span', { 'aria-label': '当前曲目' })
+    },
     '@/components/music/track-identity': {
       TrackIdentity: ({ track, cover }) => React.createElement('div', {}, cover, track.title)
     },
@@ -197,6 +200,24 @@ async function harness(run) {
     })
   }
 }
+
+test('the playback indicator follows the current queue occurrence through search and sorting', async () => {
+  await harness(async ({ render, search }) => {
+    await render({ currentKey: 'a', currentIndex: 2, sortable: true })
+    const indicators = () => document.querySelectorAll('[aria-label="当前曲目"]')
+    assert.equal(indicators().length, 1)
+    const currentRow = indicators()[0].closest('.track-row')
+    assert.equal(currentRow, document.querySelectorAll('.track-row')[2])
+    await search('Zulu')
+    assert.equal(indicators().length, 1)
+    assert.equal(indicators()[0].closest('.track-row'), currentRow)
+    await act(async () => document.querySelector('[aria-label^="时长排序："]').click())
+    assert.equal(indicators().length, 1)
+    assert.equal(indicators()[0].closest('.track-row'), currentRow)
+    await search('Beta')
+    assert.equal(indicators().length, 0)
+  })
+})
 
 test('list search matches aliases, artists and albums and plays the filtered queue', async () => {
   await harness(async ({ plays, search }) => {

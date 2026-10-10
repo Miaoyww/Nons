@@ -46,6 +46,7 @@ import {
 import { ActionButton } from '@/components/music/action-button'
 import { useAccount } from '@/features/account/account'
 import { Cover } from '@/components/music/cover'
+import { PlayingIndicator } from '@/components/music/playing-indicator'
 import { useMusicNavigation, type MusicCollection } from '@/features/workspace/music-navigation'
 import { TrackList } from '@/components/music/track-list'
 import { InfiniteLoad } from '@/components/music/infinite-load'
@@ -449,7 +450,7 @@ export default function MusicLibrary({
                       >
                         <Cover cover={track.cover} className="size-10" />
                       </button>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <button
                           type="button"
                           className="block max-w-full truncate text-left font-semibold"
@@ -464,6 +465,7 @@ export default function MusicLibrary({
                           <TrackArtists track={track} />
                         </p>
                       </div>
+                      {track.key === currentKey && <PlayingIndicator />}
                     </SongContextMenu>
                   ))}
                 </div>
