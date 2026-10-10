@@ -44,6 +44,7 @@ import { TrackList } from '@/components/music/track-list'
 import { InfiniteLoad } from '@/components/music/infinite-load'
 import { usePagedList } from '@/lib/use-paged-list'
 import { LyricExcerpt } from '@/features/lyrics/lyric-excerpt'
+import { reconcileTracks } from '@/features/library/reconcile-tracks'
 
 const filters = [
   { value: 'all', label: '全部歌单' },
@@ -124,16 +125,23 @@ export default function MusicLibrary({
 
   useEffect(() => {
     let disposed = false
-    setSummary(undefined)
     setSummaryError(undefined)
     setSummaryBusy(false)
-    if (!profile || !isTauri()) return
+    if (!profile || !isTauri()) {
+      setSummary(undefined)
+      return
+    }
     const cached = peekMusicLibrary(profile.userId)
-    setSummary(cached)
-    setSummaryBusy(!cached)
+    const current = cached ?? (summary?.profile.userId === profile.userId ? summary : undefined)
+    setSummary(current)
+    setSummaryBusy(!current)
     void getMusicLibrary(profile.userId)
       .then((value) => {
-        if (!disposed) setSummary(value)
+        if (!disposed)
+          setSummary((previous) => ({
+            ...value,
+            likedTracks: reconcileTracks(previous?.likedTracks ?? [], value.likedTracks)
+          }))
       })
       .catch((cause) => {
         if (!disposed) setSummaryError(errorText(cause))
@@ -170,12 +178,13 @@ export default function MusicLibrary({
       const value = await getLibraryTracks(collection!, offset, profile!.userId)
       return { items: value.tracks, more: value.more, metadata: value }
     },
-    [collection, profile, refresh, showingDetail, likesRevision, collectionRevision]
+    [collection, profile, showingDetail]
   )
   const detailList = usePagedList<Track, CollectionTracks>(
     detailLoader,
     100,
-    !!collection && !!profile && showingDetail && isTauri()
+    !!collection && !!profile && showingDetail && isTauri(),
+    { refreshKey: `${refresh}:${likesRevision}:${collectionRevision}`, reconcile: reconcileTracks }
   )
   const detail = {
     ...detailList.metadata,
@@ -238,7 +247,7 @@ export default function MusicLibrary({
             key={`header:${collection.kind}:${collection.id}`}
             collection={collection}
             description={detail.description}
-            total={detail.total || collection.trackCount}
+            total={detailList.metadata?.total ?? collection.trackCount}
             busy={playing}
             disabled={playing || !profile || detailBusy || !detail.tracks.length}
             onPlay={() => void playCollection(collection)}

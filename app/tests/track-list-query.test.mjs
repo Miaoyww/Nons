@@ -193,7 +193,7 @@ test('loaded collection cards can switch to history through real pagination and 
     await act(async () => resolveHistory({ items: tracks, more: false }))
     assert.equal(document.querySelectorAll('.track-cover').length, tracks.length)
     await act(async () => document.querySelector('.track-cover').click())
-    assert.deepEqual(plays.at(-1)[1], tracks)
+    assert.deepEqual([...plays.at(-1)[1]], tracks)
   })
 })
 
@@ -202,6 +202,24 @@ test('filtered duplicate rows retain original removal indices', async () => {
     await search('Alpha')
     menus.at(-1).onRemove()
     assert.equal(removes.at(-1)[1], 2)
+  })
+})
+
+test('inserting and deleting songs preserves existing row DOM and search state', async () => {
+  await harness(async ({ render, tracks, search }) => {
+    await search('Zulu')
+    const oldRows = [...document.querySelectorAll('.track-row')]
+    const added = { ...tracks[0], key: 'new', title: 'Zulu New' }
+    await render({ tracks: [added, ...tracks] })
+    let rows = [...document.querySelectorAll('.track-row')]
+    assert.equal(rows.length, 3)
+    assert.equal(rows[1], oldRows[0])
+    assert.equal(rows[2], oldRows[1])
+    await render({ tracks: tracks.slice(0, 2) })
+    rows = [...document.querySelectorAll('.track-row')]
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0], oldRows[0])
+    assert.equal(document.querySelector('input').value, 'Zulu')
   })
 })
 

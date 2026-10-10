@@ -61,10 +61,12 @@ function harness() {
     new Promise((resolve, reject) => requests.push({ offset, resolve, reject }))
   let loader = newLoader()
   let size = 50,
-    enabled = true
+    enabled = true,
+    refreshKey = 0,
+    reconcile
   const render = (flushEffects = true) => {
     cursor = 0
-    const value = exports.usePagedList(loader, size, enabled)
+    const value = exports.usePagedList(loader, size, enabled, { refreshKey, reconcile })
     if (flushEffects) while (effects.length) effects.shift()()
     return value
   }
@@ -77,6 +79,11 @@ function harness() {
     configure(options) {
       size = options.size ?? size
       enabled = options.enabled ?? enabled
+      reconcile = options.reconcile ?? reconcile
+    },
+    refresh() {
+      refreshKey++
+      return render()
     },
     changeQuery() {
       loader = newLoader()
@@ -213,4 +220,89 @@ test('late first-page success and failure cannot overwrite a replacement query',
     assert.equal(current.more, false)
     assert.equal(current.busy, false)
   }
+})
+
+test('background refresh retains every loaded page until all replacements arrive and reconciles rows', async () => {
+  const app = harness()
+  const a = { key: 'a' },
+    b = { key: 'b' }
+  app.configure({
+    reconcile: (previous, next) =>
+      next.map((item) => previous.find((old) => old.key === item.key) ?? item)
+  })
+  app.render()
+  app.requests[0].resolve({ items: [a], more: true })
+  await settle()
+  const continuation = app.render().loadMore()
+  app.requests[1].resolve({ items: [b], metadata: 'old detail', more: true })
+  await continuation
+  const original = app.render().items
+  app.refresh()
+  assert.equal(app.render().items, original)
+  assert.equal(app.render().metadata, 'old detail')
+  assert.equal(app.render().busy, true)
+  app.requests[2].resolve({ items: [{ key: 'new' }, { key: 'a' }], more: true })
+  await settle()
+  assert.equal(app.requests[3].offset, 50)
+  assert.equal(app.render().items, original, 'first page cannot discard loaded continuation rows')
+  app.requests[3].resolve({ items: [{ key: 'b' }], metadata: 'new detail', more: true })
+  await settle()
+  const refreshed = app.render()
+  assert.deepEqual(
+    [...refreshed.items].map((item) => item.key),
+    ['new', 'a', 'b']
+  )
+  assert.equal(refreshed.items[1], a)
+  assert.equal(refreshed.items[2], b)
+  assert.equal(refreshed.metadata, 'new detail')
+  const next = refreshed.loadMore()
+  assert.equal(app.requests[4].offset, 100)
+  app.requests[4].resolve({ items: [], more: false })
+  await next
+})
+
+test('failed background refresh preserves all pages and retries the complete loaded range', async () => {
+  const app = harness()
+  app.render()
+  app.requests[0].resolve({ items: ['first'], more: true })
+  await settle()
+  const next = app.render().loadMore()
+  app.requests[1].resolve({ items: ['second'], more: true })
+  await next
+  const original = app.render().items
+  app.refresh()
+  app.requests[2].resolve({ items: ['replacement'], more: true })
+  await settle()
+  app.requests[3].reject(new Error('offline'))
+  await settle()
+  assert.equal(app.render().items, original)
+  assert.match(app.render().error, /offline/)
+  const retry = app.render().loadMore()
+  assert.equal(app.requests[4].offset, 0)
+  app.requests[4].resolve({ items: ['replacement'], more: true })
+  await settle()
+  assert.equal(app.requests[5].offset, 50)
+  app.requests[5].resolve({ items: ['last'], more: false })
+  await retry
+  assert.deepEqual([...app.render().items], ['replacement', 'last'])
+})
+
+test('a newer refresh discards the old refresh and preserves the loaded depth', async () => {
+  const app = harness()
+  app.render()
+  app.requests[0].resolve({ items: ['first'], more: true })
+  await settle()
+  const next = app.render().loadMore()
+  app.requests[1].resolve({ items: ['second'], more: true })
+  await next
+  app.refresh()
+  app.refresh()
+  app.requests[2].resolve({ items: ['stale'], more: false })
+  app.requests[3].resolve({ items: ['new first'], more: true })
+  await settle()
+  assert.equal(app.requests[4].offset, 50)
+  assert.deepEqual([...app.render().items], ['first', 'second'])
+  app.requests[4].resolve({ items: ['new second'], more: false })
+  await settle()
+  assert.deepEqual([...app.render().items], ['new first', 'new second'])
 })

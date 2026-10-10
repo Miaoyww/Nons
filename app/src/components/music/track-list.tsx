@@ -3,7 +3,7 @@ import { TrackAlbum } from '@/components/music/music-links'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { scrollParent } from '@/components/music/infinite-load'
 import { Heart, ListPlus, Play, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
-import { memo, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { TrackSearchContext } from '@/components/music/track-search-context'
 import { errorText, formatTime, type Track } from '@/lib/player'
 import { ActionButton } from '@/components/music/action-button'
@@ -126,8 +126,13 @@ export const TrackList = memo(function TrackList({
   const titleActive = sort === 'title' || sort === 'artist'
   const entries = useMemo(() => {
     const keyword = searchQuery.trim().toLocaleLowerCase()
+    const occurrences = new Map<string, number>()
     const result = tracks
-      .map((track, index) => ({ track, index }))
+      .map((track, index) => {
+        const occurrence = occurrences.get(track.key) ?? 0
+        occurrences.set(track.key, occurrence + 1)
+        return { track, index, rowKey: `${track.key}:${occurrence}` }
+      })
       .filter(
         ({ track }) =>
           !searchable ||
@@ -158,12 +163,14 @@ export const TrackList = memo(function TrackList({
   const [likeError, setLikeError] = useState<string>()
   const body = useRef<HTMLTableSectionElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
+  const getItemKey = useCallback((index: number) => entries[index].rowKey, [entries])
   const virtualizer = useVirtualizer({
     count: entries.length,
     getScrollElement: () => (body.current ? scrollParent(body.current) : null),
     estimateSize: () => (cardMode === 'compact' ? 52 : 72),
     scrollMargin,
     overscan: 8,
+    getItemKey,
     measureElement: (element) => element.getBoundingClientRect().height + 4
   })
   useLayoutEffect(() => {
@@ -327,10 +334,10 @@ export const TrackList = memo(function TrackList({
             </tr>
           )}
           {rows.map((row) => {
-            const { index, track } = entries[row.index]
+            const { index, track, rowKey } = entries[row.index]
             return (
               <SongContextMenu
-                key={`${track.key}:${index}`}
+                key={rowKey}
                 track={track}
                 onPlay={() => onPlay(row.index, visibleTracks)}
                 busy={busy}

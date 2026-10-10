@@ -12,7 +12,14 @@ export interface ListPage<T, M = undefined> {
 export function usePagedList<T, M = undefined>(
   loader: (offset: number) => Promise<ListPage<T, M>>,
   size: number,
-  enabled: boolean
+  enabled: boolean,
+  {
+    refreshKey,
+    reconcile
+  }: {
+    refreshKey?: unknown
+    reconcile?: (previous: T[], next: T[]) => T[]
+  } = {}
 ) {
   const query = useMemo(() => ({ loader, size, enabled }), [loader, size, enabled])
   const empty = {
@@ -24,44 +31,65 @@ export function usePagedList<T, M = undefined>(
     error: undefined as string | undefined
   }
   const [view, setView] = useState(empty)
-  const request = useRef({ query, offset: 0, busy: false, more: true })
-  const loadMore = useCallback(async () => {
-    const state = request.current
-    if (!enabled || state.query !== query || state.busy || !state.more) return
-    state.busy = true
-    setView((previous) => ({ ...previous, busy: true, error: undefined }))
-    try {
-      const page = await loader(state.offset)
-      if (request.current !== state) return
-      const firstPage = state.offset === 0
-      setView((previous) => ({
-        query,
-        items: firstPage ? page.items : [...previous.items, ...page.items],
-        metadata: page.metadata,
-        more: page.more,
-        busy: true,
-        error: undefined
-      }))
-      state.offset += size
-      state.more = page.more
-    } catch (cause) {
-      if (request.current === state)
-        setView((previous) => ({ ...previous, error: errorText(cause) }))
-    } finally {
-      if (request.current === state) {
-        state.busy = false
-        setView((previous) => ({ ...previous, busy: false }))
+  const request = useRef({ query, offset: 0, busy: false, more: true, reloadPages: 1 })
+  const load = useCallback(
+    async (pages = request.current.offset === 0 ? request.current.reloadPages : 1) => {
+      const state = request.current
+      if (!enabled || state.query !== query || state.busy || !state.more) return
+      state.busy = true
+      setView((previous) => ({ ...previous, busy: true, error: undefined }))
+      try {
+        const firstPage = state.offset === 0
+        let offset = state.offset
+        let page: ListPage<T, M>
+        const items: T[] = []
+        for (let index = 0; index < pages; index++) {
+          page = await loader(offset)
+          if (request.current !== state) return
+          items.push(...page.items)
+          offset += size
+          if (!page.more) break
+        }
+        setView((previous) => ({
+          query,
+          items: firstPage
+            ? reconcile && previous.query === query
+              ? reconcile(previous.items, items)
+              : items
+            : [...previous.items, ...items],
+          metadata: page!.metadata,
+          more: page!.more,
+          busy: true,
+          error: undefined
+        }))
+        state.offset = offset
+        state.more = page!.more
+        state.reloadPages = Math.max(1, offset / size)
+      } catch (cause) {
+        if (request.current === state)
+          setView((previous) => ({ ...previous, error: errorText(cause) }))
+      } finally {
+        if (request.current === state) {
+          state.busy = false
+          setView((previous) => ({ ...previous, busy: false }))
+        }
       }
-    }
-  }, [query])
+    },
+    [query, reconcile]
+  )
+  const loadMore = useCallback(() => load(), [load])
   useEffect(() => {
-    request.current = { query, offset: 0, busy: false, more: true }
-    setView(empty)
-    void loadMore()
+    const pages = request.current.query === query ? request.current.reloadPages : 1
+    request.current = { query, offset: 0, busy: false, more: true, reloadPages: pages }
+    // Refresh this query in the background; only a different query clears its rows.
+    setView((previous) =>
+      previous.query === query ? { ...previous, busy: enabled, error: undefined } : empty
+    )
+    void load(pages)
     return () => {
       request.current = { ...request.current }
     }
-  }, [loadMore])
+  }, [load, refreshKey])
   const current = view.query === query ? view : empty
   const { items, metadata, more, busy, error } = current
   return { items, metadata, more, busy, error, loadMore }
