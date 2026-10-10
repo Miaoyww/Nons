@@ -80,7 +80,7 @@ export function useTrackColumnSizing(specs: ColumnSpec[]) {
         aria-valuenow={Math.round(sizing[id])}
         className="track-column-resizer"
         data-resizing={header.column.getIsResizing()}
-        title="拖动调整列宽；方向键微调；双击恢复默认"
+        title="双击恢复默认"
         onMouseDown={header.getResizeHandler()}
         onTouchStart={header.getResizeHandler()}
         onDoubleClick={() => setCustom({})}

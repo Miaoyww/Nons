@@ -32,7 +32,7 @@ export function TrackIdentity({
             type="button"
             className="track-title track-title-copy truncate font-medium"
             aria-label={`复制歌曲名称 ${track.title}`}
-            title={`${trackDisplayTitle(track)} · 点击复制歌曲名称`}
+            title={trackDisplayTitle(track)}
             onClick={(event) => {
               event.stopPropagation()
               onTitleCopy()
