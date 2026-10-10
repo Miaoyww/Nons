@@ -2786,25 +2786,11 @@
   right: -5px;
   bottom: 0;
   width: 10px;
-  cursor: col-resize;
+  cursor: ew-resize;
+  background: transparent;
   touch-action: none;
   user-select: none;
   z-index: 1;
-}
-.track-column-resizer::after {
-  content: '';
-  position: absolute;
-  top: 20%;
-  bottom: 20%;
-  left: 4px;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--border);
-}
-.track-column-resizer:hover::after,
-.track-column-resizer:focus-visible::after,
-.track-column-resizer[data-resizing='true']::after {
-  background: var(--primary);
 }
 .track-column-resizer:focus-visible {
   outline: 2px solid var(--ring);
